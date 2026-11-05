@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; script-src 'self'; connect-src 'self'">
+<link rel="icon" href="icon.png">
+<title>Plan de Cables · Visor</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="ro">
+<div id="login"><form id="lgForm" class="lgbox"><img src="icon.png" alt="" class="lglogo"><h1>Plan de Cables</h1><p class="muted" id="lgObra">Visor de avance de obra</p>
+<label>Usuario<input type="text" id="lgU" autocomplete="username" required></label>
+<label>Contraseña<input type="password" id="lgP" autocomplete="current-password" required></label>
+<label class="lgchk"><input type="checkbox" id="lgR" checked> Recordarme en este equipo</label>
+<button class="btn pri" id="lgB" type="submit">Ingresar</button><div id="lgE" class="lgerr"></div></form></div>
+<aside id="side">
+  <div class="brand">
+    <svg viewBox="0 0 40 40" class="logo" aria-hidden="true">
+      <circle cx="20" cy="20" r="17" class="ring"/>
+      <circle cx="20" cy="20" r="11" class="ring2"/>
+      <circle cx="20" cy="20" r="4.5" class="hub"/>
+    </svg>
+    <div><b>Plan de Cables</b><small>BT · MT · PAT</small></div>
+  </div>
+  <nav id="nav">
+<button data-view="resumen" class="on"><svg class="ni" viewBox="0 0 24 24"><path d="M3 13h4v7H3zM10 8h4v12h-4zM17 4h4v16h-4z"/></svg>Resumen</button><button data-view="avance"><svg class="ni" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg>Avance</button><button data-view="zanjas"><svg class="ni" viewBox="0 0 24 24"><path d="M3 8h18M3 16h18M7 8v8M12 8v8M17 8v8"/></svg>Zanjas</button><button data-view="propuesta"><svg class="ni" viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Propuesta de tendido</button><div class="ng">Baja tensión · 0,8 kV</div><button data-view="BT-plan"><svg class="ni" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.5 7.5 20 18M8.5 16.5 20 6"/></svg>Plan de corte</button><button data-view="BT-circ"><svg class="ni" viewBox="0 0 24 24"><path d="M4 7h13l-3-3M20 17H7l3 3"/></svg>Circuitos</button><div class="ng">Media tensión · 33 kV</div><button data-view="MT-plan"><svg class="ni" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.5 7.5 20 18M8.5 16.5 20 6"/></svg>Plan de corte</button><button data-view="MT-circ"><svg class="ni" viewBox="0 0 24 24"><path d="M4 7h13l-3-3M20 17H7l3 3"/></svg>Circuitos</button><div class="ng">Puesta a tierra</div><button data-view="PAT-plan"><svg class="ni" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.5 7.5 20 18M8.5 16.5 20 6"/></svg>Plan de corte</button><button data-view="PAT-circ"><svg class="ni" viewBox="0 0 24 24"><path d="M4 7h13l-3-3M20 17H7l3 3"/></svg>Tendidos</button><div class="ng">General</div><button data-view="bobinas"><svg class="ni" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>Bobinas</button><button data-view="ajustes"><svg class="ni" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Ajustes</button>
+<span id="navPill"></span>
+</nav>
+  <div class="side-foot">
+    <div id="projName" title="Proyecto"></div>
+    <div id="saveState">Guardado</div>
+    <div id="netState"></div>
+  </div>
+</aside>
+<main id="main">
+  <header id="top">
+    <div><h1 id="vTitle"></h1><p id="vSub"></p></div>
+    <div id="vActions"></div>
+  </header>
+  <section id="view"></section>
+</main>
+<div id="modal" class="hidden"><div class="mbox" role="dialog"></div></div>
+<div id="toasts"></div>
+<div id="printArea"></div>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="engine.js"></script>
+<script src="io.js"></script>
+<script src="web.js"></script>
+<script src="sync.js"></script>
+<script src="charts.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
