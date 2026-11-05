@@ -147,7 +147,7 @@
     resumen: ['Resumen', () => `${esc(S.nombre)}`],
     avance: ['Avance', () => 'Porcentaje tendido por apartado, por STS, en el tiempo, zanjas y bobinas'],
     propuesta: ['Propuesta de tendido', () => 'Lotes de zanjas por zona, del tamaño de una bobina, en el orden sugerido para abrir'],
-    zanjas: ['Zanjas', () => 'Estado de cada zanja (BT y MT) y metros realizados. Una zanja se cierra cuando tiene el cable y la PAT tendidos'],
+    zanjas: ['Zanjas', () => 'Estado de cada zanja (BT y MT) y metros realizados. Se tiende de a un circuito; la zanja se cierra con todos sus circuitos tendidos y ahí se registra la PAT'],
     'BT-plan': ['Plan de corte', () => 'Cables de aluminio inversor → STS · los cortes listos quedan fijos en su bobina'],
     'BT-circ': ['Circuitos', () => 'Tendidos inversor → STS: zanja y registro de lo ejecutado'],
     'MT-plan': ['Plan de corte', () => 'Cables de media tensión entre STS, sala de celdas y LMT · los cortes listos quedan fijos en su bobina'],
@@ -339,12 +339,12 @@
       const patOk = z.pat && z.pat.completo;
       h += `<tr data-id="${z.id}" class="${ui.sel.has(z.id) ? 'sel' : ''}"><td><input type="checkbox" class="sel" ${ui.sel.has(z.id) ? 'checked' : ''}></td><td><span class="chip">${z.cat}</span></td>
         <td>${esc(z.titulo)}${z.miembros.length > 1 ? ' <span class="pill p-warn" title="Zanja compartida">compartida</span>' : ''}</td>
-        <td><div class="chips">${z.miembros.map((c) => `<span class="chip ${c.completo ? 'lista' : ''}" title="${esc(c.desde)} → ${esc(c.hasta)}">${esc(c.designacion)}</span>`).join('')}</div></td>
+        <td><div class="chips">${z.miembros.map((c) => `<span class="chip ${c.completo ? 'lista' : ''}" title="${esc(c.desde)} → ${esc(c.hasta)}${c.completo ? ' · tendido' : ''}">${c.completo ? '✓ ' : ''}${esc(c.designacion)}${z.miembros.length > 1 && !c.completo && !window.READONLY ? `<button class="chipx" data-sacar="${c.id}" title="Sacar de esta zanja (queda con zanja propia, para más adelante)">×</button>` : ''}</span>`).join('')}</div></td>
         <td class="n"><input type="number" class="zl" step="0.1" min="0" value="${z.largo}" title="Largo de zanja según plano"></td><td>${zSeg(z.id, z.estado, z.listoCerrar)}</td><td>${z.nReal}/${z.nCond} ${z.completo ? '✓' : ''}</td>
-        <td>${patOk ? `<span class="pill p-done">${esc(z.pat.fasesInfo.C.bobina)}</span>` : '<span class="muted">pendiente</span>'}</td>
+        <td>${patOk ? `<span class="pill p-done">${esc(z.pat.fasesInfo.C.bobina || 'sin bobina')} · ${fmt(z.pat.fasesInfo.C.len, 1)} m</span>` : '<span class="muted">al cerrar</span>'}</td>
         <td style="white-space:nowrap"><button class="btn sm acc" data-a="tc">Cable</button> <button class="btn sm" data-a="tp">PAT</button><button class="btn sm ghost" data-a="ez" title="Editar zanja">✎</button></td></tr>`;
     });
-    el.innerHTML = h + `</tbody></table></div><p class="hint">Si varios circuitos van por la misma zanja, tildalos y tocá <b>Misma zanja</b>: quedan con un solo estado, un solo largo y una sola PAT. El largo se carga directo en la tabla (por ejemplo, del plano); con ✎ cambiás el nombre o separás un circuito. Abierta: se puede tender y el plan le asigna bobina primero. Cerrada: requiere cable y PAT registrados (si no, pide confirmación).</p>`;
+    el.innerHTML = h + `</tbody></table></div><p class="hint">Si varios circuitos van por la misma zanja, tildalos y tocá <b>Misma zanja</b>: quedan con un solo estado, un solo largo y una sola PAT. El largo se carga directo en la tabla (por ejemplo, del plano); con ✎ cambiás el nombre o separás un circuito. Abierta: se puede tender, de a un circuito, y el plan se recalcula con cada tendido. <b>Cerrar</b> se habilita cuando están tendidos todos los circuitos de la zanja: ahí se registra la PAT con el largo de la zanja (editable). Si un circuito de una zanja compartida queda para más adelante, sacalo con la <b>×</b> de su nombre: pasa a zanja propia y libera su bobina para el recálculo.</p>`;
     segBind('#fZT', ui.zTipo, (v) => { ui.zTipo = v; render(false); });
     segBind('#fZE', ui.zEst, (v) => { ui.zEst = v; render(false); });
     searchBind('#fZQ', (v) => { ui.zQ = v; });
@@ -358,7 +358,7 @@
       $('.zl', tr).onchange = (e) => { const sz = S.zanjas.find((x) => x.id === z.id); sz.largo = Math.max(0, Number(e.target.value) || 0); sz.largoPlano = true; commit(`Zanja ${z.titulo}: ${fmt(sz.largo, 1)} m`); };
     });
   }
-  const zSeg = (zid, est, okCerrar) => `<span class="zseg" data-id="${zid}">${Engine.ZANJA.map((z) => `<button data-z="${z}" class="${est === z ? 'on z' + z.replace(' ', '') : ''}" ${z === 'cerrada' && !okCerrar && est !== 'cerrada' ? 'title="Falta registrar cable o PAT"' : ''}>${z === 'no abierta' ? 'No' : z === 'abierta' ? 'Abierta' : 'Cerrada'}</button>`).join('')}</span>`;
+  const zSeg = (zid, est, okCerrar) => `<span class="zseg" data-id="${zid}">${Engine.ZANJA.map((z) => `<button data-z="${z}" class="${est === z ? 'on z' + z.replace(' ', '') : ''}" ${z === 'cerrada' && !okCerrar && est !== 'cerrada' ? 'title="Faltan tender circuitos de esta zanja"' : ''}>${z === 'no abierta' ? 'No' : z === 'abierta' ? 'Abierta' : 'Cerrada'}</button>`).join('')}</span>`;
   function bindZSeg(el) {
     $$('.zseg button', el).forEach((b) => { b.onclick = async (e) => { e.stopPropagation(); const tr = b.closest('tr[data-id]'); ui.flashKeep = tr ? [tr.dataset.id] : null; await setZanja([b.parentElement.dataset.id], b.dataset.z); }; });
   }
@@ -367,10 +367,7 @@
     zids = [...new Set(zids)].filter(Boolean);
     const zs = zids.map((id) => S.zanjas.find((x) => x.id === id)).filter(Boolean);
     const rz = zids.map((id) => R.zlist.find((x) => x.id === id)).filter(Boolean);
-    if (est === 'cerrada') {
-      const falt = rz.filter((z) => !z.listoCerrar && z.estado !== 'cerrada');
-      if (falt.length && !(await confirmar('Cerrar zanja', `${falt.length === 1 ? `La zanja ${esc(falt[0].titulo)} no tiene` : `${falt.length} zanjas no tienen`} registrado el tendido completo del cable y la PAT. ¿Cerrar igual?`, 'Cerrar igual'))) return;
-    }
+    if (est === 'cerrada') return cerrarZanjas(zids);
     if (est === 'no abierta') { const conT = rz.filter((z) => z.nReal > 0); if (conT.length) toast(`${conT.length} con cable ya tendido: siguen contando como listas`); }
     zs.forEach((z) => { z.estado = est; if (est === 'cerrada' && !z.fechaCierre) z.fechaCierre = today(); if (est !== 'cerrada') delete z.fechaCierre; });
     ui.flash = ui.flashKeep || [...ui.sel, ...zids]; ui.flashKeep = null;
@@ -402,8 +399,9 @@
     if (window.READONLY) return;
     if (z.miembros.length === 1) return tender(z.miembros[0].id);
     const res = await modal({ title: `Cable · ${z.titulo}`, sub: 'Elegí el circuito a registrar',
-      body: z.miembros.map((c) => `<div class="phase-row" style="grid-template-columns:1fr auto auto"><div><b class="mono">${esc(c.designacion)}</b> · ${esc(c.desde)} → ${esc(c.hasta)}</div><span>${c.nReal}/${c.fz.length}</span><button class="btn sm acc" data-id="${c.id}">Tender</button></div>`).join(''),
-      buttons: [['Cerrar', 'btn', () => null]] });
+      body: z.miembros.map((c) => `<div class="phase-row" style="grid-template-columns:1fr auto auto"><div><b class="mono">${esc(c.designacion)}</b> · ${esc(c.desde)} → ${esc(c.hasta)}</div><span>${c.nReal}/${c.fz.length}</span><span style="white-space:nowrap">${!c.completo ? `<button class="btn sm" data-sep="${c.id}">Sacar</button> ` : ''}<button class="btn sm acc" data-id="${c.id}">Tender</button></span></div>`).join('')
+        + `<p class="hint">Se tiende de a un circuito y el plan se recalcula con cada uno. Si alguno queda para más adelante, tocá <b>Sacar</b>: pasa a zanja propia y libera su bobina.</p>`,
+      buttons: [['Volver', 'btn', () => null]] });
     void res;
   }
   document.addEventListener('click', (e) => { const b = e.target.closest('.mbody .phase-row button[data-id]'); if (b) { const id = b.dataset.id; $('#modal').classList.add('hidden'); setTimeout(() => tender(id), 50); } });
@@ -417,19 +415,87 @@
         <label>Fecha de cierre<input type="date" name="fc" value="${esc(z.fechaCierre || '')}"></label></div>
         <h4 style="margin:16px 0 6px">Circuitos en esta zanja</h4>
         ${rz.miembros.map((c) => `<div class="phase-row" style="grid-template-columns:1fr auto"><div><b class="mono">${esc(c.designacion)}</b> · ${esc(c.desde)} → ${esc(c.hasta)} <span class="muted">· ${fmt(c.lineal, 1)} m lineales</span></div>
-          ${rz.miembros.length > 1 ? `<button class="btn sm" data-sep="${c.id}">Separar</button>` : ''}</div>`).join('')}`,
+          ${rz.miembros.length > 1 ? `<button class="btn sm" data-sep="${c.id}">Sacar de la zanja</button>` : ''}</div>`).join('')}`,
       buttons: [['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (box) => {
         z.nombre = $('[name=nombre]', box).value.trim() || undefined; if (!z.nombre) delete z.nombre;
-        z.largo = Number($('[name=largo]', box).value) || 0; z.estado = $('[name=estado]', box).value;
+        z.largo = Number($('[name=largo]', box).value) || 0; const ne = $('[name=estado]', box).value; if (ne !== 'cerrada' || z.estado === 'cerrada') z.estado = ne; else z._cerrar = true;
         const fc = $('[name=fc]', box).value; if (fc) z.fechaCierre = fc; else delete z.fechaCierre;
         return 'ok';
       }]] });
-    if (res === 'ok') commit('Zanja actualizada');
+    if (res === 'ok') { const cerrar = z._cerrar; delete z._cerrar; commit('Zanja actualizada'); if (cerrar) setTimeout(() => cerrarZanjas([zid]), 60); }
   }
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-sep]'); if (!b) return;
-    Engine.separarCircuito(S, b.dataset.sep); $('#modal').classList.add('hidden'); commit('Circuito separado: ahora tiene zanja propia');
+    $('#modal').classList.add('hidden'); setTimeout(() => sacarDeZanja(b.dataset.sep), 60);
   });
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sacar]'); if (!b) return;
+    e.stopPropagation(); sacarDeZanja(b.dataset.sacar);
+  }, true);
+  async function sacarDeZanja(cid) {
+    if (window.READONLY) return;
+    const c = S.circuitos.find((x) => x.id === cid), rc = R.circuitos.find((x) => x.id === cid); if (!c || !rc) return;
+    const rz = R.zlist.find((z) => z.id === rc.zid); if (!rz || rz.miembros.length < 2) return;
+    const tend = rc.nReal > 0;
+    if (!(await confirmar('Sacar de la zanja', `<b>${esc(c.designacion)}</b> (${esc(c.desde)} → ${esc(c.hasta)}) sale de la zanja ${esc(rz.titulo)} y pasa a una zanja propia de ${fmt(c.lineal || 0, 1)} m${tend ? ', abierta (ya tiene conductores tendidos)' : ', <b>no abierta</b>'}.<br><br>${tend ? '' : 'Su corte deja de estar comprometido y la bobina se recalcula para los demás tendidos. '}La zanja ${esc(rz.titulo)} se puede cerrar cuando estén tendidos los circuitos que le quedan. Su PAT se registra aparte, al cerrar su propia zanja.`, 'Sacar'))) return;
+    const nid = Engine.separarCircuito(S, cid);
+    ui.flash = [cid, rc.zid, nid];
+    commit(`${c.designacion} sacado de la zanja ${rz.titulo}`);
+  }
+
+  // Cerrar zanjas: solo con todos sus circuitos tendidos; registra la PAT (largo de zanja, editable)
+  async function cerrarZanjas(zids, auto) {
+    if (window.READONLY) return;
+    zids = [...new Set(zids)].filter(Boolean);
+    const rz = zids.map((id) => R.zlist.find((z) => z.id === id)).filter((z) => z && z.estado !== 'cerrada');
+    if (!rz.length) { toast('Ya está cerrada'); return; }
+    const inc = rz.filter((z) => !z.completo), ok = rz.filter((z) => z.completo);
+    if (!ok.length) {
+      const z = inc[0];
+      await modal({ title: inc.length === 1 ? `No se puede cerrar ${esc(z.titulo)}` : 'No se pueden cerrar', sub: 'Faltan tender circuitos',
+        body: inc.map((z) => `<h4 style="margin:6px 0">${esc(z.titulo)}</h4>` + z.miembros.map((c) => `<div class="phase-row" style="grid-template-columns:1fr auto auto"><div><b class="mono">${esc(c.designacion)}</b> · ${esc(c.desde)} → ${esc(c.hasta)}</div><span class="pill ${c.completo ? 'p-done' : 'p-warn'}">${c.completo ? 'tendido' : `${c.nReal}/${c.fz.length}`}</span>${!c.completo && z.miembros.length > 1 ? `<button class="btn sm" data-sep="${c.id}">Sacar de la zanja</button>` : '<span></span>'}</div>`).join('')).join('')
+          + `<p class="hint">Una zanja se cierra cuando están tendidos todos sus circuitos. Si alguno queda para más adelante, sacalo de la zanja: pasa a zanja propia y libera su bobina.</p>`,
+        buttons: [['Entendido', 'btn pri', () => null]] });
+      return;
+    }
+    const bobsDe = (k) => R.bobinas.filter((b) => b.key === k);
+    const fila = (z) => {
+      const p = z.pat, pf = p ? p.fasesInfo.C || {} : {}, real = p ? (S.circuitos.find((x) => x.id === p.id).real || {}).C : null;
+      const bobs = p ? bobsDe(p.key) : [];
+      const sel = real ? real.bobina || '' : pf.bobina || '';
+      const largo = real && real.metros ? real.metros : z.largo;
+      return `<div class="phase-row" data-z="${z.id}" style="grid-template-columns:minmax(150px,1fr) 70px 200px 96px 130px">
+        <div><b>${esc(z.titulo)}</b><div class="muted">${z.miembros.length} circuito${z.miembros.length > 1 ? 's' : ''} · zanja ${fmt(z.largo, 1)} m</div></div>
+        <span class="chip">${p ? p.seccion + ' mm²' : '—'}</span>
+        ${p ? `<select class="pb"><option value="">Sin bobina registrada</option>${bobs.map((b) => `<option value="${esc(b.codigo)}" ${sel === b.codigo ? 'selected' : ''}>${esc(b.codigo)} · saldo ${fmt(b.saldoActual, 1)} m</option>`).join('')}</select>` : '<span class="muted">sin PAT</span>'}
+        <input type="number" class="pm" step="0.1" min="0" value="${largo}" title="Largo de PAT tendido" ${p ? '' : 'disabled'}>
+        <input type="date" class="pd" value="${(real && real.fecha) || today()}"></div>`;
+    };
+    const res = await modal({ title: ok.length === 1 ? `Cerrar zanja ${esc(ok[0].titulo)}` : `Cerrar ${ok.length} zanjas`, wide: true,
+      sub: auto ? 'Están tendidos todos los circuitos de la zanja' : 'PAT de Cu desnudo: 25 mm² en BT, 95 mm² en MT',
+      body: `<div class="muted phase-row prh" style="grid-template-columns:minmax(150px,1fr) 70px 200px 96px 130px"><span>Zanja</span><span>PAT</span><span>Bobina</span><span>Largo (m)</span><span>Fecha</span></div>${ok.map(fila).join('')}
+        ${inc.length ? `<p class="hint" style="color:var(--warn)">No se cierran (faltan circuitos por tender): ${inc.map((z) => esc(z.titulo)).join(', ')}.</p>` : ''}
+        <p class="hint">La PAT se da por tendida con el largo de la zanja; corregilo si en campo fue distinto. Se propone la bobina del plan.</p>`,
+      buttons: [[auto ? 'Más tarde' : 'Cancelar', 'btn', () => null], [ok.length === 1 ? 'Cerrar zanja' : 'Cerrar zanjas', 'btn pri', (box) => {
+        const out = [];
+        for (const row of $$('.phase-row[data-z]', box)) {
+          const pb = $('.pb', row); const m = Number($('.pm', row).value) || 0;
+          out.push({ zid: row.dataset.z, bobina: pb ? pb.value : null, metros: m, fecha: $('.pd', row).value, conPat: !!pb });
+        }
+        return out;
+      }]] });
+    if (!res) return;
+    res.forEach((r) => {
+      const z = S.zanjas.find((x) => x.id === r.zid), rzz = R.zlist.find((x) => x.id === r.zid);
+      if (r.conPat && rzz.pat) {
+        const pc = S.circuitos.find((x) => x.id === rzz.pat.id);
+        pc.real = { C: r.bobina ? { bobina: r.bobina, metros: r.metros, fecha: r.fecha } : { sinBobina: true, metros: r.metros, fecha: r.fecha } };
+      }
+      z.estado = 'cerrada'; z.fechaCierre = r.fecha || today();
+    });
+    ui.flash = [...res.map((r) => r.zid), ...ok.flatMap((z) => z.miembros.map((c) => c.id))]; ui.sel.clear();
+    commit(res.length === 1 ? `Zanja ${ok[0].titulo} cerrada · PAT ${fmt(res[0].metros, 1)} m` : `${res.length} zanjas cerradas con su PAT`);
+  }
   function bindSel(el, list) {
     const all = $('#selAll', el);
     if (all) { all.checked = list.length > 0 && list.every((c) => ui.sel.has(c.id)); all.onchange = (e) => { list.forEach((c) => (e.target.checked ? ui.sel.add(c.id) : ui.sel.delete(c.id))); render(false); }; }
@@ -540,7 +606,7 @@
     const asig = c.asig || {};
     const opts = (sel) => `<option value="">Automático (mejor aprovechamiento)</option>` + bobs.map((b) => `<option value="${esc(b.codigo)}" ${sel === b.codigo ? 'selected' : ''}>${esc(b.codigo)} · saldo actual ${fmt(b.saldoActual, 1)} m${b.estadoReal === 'en uso' ? ' · en uso' : b.estadoReal === 'sin abrir' ? ' · sin abrir' : ''}</option>`).join('');
     const rows = rc.fz.map((f) => { const r = (c.real || {})[f], p = rc.fasesInfo[f] || {};
-      if (r && r.bobina) return `<div class="phase-row" style="grid-template-columns:56px 1fr 180px"><b>${f === 'C' ? 'Cu' : f}</b><span class="muted">Ya tendida desde ${esc(r.bobina)} (${fmt(r.metros, 2)} m)</span><span></span></div>`;
+      if (r && (r.bobina || r.sinBobina)) return `<div class="phase-row" style="grid-template-columns:56px 1fr 180px"><b>${f === "C" ? "Cu" : f}</b><span class="muted">Ya tendida desde ${esc(r.bobina || "(sin bobina)")} (${fmt(r.metros, 2)} m)</span><span></span></div>`;
       return `<div class="phase-row eb" data-f="${f}" style="grid-template-columns:56px 1fr 180px"><b>${f === 'C' ? 'Cu' : f}</b><select class="bob">${opts(asig[f] || '')}</select><span class="muted">plan actual: ${esc(p.bobina || '—')}${p.manual ? ' (elegida)' : ''}</span></div>`; }).join('');
     const res = await modal({ title: `Bobina y largo · ${c.designacion}`, sub: `${esc(c.desde)} → ${esc(c.hasta)} · ${esc(c.formacion)}`, wide: true,
       body: `<div class="form"><label>Largo a cortar por conductor (m)<input type="number" step="0.01" min="0" name="largo" value="${c.largoCorte || ''}" placeholder="${fmt(conAj, 2)}"></label>
@@ -576,14 +642,14 @@
     if (window.READONLY) return;
     const c = S.circuitos.find((x) => x.id === id), rc = R.circuitos.find((x) => x.id === id);
     const bobs = R.bobinas.filter((b) => b.key === rc.key);
-    if (!bobs.length) { toast(`No hay bobinas de ${CATN[rc.cat]} ${rc.seccion} mm² cargadas`, { err: true }); return; }
-    const opts = (sel) => `<option value="">—</option>` + bobs.map((b) => `<option value="${esc(b.codigo)}" ${sel === b.codigo ? 'selected' : ''}>${esc(b.codigo)} · saldo ${fmt(b.saldoActual, 1)} m</option>`).join('');
+    if (!bobs.length && rc.cat !== 'PAT') { toast(`No hay bobinas de ${CATN[rc.cat]} ${rc.seccion} mm² cargadas`, { err: true }); return; }
+    const opts = (sel) => `<option value="">—</option>${rc.cat === 'PAT' ? `<option value="__sin" ${sel === '__sin' ? 'selected' : ''}>Sin bobina registrada</option>` : ''}` + bobs.map((b) => `<option value="${esc(b.codigo)}" ${sel === b.codigo ? 'selected' : ''}>${esc(b.codigo)} · saldo ${fmt(b.saldoActual, 1)} m</option>`).join('');
     const lbl = (f) => (f === 'C' ? 'Cu' : f);
     const teo = Math.round((Number(c.cantidad) || 0) / rc.fz.length * 100) / 100;
     const rows = rc.fz.map((f) => {
-      const r = (c.real || {})[f], plan = rc.fasesInfo[f] || {}, done = !!(r && r.bobina);
+      const r = (c.real || {})[f], plan = rc.fasesInfo[f] || {}, done = !!(r && (r.bobina || r.sinBobina));
       return `<div class="phase-row pr6" data-f="${f}"><label class="fz"><input type="checkbox" class="on" ${done ? 'checked' : ''}> ${lbl(f)}</label>
-        <select class="bob">${opts(done ? r.bobina : plan.bobina || '')}</select>
+        <select class="bob">${opts(done ? r.bobina || '__sin' : plan.bobina || '')}</select>
         <span class="teo">${fmt(teo, 2)}</span>
         <input type="number" class="m" step="0.01" min="0" value="${done ? r.metros : rc.lenFase}" title="Metros realmente tirados">
         <span class="dif"></span>
@@ -619,7 +685,8 @@
         if (!$('.on', row).checked) continue;
         const b = $('.bob', row).value, m = Number($('.m', row).value);
         if (!b) { toast(`${lbl(row.dataset.f)}: elegí la bobina`, { err: true }); return false; }
-        real[row.dataset.f] = { bobina: b, metros: m > 0 ? Math.round(m * 100) / 100 : teo, fecha: $('.d', row).value };
+        const met = m > 0 ? Math.round(m * 100) / 100 : rc.cat === 'PAT' ? rc.lenFase : teo;
+        real[row.dataset.f] = b === '__sin' ? { sinBobina: true, metros: met, fecha: $('.d', row).value } : { bobina: b, metros: met, fecha: $('.d', row).value };
       }
       c.real = real;
       return 'ok';
@@ -628,7 +695,11 @@
       ui.flash = [id, c.vinculo || c.zanjaId];
       const zc = S.zanjas.find((z) => z.id === (c.vinculo || c.zanjaId));
       if (Object.keys(c.real).length && zc && zc.estado === 'no abierta') zc.estado = 'abierta';
+      const antes = zc ? (R.zlist.find((z) => z.id === zc.id) || {}).completo : false;
       commit(`Tendido de ${c.designacion} actualizado`);
+      // último circuito de la zanja: ofrecer cerrarla y registrar la PAT
+      const rz = zc && !c.vinculo ? R.zlist.find((z) => z.id === zc.id) : null;
+      if (rz && rz.completo && !antes && rz.estado !== 'cerrada') setTimeout(() => cerrarZanjas([rz.id], true), 350);
     }
   }
 
@@ -1098,6 +1169,6 @@
     go('resumen');
   }
   function recargar(text) { const st = JSON.parse(text); S = normalizar(st); Sync.ordenar(S); R = Engine.calcular(S); render(false); toast('Datos actualizados'); }
-  window.__app = { recargar, get S() { return S; }, get R() { return R; }, go, commit, setZanja, conectar, syncNow, get NET() { return NET; }, get netStatus() { return netStatus; } };
+  window.__app = { recargar, get S() { return S; }, get R() { return R; }, go, commit, setZanja, tender, cerrarZanjas, sacarDeZanja, Engine, conectar, syncNow, get NET() { return NET; }, get netStatus() { return netStatus; } };
   init();
 })();
