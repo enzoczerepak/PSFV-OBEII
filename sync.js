@@ -2,12 +2,12 @@
    Cada PC guarda sus datos; los cambios se intercambian por registro (bobina, circuito, zanja, ajustes, compromisos).
    Conflictos: gana el cambio más reciente (con corrección de diferencia de reloj entre PCs). */
 (function () {
-  const KINDS = [['b', 'bobinas'], ['c', 'circuitos'], ['z', 'zanjas']];
+  const KINDS = [['b', 'bobinas'], ['c', 'circuitos'], ['z', 'zanjas'], ['k', 'cronoTareas']];
   // Versión del protocolo: 2 agrega fundaciones STS ('f:') y conserva registros de tipos desconocidos.
   // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
   const PROTO = 2;
-  const nuevo = (k) => k.startsWith('f:');
-  const conocido = (k) => k === 'cfg' || k === 'comp' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
+  const nuevo = (k) => k.startsWith('f:') || k.startsWith('k:') || k === 'km';
+  const conocido = (k) => k === 'cfg' || k === 'comp' || k === 'km' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
 
   // JSON con claves ordenadas: el orden interno de los campos no cuenta como cambio
   function canon(v) {
@@ -20,6 +20,7 @@
     KINDS.forEach(([p, col]) => (S[col] || []).forEach((x) => m.set(p + ':' + x.id, x)));
     m.set('cfg', { nombre: S.nombre, params: S.params, fuente: S.fuente || '' });
     m.set('comp', { compromiso: S.compromiso || {} });
+    if (S.cronoMeta) m.set('km', S.cronoMeta);
     // fundaciones STS: un registro por STS y etapa
     Object.entries(S.fundaciones || {}).forEach(([sts, et]) => Object.entries(et || {}).forEach(([e, v]) => { if (v) m.set('f:' + sts + '|' + e, v); }));
     // registros de versiones más nuevas: se guardan tal cual para no borrarlos
@@ -39,6 +40,7 @@
   function aplicar(S, k, d, v) {
     if (k === 'cfg') { if (!d && v) { S.nombre = v.nombre; S.params = v.params; S.fuente = v.fuente; } return; }
     if (k === 'comp') { if (!d && v) S.compromiso = v.compromiso || {}; return; }
+    if (k === 'km') { S.cronoMeta = d ? null : v; return; }
     if (k.startsWith('f:')) { const [sts, e] = k.slice(2).split('|'); S.fundaciones = S.fundaciones || {}; const o = (S.fundaciones[sts] = S.fundaciones[sts] || {}); if (d) delete o[e]; else o[e] = v; return; }
     const [p, id] = [k.slice(0, 1), k.slice(2)];
     const col = (KINDS.find((x) => x[0] === p) || [])[1];
@@ -131,7 +133,7 @@
   }
   // Cliente que se une por primera vez
   function reemplazarPorServidor(S) {
-    S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {};
+    S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {}; S.cronoTareas = []; S.cronoMeta = null;
     S.__sync = { snap: {}, meta: {}, pend: {}, rev: 0, peerRev: 0 };
   }
   function marcarTodoPendiente(S) {

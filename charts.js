@@ -32,19 +32,20 @@
     const xs = series.flatMap((s) => s.pts.map((p) => +p.x));
     if (!xs.length) return '';
     let x0 = Math.min(...xs), x1 = Math.max(...xs); if (x1 === x0) { x0 -= 864e5; x1 += 864e5; }
-    const ymax = Math.max(0.1, Math.min(1, Math.ceil(Math.max(...series.flatMap((s) => s.pts.map((p) => p.y))) * 10 + 0.5) / 10));
+    const ymax = opts.full ? 1 : Math.max(0.1, Math.min(1, Math.ceil(Math.max(...series.flatMap((s) => s.pts.map((p) => p.y))) * 10 + 0.5) / 10));
     const X = (v) => L + ((v - x0) / (x1 - x0)) * (W - L - Rm), Y = (v) => T + (1 - v / ymax) * (H - T - B);
     let s = `<svg class="ch" viewBox="0 0 ${W} ${H}" role="img">`;
     for (let i = 0; i <= 4; i++) { const v = (ymax * i) / 4, y = Y(v); s += `<line x1="${L}" x2="${W - Rm}" y1="${y}" y2="${y}" class="grid"/><text x="${L - 6}" y="${y + 4}" class="ax" text-anchor="end">${fmt(v * 100)}%</text>`; }
     const nT = Math.min(6, Math.max(2, Math.round((x1 - x0) / 864e5) + 1));
     for (let i = 0; i < nT; i++) { const v = x0 + ((x1 - x0) * i) / (nT - 1); s += `<text x="${X(v)}" y="${H - 6}" class="ax" text-anchor="middle">${new Date(v).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}</text>`; }
+    if (opts.hoy && +opts.hoy >= x0 && +opts.hoy <= x1) { const hx = X(+opts.hoy); s += `<line x1="${hx}" x2="${hx}" y1="${T}" y2="${H - B}" stroke="#f5a524" stroke-width="1.5" stroke-dasharray="4 3"/><text x="${hx + 4}" y="${T + 10}" class="ax">hoy</text>`; }
     series.forEach((se) => {
       if (!se.pts.length) return;
       const d = se.pts.map((p, i) => `${i ? 'L' : 'M'}${X(+p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join(' ');
       s += `<path d="${d}" fill="none" stroke="${se.color}" stroke-width="2" stroke-linejoin="round" class="draw"/>`;
       se.pts.forEach((p) => { s += `<circle cx="${X(+p.x)}" cy="${Y(p.y)}" r="4" fill="${se.color}" stroke="var(--card)" stroke-width="2" class="mk" data-tip="${esc(p.tip)}"/><circle cx="${X(+p.x)}" cy="${Y(p.y)}" r="11" fill="transparent" data-tip="${esc(p.tip)}"/>`; });
       const last = se.pts[se.pts.length - 1];
-      s += `<text x="${X(+last.x) + 8}" y="${Y(last.y) + 4}" class="lbl">${esc(se.name)} ${fmt(last.y * 100, 1)}%</text>`;
+      if (!opts.sinEtiquetas || se.pts.length === 1) s += `<text x="${X(+last.x) + 8}" y="${Y(last.y) + 4}" class="lbl">${esc(se.name)} ${fmt(last.y * 100, 1)}%</text>`;
     });
     return s + '</svg>';
   }

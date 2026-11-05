@@ -261,5 +261,16 @@
     XLSX.utils.book_append_sheet(wb, sheet(ac.concat(rows), [14, 8, 4, 42, 11, 13, 30]), 'Actividades');
     return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   }
-  window.IO = { readWorkbook, exportPlan, exportTendidos, exportPuntas, exportFund, num };
+
+  function exportCrono(C, meta) {
+    const wb = XLSX.utils.book_new(); const P = C.P;
+    const r1v = (v) => Math.round(v * 10) / 10;
+    const res = [['Cronograma', meta.nombre || ''], ['Archivo', meta.fuente || ''], ['Fecha del informe', C.hoy], ['Inicio', P.inicio], ['Fin actual', P.fin], ['Fin línea base', P.bFin || ''], ['Avance real (%)', r1v(P.pct)], ['Avance esperado hoy (%)', r1v(P.esp)], ['Desvío (pp)', r1v(P.pct - P.esp)]];
+    XLSX.utils.book_append_sheet(wb, sheet(res, [24, 50]), 'Resumen');
+    const rows = [['WBS', 'Nivel', 'Actividad', 'Tipo', 'Inicio', 'Fin', 'Duración (días)', 'Inicio importado', 'Fin importado', 'Inicio línea base', 'Fin línea base', 'Desvío fin vs base (días)', '% real', '% esperado hoy', 'Estado', 'Ruta crítica', 'Modificado', 'Nota']];
+    C.T.forEach((t) => rows.push([t.wbs, t.nivel, '   '.repeat(t.nivel - 1) + t.nombre, t.esResumen ? 'Etapa' : t.hito ? 'Hito' : 'Actividad', t.inicio, t.fin, t.hito ? 0 : Math.round((new Date(t.fin) - new Date(t.inicio)) / 864e5) + 1, t.oInicio || '', t.oFin || '', t.bInicio || '', t.bFin || '', t.desvio || 0, r1v(t.pct), r1v(t.esp), t.estado, t.critica ? 'sí' : '', t.mod ? t.mod.slice(0, 10) : '', t.nota || '']));
+    XLSX.utils.book_append_sheet(wb, sheet(rows, [9, 6, 60, 10, 11, 11, 10, 12, 12, 12, 12, 12, 8, 10, 11, 8, 11, 30]), 'Actividades');
+    return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  }
+  window.IO = { readWorkbook, exportPlan, exportTendidos, exportPuntas, exportFund, exportCrono, num };
 })();

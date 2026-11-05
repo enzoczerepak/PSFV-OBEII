@@ -37,11 +37,23 @@ window.READONLY = true;
     const t = new Date(d.actualizado);
     const el = $('#saveState'); if (el) { el.textContent = 'Datos al ' + t.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); el.classList.remove('dirty'); }
   }
-  async function entrar(id, kekRaw, d) {
+  function saludo(nombre) {
+    const h = new Date().getHours(), sal = h < 6 ? 'Buenas noches' : h < 13 ? 'Buenos días' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
+    const n = String(nombre || '').trim().split(/[\s._-]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    const fecha = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const g = document.createElement('div'); g.id = 'greet';
+    g.innerHTML = `<div class="gb"><div class="gi">👋</div><div><b>${sal}${n ? ', ' + n.replace(/[<>&"]/g, '') : ''}</b><span>${fecha.charAt(0).toUpperCase() + fecha.slice(1)}</span><small>Bienvenido/a al visor de avance de obra · PSFV-OBEII</small></div></div>`;
+    document.body.appendChild(g);
+    requestAnimationFrame(() => g.classList.add('show'));
+    const fuera = () => { g.classList.remove('show'); setTimeout(() => g.remove(), 500); };
+    g.onclick = fuera; setTimeout(fuera, 3800);
+  }
+  async function entrar(id, kekRaw, d, nombre) {
     const txt = await abrir(d, id, kekRaw);
     document.getElementById('login').classList.add('ok');
     setTimeout(() => { const l = document.getElementById('login'); if (l) l.style.display = 'none'; }, 400);
     resolver({ text: txt, path: null });
+    setTimeout(() => saludo(nombre), 450);
     setTimeout(() => {
       marca(d);
       const f = document.querySelector('.side-foot');
@@ -58,7 +70,7 @@ window.READONLY = true;
   }
   async function auto() {
     const s = store.get(); if (!s) return false;
-    try { const d = await bajar(); await entrar(s.id, b64d(s.k), d); return true; } catch (_) { store.clear(); return false; }
+    try { const d = await bajar(); await entrar(s.id, b64d(s.k), d, s.n); return true; } catch (_) { store.clear(); return false; }
   }
   document.addEventListener('DOMContentLoaded', async () => {
     const f = $('#lgForm'), err = $('#lgE'), btn = $('#lgB');
@@ -72,8 +84,8 @@ window.READONLY = true;
         const u = (d.usuarios || []).find((x) => x.id === id);
         if (!u) throw new Error('usuario');
         const k = await derivar($('#lgP').value, u.salt, u.iter);
-        await entrar(id, k, d);
-        store.set({ id, k: b64e(k) }, $('#lgR').checked);
+        await entrar(id, k, d, $('#lgU').value);
+        store.set({ id, k: b64e(k), n: $('#lgU').value.trim() }, $('#lgR').checked);
       } catch (ex) {
         err.textContent = ex.message === 'usuario' || ex.message === 'clave' ? 'Usuario o contraseña incorrectos' : ex.message;
         btn.disabled = false; btn.textContent = 'Ingresar';
