@@ -1909,8 +1909,8 @@
       const bt = [...circ.values()];
       return `<h3>Planta PSFV Oberá II</h3>${fila('Trackers', `${P.trk.length} <small>(${tot((t) => t.t === '1P52')} × 1P52 · ${tot((t) => t.t === '1P26')} × 1P26)</small>`)}
         ${fila('Módulos', fmt(P.trk.reduce((a, t) => a + (t.t === '1P52' ? 52 : 26), 0)))}${fila('Potencia DC aprox.', `${fmt(P.trk.reduce((a, t) => a + (t.t === '1P52' ? 52 : 26), 0) * 0.63 / 1000, 2)} MWp`)}
-        ${fila('Inversores', P.inv.length)}${fila('STS', P.sts.map((s) => `${s.id.replace('STS ', '')}: ${fmt(s.mva, 1)}`).join(' · ') + ' MVA')}
-        ${fila('Zanjas BT', `${bt.filter((c) => zest(c) !== 'no abierta').length} abiertas · ${bt.filter((c) => zest(c) === 'cerrada').length} cerradas / ${bt.length}`)}
+        ${fila('Inversores', P.inv.length)}${fila('STS', P.sts.slice().sort((a, b) => a.id.localeCompare(b.id)).map((s) => `${s.id.replace('STS ', '')}: ${fmt(s.mva, 1)}`).join(' · ') + ' MVA')}
+        ${(() => { const zc = (cat) => { const zs = R.zlist.filter((z) => z.cat === cat); const na = zs.filter((z) => z.estado === 'abierta').length, nc = zs.filter((z) => z.estado === 'cerrada').length; return `${na} abierta${na === 1 ? '' : 's'} · ${nc} cerrada${nc === 1 ? '' : 's'} <small>de ${zs.length}</small>`; }; return fila('Zanjas BT', zc('BT')) + fila('Zanjas MT', zc('MT')); })()}
         ${fila('Cable BT tendido', `${bt.filter((c) => c.completo).length} / ${bt.length} circuitos`)}
         <h4 class="dh">Sectores</h4><div class="plsecs">${P.sect.map((s) => { const n = P.trk.filter((t) => t.s === s.n); return `<button class="plsec" data-pk2="s|${s.n}"><i style="background:${SECT_COL[s.n]}"></i><b>Sector ${s.n}</b><span>${n.length} trackers</span></button>`; }).join('')}</div>
         <p class="hint">Rueda del mouse: zoom · arrastrar: mover · tocá un tracker, un inversor, una zanja o un STS para ver su información. Potencia con módulos de 625 a 635 W (distribución por tracker a definir).</p>`;
