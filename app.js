@@ -8,6 +8,8 @@
   const uid = (p) => p + Math.random().toString(36).slice(2, 9);
   const CATS = Engine.CATS;
   const CATN = { BT: 'BT 0,8 kV', MT: 'MT 33 kV', PAT: 'PAT Cu desnudo' };
+  const CATL = { BT: 'BT · 0,8 kV', MT: 'MT · 33 kV', PAT: 'PAT · Cu desnudo' };
+  const ctag = (c) => `<i class="cdot c-${c}"></i>`;
 
   let S = null, R = null, view = 'resumen', seedCache = null;
   let NET = { modo: 'local' }, netStatus = { ok: null, msg: '' }, syncBusy = false, syncTimer = null;
@@ -146,23 +148,26 @@
     avance: ['Avance', () => 'Porcentaje tendido por apartado, por STS, en el tiempo, zanjas y bobinas'],
     propuesta: ['Propuesta de tendido', () => 'Lotes de zanjas por zona, del tamaño de una bobina, en el orden sugerido para abrir'],
     zanjas: ['Zanjas', () => 'Estado de cada zanja (BT y MT) y metros realizados. Una zanja se cierra cuando tiene el cable y la PAT tendidos'],
-    'BT-plan': ['Plan de corte · BT 0,8 kV', () => 'Cables de aluminio inversor → STS · los cortes listos quedan fijos en su bobina'],
-    'BT-circ': ['Circuitos · BT 0,8 kV', () => 'Tendidos inversor → STS: zanja y registro de lo ejecutado'],
-    'MT-plan': ['Plan de corte · MT 33 kV', () => 'Cables de media tensión entre STS, sala de celdas y LMT · los cortes listos quedan fijos en su bobina'],
-    'MT-circ': ['Circuitos · MT 33 kV', () => 'STS 4 → 3 → sala de celdas · STS 1 → 2 → sala de celdas · sala de celdas → LMT · fin LMT → ET'],
-    'PAT-plan': ['Plan de corte · PAT', () => 'Cobre desnudo: 25 mm² en zanjas de BT, 95 mm² en zanjas de MT · los cortes listos quedan fijos en su bobina'],
-    'PAT-circ': ['Tendidos · PAT', () => 'Un conductor de Cu desnudo por zanja (compartida o no), con el largo de la zanja'],
+    'BT-plan': ['Plan de corte', () => 'Cables de aluminio inversor → STS · los cortes listos quedan fijos en su bobina'],
+    'BT-circ': ['Circuitos', () => 'Tendidos inversor → STS: zanja y registro de lo ejecutado'],
+    'MT-plan': ['Plan de corte', () => 'Cables de media tensión entre STS, sala de celdas y LMT · los cortes listos quedan fijos en su bobina'],
+    'MT-circ': ['Circuitos', () => 'STS 4 → 3 → sala de celdas · STS 1 → 2 → sala de celdas · sala de celdas → LMT · fin LMT → ET'],
+    'PAT-plan': ['Plan de corte', () => 'Cobre desnudo: 25 mm² en zanjas de BT, 95 mm² en zanjas de MT · los cortes listos quedan fijos en su bobina'],
+    'PAT-circ': ['Tendidos', () => 'Un conductor de Cu desnudo por zanja (compartida o no), con el largo de la zanja'],
     bobinas: ['Bobinas', () => 'Ingreso de bobinas de BT, MT y PAT, saldo actual y remanente previsto'],
     ajustes: ['Ajustes', () => 'Parámetros del cálculo y datos del proyecto'],
   };
   function go(v) {
     view = v; ui.sel.clear();
-    $$('#nav button').forEach((b) => { b.classList.toggle('on', b.dataset.view === v); if (b.dataset.view === v) $('#navPill').style.transform = `translateY(${b.offsetTop}px)`; });
+    $$('.sfBtn').forEach((b) => b.classList.toggle('on', b.dataset.view === v)); $('#navPill').style.opacity = v === 'ajustes' ? 0 : 1;
+    $$('#nav button').forEach((b) => { b.classList.toggle('on', b.dataset.view === v); if (b.dataset.view === v) { const pl = $('#navPill'); pl.style.transform = `translateY(${b.offsetTop}px)`; pl.style.left = b.offsetLeft + 'px'; pl.style.width = b.offsetWidth + 'px'; pl.style.height = b.offsetHeight + 'px'; pl.style.right = 'auto'; if (window.innerWidth > 860) b.scrollIntoView({ block: 'nearest' }); } });
     render(true);
   }
   function render(anim) {
     const [t, sub] = VIEWS[view];
-    $('#vTitle').textContent = t; $('#vSub').innerHTML = sub();
+    const vc = view.split('-')[0];
+    $('#vMod').textContent = view === 'ajustes' ? 'General' : 'Tendido y aprovechamiento de cables';
+    $('#vTitle').innerHTML = (CATN[vc] && view.includes('-') ? `<span class="cchip c-${vc}">${CATL[vc]}</span>` : '') + esc(t); $('#vSub').innerHTML = sub();
     $('#projName').textContent = S.nombre;
     const el = $('#view'), sc = el.scrollTop;
     // posición de las listas con scroll propio, para no perder el lugar al redibujar
@@ -202,14 +207,14 @@
     const cnt = (cat) => { const cs = R.circuitos.filter((c) => c.cat === cat); return [cs.filter((c) => c.completo).length, cs.length, cs.filter((c) => c.estado === 'listo para tender').length]; };
     let h = `<div class="grid g3 stagger" style="margin-bottom:16px">
       <div class="card"><h3>Tendido</h3><table class="kt"><tr><th></th><th>Tendidos</th><th>Listos</th></tr>
-        ${['BT', 'MT', 'PAT'].map((c) => { const [a, b, l] = cnt(c); return `<tr><td><b>${CATN[c]}</b></td><td><span class="mini ok"><div data-w="${pct(a, b)}" style="width:0"></div></span> ${a}/${b}</td><td>${l}</td></tr>`; }).join('')}</table></div>
+        ${['BT', 'MT', 'PAT'].map((c) => { const [a, b, l] = cnt(c); return `<tr><td>${ctag(c)}<b>${CATN[c]}</b></td><td><span class="mini ok"><div data-w="${pct(a, b)}" style="width:0"></div></span> ${a}/${b}</td><td>${l}</td></tr>`; }).join('')}</table></div>
       <div class="card"><h3>Zanja realizada</h3>${zanjaCard('BT')}${zanjaCard('MT')}<div class="legend" style="margin-top:6px"><span><i class="c-done"></i>Cerrada</span><span><i class="c-acc"></i>Abierta</span></div></div>
       <div class="card"><h3>Alertas</h3><div class="alerts">${R.alerts.length ? R.alerts.map((a) => `<div class="alert ${a.tipo}">${esc(a.txt)}</div>`).join('') : '<div class="alert ok">Sin observaciones</div>'}</div></div>
     </div><div class="grid g3 stagger" style="margin-bottom:16px"><div class="card"><h3>PAT tendida</h3>${patCard()}</div>`;
     R.resumen.forEach((r) => {
       const tot = Math.max(r.stock, r.requerido);
       const st = !r.bobinas ? '<span class="pill p-warn">sin bobinas</span>' : r.faltante > 0 ? pill('falta cable').replace('p-prov', 'p-bad') : '<span class="pill p-ok">stock suficiente</span>';
-      h += `<div class="card sc" data-go="${r.cat}-plan"><div class="hero"><div class="sec">${r.seccion}<small> mm² · ${CATN[r.cat]}</small></div><span style="margin-left:auto">${st}</span></div><div class="muted" style="margin:-8px 0 12px">${r.bobinas} bobinas · ${fmt(r.stock)} m en stock</div>
+      h += `<div class="card sc" data-go="${r.cat}-plan"><div class="hero"><div class="sec">${r.seccion}<small> mm² · ${ctag(r.cat)}${CATN[r.cat]}</small></div><span style="margin-left:auto">${st}</span></div><div class="muted" style="margin:-8px 0 12px">${r.bobinas} bobinas · ${fmt(r.stock)} m en stock</div>
         <div class="kpis k3">${kpi('Requerido', r.requerido)}${kpi('Tendido', r.tendido)}${kpi('Listo p/ cortar', r.listo)}${kpi('Balance stock', r.balance)}${kpi('Remanente útil previsto', r.remUtil)}${kpi('Descarte previsto', r.descarte)}</div>
         <div class="muted" style="margin-top:6px">Bobinas: ${r.realSinAbrir} sin abrir · ${r.realEnUso} en uso · ${r.realTerminadas} terminadas${r.noSeUsa ? ` · ${r.noSeUsa} que el plan no usa` : ''}</div>
         ${r.tendidoTeo ? `<div class="muted" style="margin-top:8px">Tirado vs lista: <span class="dv ${r.desvio > 0.005 ? 'pos' : r.desvio < -0.005 ? 'neg' : ''}">${r.desvio > 0 ? '+' : ''}${fmt(r.desvio, 1)} m (${r.desvio > 0 ? '+' : ''}${fmt(r.desvioPct * 100, 1)} %)</span> sobre ${fmt(r.tendidoTeo)} m tendidos</div>` : ''}
@@ -229,7 +234,7 @@
     let h = `<div class="grid g3 stagger" style="margin-bottom:16px">`;
     ['BT', 'MT', 'PAT'].forEach((cat) => {
       const t = sumCat(cat), [a, b] = nC(cat), p = t.req ? t.tend / t.req : 0;
-      h += `<div class="card tile"><div>${Charts.ring(p, SERIE[cat], 'tendido')}</div><div><h3 style="margin-bottom:6px">${CATN[cat]}</h3>
+      h += `<div class="card tile"><div>${Charts.ring(p, SERIE[cat], 'tendido')}</div><div><h3 style="margin-bottom:6px">${ctag(cat)}${CATN[cat]}</h3>
         <div class="kpis k1" style="gap:6px">${kpi('Metros tendidos', t.tend, `/ ${fmt(t.req)} m`)}${kpi('Circuitos completos', a, `/ ${b}`)}</div>
         <div class="muted" style="margin-top:6px">${fmt(t.listo)} m listos para cortar</div></div></div>`;
     });
@@ -1058,7 +1063,7 @@
 
   // ======================= inicio =======================
   async function init() {
-    $$('#nav button').forEach((b) => { b.onclick = () => go(b.dataset.view); });
+    $$('#nav button, .sfBtn').forEach((b) => { b.onclick = () => go(b.dataset.view); });
     const r = await window.api.load();
     const st = JSON.parse(r.text);
     // migración: agregar circuitos de MT de la lista de cables si el proyecto no los tiene
