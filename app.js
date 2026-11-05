@@ -143,7 +143,7 @@
   }
   function actions(btns) {
     const a = $('#vActions'); a.innerHTML = '';
-    if (window.READONLY) btns = btns.filter(([t]) => /Exportar|PDF/.test(t));
+    if (window.READONLY) btns = btns.filter(([t]) => /Exportar|PDF/.test(t) || (window.__editor && /Actualizar cronograma/.test(t)));
     btns.forEach(([txt, cls, fn]) => { const b = document.createElement('button'); b.className = cls; b.innerHTML = txt; b.onclick = fn; a.appendChild(b); });
   }
 
@@ -155,7 +155,7 @@
     diario: ['Tendido por fecha', () => 'Elegí un día del calendario para ver qué se tendió: metros, secciones, circuitos e inversores'],
     crono: ['Resumen del cronograma', () => `${esc((S.cronoMeta || {}).nombre || 'Cronograma de obra')} · avance real vs. esperado al día de hoy`],
     gantt: ['Diagrama de Gantt', () => 'Actividades del cronograma en el tiempo · tocá una para cambiar fechas o avance'],
-    fundaciones: ['Fundaciones STS', () => 'Avance de las bases de los 4 STS por etapa: tildá lo terminado y cargá las fechas de inicio'],
+    fundaciones: ['Fundaciones STS', () => 'Avance de las bases de los 4 STS por etapa: iniciá y finalizá cada etapa con su fecha'],
     puntas: ['Puntas de cable', () => 'Terminales colocados en cada extremo: lado inversor y lado STS en BT; entre STS, sala de celdas, piquete y ET en MT'],
     propuesta: ['Propuesta de tendido', () => 'Lotes de zanjas por zona, del tamaño de una bobina, en el orden sugerido para abrir'],
     zanjas: ['Zanjas', () => 'Estado de cada zanja (BT y MT) y metros realizados. Se tiende de a un circuito; la zanja se cierra con todos sus circuitos tendidos y ahí se registra la PAT'],
@@ -1058,7 +1058,7 @@
         <label>Repositorio<input type="text" id="wRepo" value="${esc(WEB.repo || '')}" placeholder="ej. obera-ii"></label>
         <label class="full">Token de acceso de GitHub<input type="password" id="wTok" value="${esc(WEB.token || '')}" placeholder="github_pat_…"></label></div>
       <h4 style="margin:14px 0 6px">Usuarios del visor</h4>
-      <div id="wUs">${us.map((u) => `<div class="phase-row wu" style="grid-template-columns:1fr 1fr auto"><input type="text" class="wn" value="${esc(u.nombre)}" readonly><input type="password" class="wp" placeholder="(sin cambios)"><button class="btn sm ghost danger wx">Quitar</button></div>`).join('')}</div>
+      <div id="wUs">${us.map((u) => `<div class="phase-row wu" style="grid-template-columns:1fr 1fr auto auto"><input type="text" class="wn" value="${esc(u.nombre)}" readonly><input type="password" class="wp" placeholder="(sin cambios)"><label class="chkl wed" title="Puede enviar cronogramas actualizados desde el visor"><input type="checkbox" class="we" ${u.editor ? 'checked' : ''}> Editor</label><button class="btn sm ghost danger wx">Quitar</button></div>`).join('')}</div>
       <button class="btn sm" id="wAdd" style="margin-top:6px">+ Usuario</button>
       <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13px"><input type="checkbox" id="wAuto" ${WEB.auto !== false ? 'checked' : ''}> Publicar automáticamente cuando haya cambios (como máximo cada 90 segundos)</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn pri" id="wSave">Guardar</button><button class="btn" id="wViz">Instalar / actualizar visor</button><button class="btn acc" id="wPub" ${webListo() ? '' : 'disabled'}>Publicar ahora</button></div>
@@ -1066,16 +1066,17 @@
         <li>Crear una cuenta en github.com (gratis) y un repositorio <b>público</b> nuevo, por ejemplo "obera-ii", marcando "Add a README".</li>
         <li>En GitHub: <i>Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token</i>. Elegir solo ese repositorio y dar permiso <b>Contents: Read and write</b> y <b>Pages: Read and write</b>. Copiar el token.</li>
         <li>Acá: cargar usuario de GitHub, repositorio y token, agregar los usuarios del visor con su contraseña (mínimo 8 caracteres) y tocar <b>Guardar</b>.</li>
+        <li><b>Editor</b>: ese usuario puede enviar desde el visor un cronograma actualizado de MS Project (.mpp o .xml). Llega cifrado a esta PC, que lo aplica sola cada 2 minutos mientras el programa esté abierto. Los editores reciben el token de GitHub cifrado con su contraseña: marcá solo a personas de confianza.</li>
         <li>Tocar <b>Instalar / actualizar visor</b> y después <b>Publicar ahora</b>. Si GitHub Pages no se activa solo: en el repositorio, <i>Settings → Pages → Deploy from a branch → main / (root)</i>.</li>
         <li>Pasar la dirección del visor y a cada persona su usuario y contraseña. La primera publicación tarda 1 a 2 minutos en aparecer.</li></ol>
         <p class="hint">Los datos viajan y quedan guardados cifrados (AES-256); sin usuario y contraseña no se pueden leer. Para quitarle el acceso a alguien, se lo quita de la lista: desde la próxima publicación ya no puede abrir los datos.</p></details>`;
-    const fila = () => `<div class="phase-row wu" style="grid-template-columns:1fr 1fr auto"><input type="text" class="wn" placeholder="usuario (ej. jgarcia)"><input type="password" class="wp" placeholder="contraseña"><button class="btn sm ghost danger wx">Quitar</button></div>`;
+    const fila = () => `<div class="phase-row wu" style="grid-template-columns:1fr 1fr auto auto"><input type="text" class="wn" placeholder="usuario (ej. Juan Pérez)"><input type="password" class="wp" placeholder="contraseña"><label class="chkl wed" title="Puede enviar cronogramas actualizados desde el visor"><input type="checkbox" class="we"> Editor</label><button class="btn sm ghost danger wx">Quitar</button></div>`;
     $('#wAdd').onclick = () => { $('#wUs').insertAdjacentHTML('beforeend', fila()); bindX(); };
     const bindX = () => $$('.wx', box).forEach((b) => { b.onclick = () => b.closest('.wu').remove(); });
     bindX();
     if ($('#wUrl')) $('#wUrl').onclick = (e) => { e.preventDefault(); window.api.openUrl(webUrl()); };
     $('#wSave').onclick = async () => {
-      const usuarios = $$('.wu', box).map((r) => ({ nombre: $('.wn', r).value.trim(), password: $('.wp', r).value }));
+      const usuarios = $$('.wu', box).map((r) => ({ nombre: $('.wn', r).value.trim(), password: $('.wp', r).value, editor: $('.we', r).checked }));
       const nuevosSinClave = usuarios.filter((u) => u.nombre && !u.password && !us.some((x) => x.nombre.toLowerCase() === u.nombre.toLowerCase()));
       if (nuevosSinClave.length) { toast(`Falta la contraseña de ${nuevosSinClave.map((u) => u.nombre).join(', ')}`, { err: true }); return; }
       if (usuarios.some((u) => u.password && u.password.length < 8)) { toast('Las contraseñas deben tener al menos 8 caracteres', { err: true }); return; }
@@ -1213,7 +1214,7 @@
     for (let d = 1; d <= nd; d++) {
       const k = `${ym}-${String(d).padStart(2, '0')}`, D = dias.get(k);
       const h = D && D.total ? 0.18 + 0.82 * (D.total / maxMes) : 0;
-      cal += `<button class="cd${k === ui.dia ? ' sel' : ''}${k === hoy ? ' hoy' : ''}${D ? ' con' : ''}" data-d="${k}" style="--h:${(h * 100).toFixed(0)}%" title="${D ? `${fmt(D.total)} m tendidos${D.nPuntas ? ` · ${D.nPuntas} puntas` : ''}` : 'Sin registros'}">
+      cal += `<button class="cd${k === ui.dia ? ' csel' : ''}${k === hoy ? ' hoy' : ''}${D ? ' con' : ''}" data-d="${k}" style="--h:${(h * 100).toFixed(0)}%" title="${D ? `${fmt(D.total)} m tendidos${D.nPuntas ? ` · ${D.nPuntas} puntas` : ''}` : 'Sin registros'}">
         <span class="n">${d}</span>${D && D.total ? `<span class="m">${D.total >= 1000 ? fmt(D.total / 1000, 1) + 'k' : fmt(D.total)}</span>` : ''}
         <span class="dots">${['BT', 'MT', 'PAT'].filter((c) => D && D.m[c] > 0).map((c) => `<i class="c-${c}"></i>`).join('')}${D && D.nPuntas ? '<i class="c-pt"></i>' : ''}${D && D.fund.length ? '<i class="c-fd"></i>' : ''}</span></button>`;
     }
@@ -1430,44 +1431,71 @@
       h += `<tr><td class="muted">${idx + 1}</td><td><b>${esc(n)}</b></td>${STSL.map((s) => {
         const v = (((S.fundaciones || {})[s]) || {})[k] || {};
         const est = v.ok ? 'ok' : v.ini ? 'cur' : '';
-        return `<td class="fc"><div class="fcell ${est}"><label class="fchk"><input type="checkbox" data-fk="${s}|${k}" ${v.ok ? 'checked' : ''} ${window.READONLY ? 'disabled' : ''}><span></span></label>
-          <button class="fdate" data-fd="${s}|${k}" title="${v.ini ? 'Inicio ' + fechaCorta(v.ini) : ''}${v.fin && v.ok ? ' · fin ' + fechaCorta(v.fin) : ''}${v.obs ? ' · ' + esc(v.obs) : ''}">${v.ini ? fechaCorta(v.ini).slice(0, 5) : window.READONLY ? '' : '+ inicio'}${v.ok && v.fin ? `<small>→ ${fechaCorta(v.fin).slice(0, 5)}</small>` : ''}</button></div></td>`;
+        const tit = `${v.ini ? 'Inicio ' + fechaCorta(v.ini) : ''}${v.ok && v.fin ? ' · fin ' + fechaCorta(v.fin) : ''}${v.obs ? ' · ' + esc(v.obs) : ''}`;
+        const ro = window.READONLY;
+        const cuerpo = v.ok ? `<button class="fdate" data-fd="${s}|${k}" title="${tit}"><i class="fic ok">✓</i>${fechaCorta(v.ini || v.fin).slice(0, 5)}<small>→ ${fechaCorta(v.fin).slice(0, 5)}</small></button>`
+          : v.ini ? `<button class="fdate" data-fd="${s}|${k}" title="${tit}"><i class="fic cur">▶</i>${fechaCorta(v.ini).slice(0, 5)}</button>${ro ? '' : `<button class="ffin" data-ff="${s}|${k}" title="Marcar la actividad como finalizada">Finalizar</button>`}`
+          : ro ? '<span class="muted">–</span>' : `<button class="fini" data-fi="${s}|${k}" title="Cargar la fecha de inicio">▶ Iniciar</button>`;
+        return `<td class="fc"><div class="fcell ${est}">${cuerpo}</div></td>`;
       }).join('')}</tr>`;
     });
-    h += `</tbody></table></div></div><p class="hint">Tildá la etapa cuando esté terminada (se guarda la fecha de fin). Tocá la fecha para cargar o corregir cuándo se inició, el fin y una observación. Una etapa con inicio y sin tildar figura <b style="color:#b7791f">en curso</b>.</p>`;
+    h += `</tbody></table></div></div><p class="hint"><b>▶ Iniciar</b> carga la fecha de inicio y la etapa queda <b style="color:#b7791f">en curso</b>. Cuando termina, <b>Finalizar</b> carga la fecha de fin y recién ahí figura <b style="color:#2f7a46">terminada</b>. Tocá la fecha para corregir inicio, fin u observación.</p>`;
     // listado
     const acts = [];
     STSL.forEach((s) => ETAPAS.forEach(([k, n], i) => { const v = (((S.fundaciones || {})[s]) || {})[k]; if (v && (v.ini || v.ok)) acts.push({ s, k, n, i, v }); }));
     acts.sort((a, b) => String(b.v.ini || b.v.fin).localeCompare(String(a.v.ini || a.v.fin)) || a.s.localeCompare(b.s) || b.i - a.i);
     h += `<div class="card" style="margin-top:16px"><h3>Actividades registradas <span class="muted" style="font-weight:400">· ${acts.length}</span></h3>${acts.length ? `<table class="tbl dtbl"><thead><tr><th>Inicio</th><th>STS</th><th>Etapa</th><th>Estado</th><th>Fin</th><th>Observación</th></tr></thead><tbody>
-      ${acts.map((a) => `<tr><td>${a.v.ini ? fechaCorta(a.v.ini) : '–'}</td><td><b>${a.s}</b></td><td>${a.i + 1}. ${esc(a.n)}</td><td>${a.v.ok ? '<span class="pill p-done">terminada</span>' : '<span class="pill p-warn">en curso</span>'}</td><td>${a.v.ok && a.v.fin ? fechaCorta(a.v.fin) : '–'}</td><td class="muted">${esc(a.v.obs || '')}</td></tr>`).join('')}</tbody></table>` : '<div class="empty" style="padding:20px"><b>Sin actividades registradas</b>Cargá la fecha de inicio de cada etapa o tildala cuando termine.</div>'}</div>`;
+      ${acts.map((a) => `<tr><td>${a.v.ini ? fechaCorta(a.v.ini) : '–'}</td><td><b>${a.s}</b></td><td>${a.i + 1}. ${esc(a.n)}</td><td>${a.v.ok ? '<span class="pill p-done">terminada</span>' : '<span class="pill p-warn">en curso</span>'}</td><td>${a.v.ok && a.v.fin ? fechaCorta(a.v.fin) : '–'}</td><td class="muted">${esc(a.v.obs || '')}</td></tr>`).join('')}</tbody></table>` : '<div class="empty" style="padding:20px"><b>Sin actividades registradas</b>Tocá ▶ Iniciar en la etapa que arrancó.</div>'}</div>`;
     el.innerHTML = h;
-    $$('[data-fk]', el).forEach((c) => { c.onchange = () => { const [s, k] = c.dataset.fk.split('|'); setEtapa(s, k, { ok: c.checked }); }; });
+    $$('[data-fi]', el).forEach((b) => { b.onclick = () => { const [s, k] = b.dataset.fi.split('|'); fechaEtapa(s, k, 'ini'); }; });
+    $$('[data-ff]', el).forEach((b) => { b.onclick = () => { const [s, k] = b.dataset.ff.split('|'); fechaEtapa(s, k, 'fin'); }; });
     $$('[data-fd]', el).forEach((b) => { b.onclick = () => { const [s, k] = b.dataset.fd.split('|'); editEtapa(s, k); }; });
   }
   function setEtapa(s, k, ch) {
     if (window.READONLY) return;
     S.fundaciones = S.fundaciones || {}; const o = (S.fundaciones[s] = S.fundaciones[s] || {});
     const v = Object.assign({}, o[k]);
-    if ('ok' in ch) { v.ok = ch.ok; if (ch.ok) { v.fin = v.fin || today(); v.ini = v.ini || v.fin; } else delete v.fin; }
+    if ('ok' in ch) { v.ok = ch.ok; if (ch.ok) v.fin = ch.fin || v.fin || today(); else delete v.fin; }
     ['ini', 'fin', 'obs'].forEach((x) => { if (x in ch) { if (ch[x]) v[x] = ch[x]; else delete v[x]; } });
     if (!v.ok) delete v.ok;
     if (!v.ok && !v.ini && !v.obs) delete o[k]; else o[k] = v;
     const i = fundInfo(s);
     commit(`${s} · ${ETN[k]}: ${v.ok ? 'terminada' : v.ini ? 'en curso' : 'sin registro'} · base ${fmt(i.p * 100)} %`);
   }
+  // inicio o fin rápido de una etapa
+  async function fechaEtapa(s, k, cual) {
+    if (window.READONLY) return;
+    const v = (((S.fundaciones || {})[s]) || {})[k] || {};
+    const fin = cual === 'fin';
+    const res = await modal({ title: `${s} · ${esc(ETN[k])}`, sub: fin ? 'Actividad finalizada' : 'Inicio de la actividad',
+      body: `<div class="form">${fin ? `<label>Inició el<input type="date" name="ini" value="${v.ini || today()}"></label><label>Finalizó el<input type="date" name="f" value="${today()}"></label>` : `<label>Inició el<input type="date" name="f" value="${today()}"></label>`}<label class="full">Observación<input name="obs" value="${esc(v.obs || '')}" placeholder="Opcional"></label></div>`,
+      buttons: [['Cancelar', 'btn', () => null], [fin ? 'Finalizar' : 'Iniciar', 'btn pri', (box) => {
+        const f = $('[name=f]', box).value, ini = fin ? $('[name=ini]', box).value : f;
+        if (!f || !ini) { toast('Completá la fecha', { err: true }); return false; }
+        if (fin && f < ini) { toast('La fecha de fin no puede ser anterior al inicio', { err: true }); return false; }
+        return { ini, fin: fin ? f : null, obs: $('[name=obs]', box).value.trim() };
+      }]] });
+    if (!res) return;
+    setEtapa(s, k, fin ? { ini: res.ini, ok: true, fin: res.fin, obs: res.obs } : { ini: res.ini, obs: res.obs });
+  }
   async function editEtapa(s, k) {
     if (window.READONLY) return;
     const v = (((S.fundaciones || {})[s]) || {})[k] || {};
     const res = await modal({ title: `${s} · ${esc(ETN[k])}`, sub: 'Fundación de STS',
-      body: `<div class="form"><label>Fecha de inicio<input type="date" name="ini" value="${v.ini || today()}"></label><label>Fecha de fin<input type="date" name="fin" value="${v.fin || ''}"></label>
-        <label class="full chkl"><input type="checkbox" name="ok" ${v.ok ? 'checked' : ''}> Etapa terminada</label><label class="full">Observación<input name="obs" value="${esc(v.obs || '')}" placeholder="Opcional"></label></div>`,
-      buttons: [...(v.ini || v.ok ? [['Quitar registro', 'btn danger', () => 'del']] : []), ['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (box) => ({ ini: $('[name=ini]', box).value, fin: $('[name=fin]', box).value, ok: $('[name=ok]', box).checked, obs: $('[name=obs]', box).value.trim() })]] });
+      body: `<div class="form"><label>Fecha de inicio<input type="date" name="ini" value="${v.ini || today()}"></label><label class="chkl" style="align-self:end"><input type="checkbox" name="ok" ${v.ok ? 'checked' : ''}> Actividad finalizada</label>
+        <label class="ffl ${v.ok ? '' : 'off'}">Fecha de fin<input type="date" name="fin" value="${v.fin || today()}" ${v.ok ? '' : 'disabled'}></label><label class="full">Observación<input name="obs" value="${esc(v.obs || '')}" placeholder="Opcional"></label></div>`,
+      buttons: [...(v.ini || v.ok ? [['Quitar registro', 'btn danger', () => 'del']] : []), ['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (box) => {
+        const r = { ini: $('[name=ini]', box).value, ok: $('[name=ok]', box).checked, fin: $('[name=fin]', box).value, obs: $('[name=obs]', box).value.trim() };
+        if (!r.ini) { toast('Cargá la fecha de inicio', { err: true }); return false; }
+        if (r.ok && (!r.fin || r.fin < r.ini)) { toast('La fecha de fin no puede ser anterior al inicio', { err: true }); return false; }
+        if (!r.ok) r.fin = null;
+        return r;
+      }]] });
     if (!res) return;
     if (res === 'del') { delete S.fundaciones[s][k]; commit(`${s} · ${ETN[k]}: registro quitado`); return; }
-    if (res.fin && !res.ok) res.ok = true;
     setEtapa(s, k, res);
   }
+  document.addEventListener('change', (e) => { if (e.target.matches && e.target.matches('#modal [name=ok]')) { const f = $('#modal [name=fin]'); if (f) { f.disabled = !e.target.checked; f.closest('label').classList.toggle('off', !e.target.checked); } } });
   async function exportFund() {
     const p = await window.api.saveBinary(IO.exportFund(S, ETAPAS, STSL, fundInfo), `Fundaciones STS ${today()}.xlsx`, 'xlsx', 'Excel');
     if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
@@ -1558,7 +1586,7 @@
     return h;
   }
   function vCronoRes(el) {
-    actions([['Exportar Excel', 'btn', () => exportCrono()], ['Exportar PDF', 'btn', () => printCrono()], ['Importar XML de Project', 'btn', importarCrono], ['Ver Gantt', 'btn pri', () => go('gantt')]]);
+    actions([['Exportar Excel', 'btn', () => exportCrono()], ['Exportar PDF', 'btn', () => printCrono()], ['Actualizar cronograma (Project)', 'btn', importarCrono], ['Ver Gantt', 'btn pri', () => go('gantt')]]);
     if (!(S.cronoTareas || []).length) { el.innerHTML = `<div class="card empty"><b>Sin cronograma cargado</b>Importá el cronograma exportado de MS Project como XML.</div>`; return; }
     const C = cronoCalc(), P = C.P, hoy = C.hoy;
     const desv = P.pct - P.esp, finD = P.bFin ? dd(P.bFin, P.fin) : 0, resta = dd(hoy, P.fin);
@@ -1585,7 +1613,7 @@
     Charts.bindTips(el);
   }
   function vGantt(el) {
-    actions([['Exportar Excel', 'btn', () => exportCrono()], ['Exportar PDF', 'btn', () => printCrono()], ['Importar XML de Project', 'btn', importarCrono]]);
+    actions([['Exportar Excel', 'btn', () => exportCrono()], ['Exportar PDF', 'btn', () => printCrono()], ['Actualizar cronograma (Project)', 'btn', importarCrono]]);
     if (!(S.cronoTareas || []).length) { el.innerHTML = `<div class="card empty"><b>Sin cronograma cargado</b>Importá el cronograma exportado de MS Project como XML.</div>`; return; }
     const LW = window.innerWidth <= 860 ? 230 : 470;
     const C = cronoCalc(), hoy = C.hoy, px = ui.gz || 4, f = ui.gf || 'all', q = (ui.gq || '').toLowerCase();
@@ -1684,31 +1712,87 @@
     });
     return { titulo: g(proj, 'Title') || g(proj, 'Name') || '', tareas: out };
   }
-  async function importarCrono() {
-    if (window.READONLY) return;
-    const f = await window.api.pickXml(); if (!f) return;
-    let d; try { d = leerMSPDI(f.text); } catch (e) { toast(e.message, { err: true }); return; }
-    if (!d.tareas.length) { toast('No encontré tareas en el archivo', { err: true }); return; }
-    const editadas = (S.cronoTareas || []).filter((t) => t.mod);
-    const res = await modal({ title: 'Importar cronograma', sub: esc(f.path.split(/[\\/]/).pop()),
-      body: `<p>Encontré <b>${d.tareas.length}</b> tareas${d.titulo ? ` en «${esc(d.titulo)}»` : ''}. Reemplaza al cronograma actual (${(S.cronoTareas || []).length} tareas).</p>
-        ${editadas.length ? `<label class="chkl"><input type="checkbox" name="keep" checked> Conservar lo que modifiqué en el programa (${editadas.length} actividades con fechas o avance cambiados)</label>` : ''}
-        <p class="hint">Para exportar desde MS Project: Archivo → Guardar como → Formato XML (*.xml).</p>`,
-      buttons: [['Cancelar', 'btn', () => null], ['Importar', 'btn pri', (box) => ({ keep: !!($('[name=keep]', box) || {}).checked })]] });
-    if (!res) return;
-    const prev = new Map((S.cronoTareas || []).map((t) => [t.uid, t]));
-    S.cronoTareas = d.tareas.filter((t) => t.nivel >= 1 && !(t.nivel === 1 && d.tareas.filter((x) => x.nivel === 1).length === 1 && false)).map((t) => {
-      const o = Object.assign({ id: 'k' + t.uid, oInicio: t.inicio, oFin: t.fin, oPct: t.pct }, t);
-      const p = prev.get(t.uid);
-      if (res.keep && p && p.mod) { o.inicio = p.inicio; o.fin = p.fin; o.pct = p.pct; o.mod = p.mod; if (p.nota) o.nota = p.nota; }
-      return o;
-    });
-    // si la primera tarea es el resumen del proyecto (nivel 1 única con todo adentro), se saca y se sube un nivel el resto
-    const n1 = S.cronoTareas.filter((t) => t.nivel === 1);
-    if (n1.length === 1 && S.cronoTareas[0].resumen) { S.cronoTareas.shift(); S.cronoTareas.forEach((t) => { t.nivel -= 1; }); }
-    S.cronoMeta = { nombre: d.titulo, fuente: f.path.split(/[\\/]/).pop(), importado: today() };
-    commit(`Cronograma importado: ${S.cronoTareas.length} tareas`);
+  // normaliza lo leído de Project (XML o .mpp convertido) al formato interno
+  function tareasDeProject(d) {
+    let T = (d.tareas || []).filter((t) => t.nivel >= 1 && t.nombre);
+    const n1 = T.filter((t) => t.nivel === 1);
+    if (n1.length === 1 && T[0] && T[0].resumen && T[0].nivel === 1 && T.length > 1) { T = T.slice(1).map((t) => Object.assign({}, t, { nivel: t.nivel - 1 })); }
+    return T.map((t, i) => ({ id: 'k' + t.uid, uid: t.uid, n: t.n, wbs: t.wbs || '', nivel: t.nivel, nombre: String(t.nombre).trim(), inicio: t.inicio, fin: t.fin || t.inicio, pct: Math.round(Number(t.pct) || 0),
+      resumen: !!t.resumen, hito: !!t.hito, critica: !!t.critica, bInicio: t.bInicio || null, bFin: t.bFin || null, preds: t.preds || [], _o: i, oInicio: t.inicio, oFin: t.fin || t.inicio, oPct: Math.round(Number(t.pct) || 0) }));
   }
+  function aplicarCrono(d, opts) {
+    const nuevas = tareasDeProject(d);
+    const prev = new Map((S.cronoTareas || []).map((t) => [t.uid, t]));
+    let cons = 0, cambF = 0;
+    nuevas.forEach((o) => {
+      const p = prev.get(o.uid);
+      if (p && (p.inicio !== o.inicio || p.fin !== o.fin)) cambF++;
+      if (opts.keep && p && p.mod) { o.inicio = p.inicio; o.fin = p.fin; o.pct = p.pct; o.mod = p.mod; cons++; }
+      if (p && p.nota) o.nota = p.nota;
+    });
+    const nuevasIds = new Set(nuevas.map((t) => t.uid));
+    const quitadas = (S.cronoTareas || []).filter((t) => !nuevasIds.has(t.uid)).length, agregadas = nuevas.filter((t) => !prev.has(t.uid)).length;
+    S.cronoTareas = nuevas;
+    S.cronoMeta = { nombre: d.titulo || (S.cronoMeta || {}).nombre || '', fuente: opts.fuente || '', importado: today(), por: opts.por || '' };
+    commit(`Cronograma actualizado${opts.por ? ' por ' + opts.por : ''}: ${nuevas.length} tareas · ${cambF} con fechas nuevas${agregadas ? ` · ${agregadas} nuevas` : ''}${quitadas ? ` · ${quitadas} quitadas` : ''}${cons ? ` · ${cons} cambios locales conservados` : ''}`);
+    return { n: nuevas.length, cambF, agregadas, quitadas, cons };
+  }
+  async function importarCrono() {
+    if (window.READONLY) return importarCronoVisor();
+    const f = await window.api.pickCrono(); if (!f) return;
+    if (f.error) { toast(f.error, { err: true, ms: 9000 }); return; }
+    let d; try { d = f.json || leerMSPDI(f.text); } catch (e) { toast(e.message, { err: true }); return; }
+    const T = tareasDeProject(d);
+    if (!T.length) { toast('No encontré tareas en el archivo', { err: true }); return; }
+    const prev = new Map((S.cronoTareas || []).map((t) => [t.uid, t]));
+    const cambF = T.filter((t) => prev.has(t.uid) && (prev.get(t.uid).inicio !== t.inicio || prev.get(t.uid).fin !== t.fin)).length;
+    const editadas = (S.cronoTareas || []).filter((t) => t.mod);
+    const nom = f.path.split(/[\\/]/).pop();
+    const res = await modal({ title: 'Actualizar cronograma', sub: esc(nom),
+      body: `<p>Encontré <b>${T.length}</b> tareas${d.titulo ? ` en «${esc(d.titulo)}»` : ''}: <b>${cambF}</b> cambian de fecha, ${T.filter((t) => !prev.has(t.uid)).length} son nuevas y ${(S.cronoTareas || []).filter((t) => !T.some((x) => x.uid === t.uid)).length} ya no están.</p>
+        ${editadas.length ? `<label class="chkl"><input type="checkbox" name="keep" checked> Conservar lo que modifiqué en el programa (${editadas.length} actividades con fechas o avance cambiados a mano)</label>` : ''}
+        <p class="hint">Acepta el archivo de MS Project (.mpp) o el XML exportado. Las actividades se reconocen por su identificador único, así que se actualizan aunque cambien de nombre o de lugar.</p>`,
+      buttons: [['Cancelar', 'btn', () => null], ['Actualizar', 'btn pri', (box) => ({ keep: !!($('[name=keep]', box) || {}).checked })]] });
+    if (!res) return;
+    aplicarCrono(d, { keep: res.keep, fuente: nom });
+  }
+  // ---- visor: un usuario editor envía el archivo al buzón; la PC de obra lo aplica
+  async function importarCronoVisor() {
+    const E = window.__editor; if (!E) return;
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.mpp,.xml';
+    inp.onchange = async () => {
+      const file = inp.files[0]; if (!file) return;
+      const ext = /\.mpp$/i.test(file.name) ? 'mpp' : /\.xml$/i.test(file.name) ? 'xml' : null;
+      if (!ext) { toast('Elegí un archivo .mpp o .xml de MS Project', { err: true }); return; }
+      let resumen = `${esc(file.name)} · ${fmt(file.size / 1048576, 1)} MB`;
+      if (ext === 'xml') { try { const d = leerMSPDI(await file.text()); resumen += ` · ${tareasDeProject(d).length} tareas`; } catch (e) { toast(e.message, { err: true }); return; } }
+      const ok = await modal({ title: 'Enviar cronograma actualizado', sub: resumen,
+        body: `<p>El archivo se envía cifrado a la PC de obra, que actualiza las fechas del cronograma en unos minutos (tiene que estar con el programa abierto). Los cambios hechos a mano en el programa se conservan.</p>`,
+        buttons: [['Cancelar', 'btn', () => null], ['Enviar', 'btn pri', () => true]] });
+      if (!ok) return;
+      toast('Enviando…', { ms: 2500 });
+      try { await E.enviar(file, ext); toast('Cronograma enviado. Se aplicará en unos minutos y se va a ver acá solo.', { ms: 9000 }); }
+      catch (e) { toast('No se pudo enviar: ' + (e.message || e), { err: true, ms: 9000 }); }
+    };
+    inp.click();
+  }
+  // ---- PC de obra: revisa el buzón cada 2 minutos
+  let buzonBusy = false;
+  async function revisarBuzon() {
+    if (window.READONLY || buzonBusy || !webListo() || NET.modo === 'cliente') return;
+    buzonBusy = true;
+    try {
+      const r = await window.api.webBuzon(); if (!r || !r.ok || !r.items.length) return;
+      const hechos = [];
+      for (const it of r.items) {
+        if (it.error) { hechos.push(it.ruta); toast(`Buzón: se descartó un archivo (${it.error})`, { err: true, ms: 8000 }); continue; }
+        try { const d = it.json || leerMSPDI(it.text); aplicarCrono(d, { keep: true, fuente: it.archivo, por: it.nombre }); hechos.push(it.ruta); toast(`Cronograma actualizado desde el visor por ${it.nombre} (${it.archivo})`, { ms: 9000 }); }
+        catch (e) { hechos.push(it.ruta); toast(`No se pudo aplicar ${it.archivo}: ${e.message}`, { err: true, ms: 9000 }); }
+      }
+      if (hechos.length) { await window.api.webBuzonBorrar(hechos); publicarWeb(false); }
+    } catch (_) { /* reintenta */ } finally { buzonBusy = false; }
+  }
+  setInterval(revisarBuzon, 120000); setTimeout(revisarBuzon, 20000);
   async function exportCrono() {
     const C = cronoCalc();
     const p = await window.api.saveBinary(IO.exportCrono(C, S.cronoMeta || {}), `Cronograma ${today()}.xlsx`, 'xlsx', 'Excel');
@@ -1798,6 +1882,6 @@
     go('resumen');
   }
   function recargar(text) { const st = JSON.parse(text); S = normalizar(st); Sync.ordenar(S); R = Engine.calcular(S); render(false); toast('Datos actualizados'); }
-  window.__app = { cronoCalc, editTarea, leerMSPDI, setEtapa, printFund, exportFund, printDia, printMes, printAvance, printPuntas, exportTendidos, exportPuntas, registrarPuntas, recargar, get S() { return S; }, get R() { return R; }, go, commit, setZanja, tender, cerrarZanjas, sacarDeZanja, Engine, conectar, syncNow, get NET() { return NET; }, get netStatus() { return netStatus; } };
+  window.__app = { revisarBuzon, aplicarCrono, tareasDeProject, fechaEtapa, cronoCalc, editTarea, leerMSPDI, setEtapa, printFund, exportFund, printDia, printMes, printAvance, printPuntas, exportTendidos, exportPuntas, registrarPuntas, recargar, get S() { return S; }, get R() { return R; }, go, commit, setZanja, tender, cerrarZanjas, sacarDeZanja, Engine, conectar, syncNow, get NET() { return NET; }, get netStatus() { return netStatus; } };
   init();
 })();

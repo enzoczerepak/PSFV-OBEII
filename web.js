@@ -30,6 +30,38 @@ window.READONLY = true;
     const txt = await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
     return txt;
   }
+  // ---- usuarios editores: pueden enviar un cronograma (.mpp/.xml) al buzón del repositorio, cifrado con su clave
+  const b64big = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+  async function prepararEditor(d, id, kekRaw, nombre) {
+    window.__editor = null;
+    const u = (d.usuarios || []).find((x) => x.id === id); if (!u || !u.tok || !d.repo) return;
+    try {
+      const kd = await crypto.subtle.importKey('raw', kekRaw, 'AES-GCM', false, ['decrypt', 'encrypt']);
+      const token = new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(u.tiv) }, kd, b64d(u.tok)));
+      const R = `${d.repo.api || 'https://api.github.com'}/repos/${encodeURIComponent(d.repo.owner)}/${encodeURIComponent(d.repo.repo)}`;
+      const api = async (m, p, body) => { const r = await fetch(R + p, { method: m, headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }); const j = await r.json().catch(() => null); return { status: r.status, body: j }; };
+      window.__editor = { nombre, async enviar(file, ext) {
+        const gz = new Uint8Array(await new Response(file.stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, kd, gz));
+        const doc = JSON.stringify({ v: 1, id, iv: b64e(iv), data: b64big(ct), archivo: file.name, ext, fecha: new Date().toISOString() });
+        const ruta = `buzon/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.json`;
+        const repo = await api('GET', ''); if (repo.status !== 200) throw new Error('sin acceso al repositorio (' + repo.status + ')');
+        const rama = repo.body.default_branch || 'main';
+        const bl = await api('POST', '/git/blobs', { content: b64big(new TextEncoder().encode(doc)), encoding: 'base64' }); if (bl.status !== 201) throw new Error('subida ' + bl.status);
+        for (let i = 0; i < 4; i++) {
+          const ref = await api('GET', `/git/ref/heads/${rama}`); const head = ref.body.object.sha;
+          const cm = await api('GET', `/git/commits/${head}`);
+          const tr = await api('POST', '/git/trees', { base_tree: cm.body.tree.sha, tree: [{ path: ruta, mode: '100644', type: 'blob', sha: bl.body.sha }] });
+          const nc = await api('POST', '/git/commits', { message: 'Cronograma enviado desde el visor', tree: tr.body.sha, parents: [head] });
+          const up = await api('PATCH', `/git/refs/heads/${rama}`, { sha: nc.body.sha });
+          if (up.status === 200) return true;
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+        throw new Error('GitHub ocupado, probá de nuevo');
+      } };
+    } catch (_) { window.__editor = null; }
+  }
   let sesion = null, ultimo = null, resolver = null;
   const cargado = new Promise((r) => { resolver = r; });
   function marca(d) {
@@ -52,6 +84,7 @@ window.READONLY = true;
     const txt = await abrir(d, id, kekRaw);
     document.getElementById('login').classList.add('ok');
     setTimeout(() => { const l = document.getElementById('login'); if (l) l.style.display = 'none'; }, 400);
+    await prepararEditor(d, id, kekRaw, nombre);
     resolver({ text: txt, path: null });
     setTimeout(() => saludo(nombre), 450);
     setTimeout(() => {
@@ -63,7 +96,7 @@ window.READONLY = true;
     setInterval(async () => {
       try {
         const n = await bajar(); if (n.actualizado === ultimo) return;
-        const t = await abrir(n, id, kekRaw); marca(n);
+        const t = await abrir(n, id, kekRaw); marca(n); await prepararEditor(n, id, kekRaw, nombre);
         if (window.__app && window.__app.recargar) window.__app.recargar(t);
       } catch (_) { /* reintenta en el próximo ciclo */ }
     }, 60000);
