@@ -3,6 +3,11 @@
    Conflictos: gana el cambio más reciente (con corrección de diferencia de reloj entre PCs). */
 (function () {
   const KINDS = [['b', 'bobinas'], ['c', 'circuitos'], ['z', 'zanjas']];
+  // Versión del protocolo: 2 agrega fundaciones STS ('f:') y conserva registros de tipos desconocidos.
+  // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
+  const PROTO = 2;
+  const nuevo = (k) => k.startsWith('f:');
+  const conocido = (k) => k === 'cfg' || k === 'comp' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
 
   // JSON con claves ordenadas: el orden interno de los campos no cuenta como cambio
   function canon(v) {
@@ -15,6 +20,10 @@
     KINDS.forEach(([p, col]) => (S[col] || []).forEach((x) => m.set(p + ':' + x.id, x)));
     m.set('cfg', { nombre: S.nombre, params: S.params, fuente: S.fuente || '' });
     m.set('comp', { compromiso: S.compromiso || {} });
+    // fundaciones STS: un registro por STS y etapa
+    Object.entries(S.fundaciones || {}).forEach(([sts, et]) => Object.entries(et || {}).forEach(([e, v]) => { if (v) m.set('f:' + sts + '|' + e, v); }));
+    // registros de versiones más nuevas: se guardan tal cual para no borrarlos
+    Object.entries(S.__otros || {}).forEach(([k, v]) => m.set(k, v));
     return m;
   }
   function meta(S) {
@@ -30,8 +39,10 @@
   function aplicar(S, k, d, v) {
     if (k === 'cfg') { if (!d && v) { S.nombre = v.nombre; S.params = v.params; S.fuente = v.fuente; } return; }
     if (k === 'comp') { if (!d && v) S.compromiso = v.compromiso || {}; return; }
+    if (k.startsWith('f:')) { const [sts, e] = k.slice(2).split('|'); S.fundaciones = S.fundaciones || {}; const o = (S.fundaciones[sts] = S.fundaciones[sts] || {}); if (d) delete o[e]; else o[e] = v; return; }
     const [p, id] = [k.slice(0, 1), k.slice(2)];
-    const col = (KINDS.find((x) => x[0] === p) || [])[1]; if (!col) return;
+    const col = (KINDS.find((x) => x[0] === p) || [])[1];
+    if (!col) { S.__otros = S.__otros || {}; if (d) delete S.__otros[k]; else S.__otros[k] = v; return; }
     S[col] = S[col] || [];
     const i = S[col].findIndex((x) => x.id === id);
     if (d) { if (i >= 0) S[col].splice(i, 1); }
@@ -67,8 +78,10 @@
   // ---- servidor: atiende un pedido de un cliente
   function atender(S, body) {
     const y = meta(S), off = Date.now() - (Number(body.now) || Date.now());
+    const viejo = !(Number(body.proto) >= PROTO);
     let aplicados = 0;
     (body.cambios || []).forEach((ch) => {
+      if (viejo && (nuevo(ch.k) || !conocido(ch.k))) return; // una PC vieja no puede borrar ni pisar fundaciones
       const adj = ch.m + off, cur = y.meta[ch.k];
       if (!cur || adj >= cur.m) {
         aplicar(S, ch.k, ch.d, ch.v);
@@ -80,10 +93,10 @@
     if (aplicados) ordenar(S);
     return { aplicados };
   }
-  function respuesta(S, since) {
-    const y = meta(S), cur = records(S), out = [];
-    Object.entries(y.meta).forEach(([k, mt]) => { if (mt.r > since) out.push({ k, m: mt.m, d: mt.d, r: mt.r, v: mt.d ? null : cur.get(k) || null }); });
-    return { rev: y.rev, now: Date.now(), cambios: out };
+  function respuesta(S, since, proto) {
+    const y = meta(S), cur = records(S), out = [], viejo = !(Number(proto) >= PROTO);
+    Object.entries(y.meta).forEach(([k, mt]) => { if (mt.r > since && !(viejo && nuevo(k))) out.push({ k, m: mt.m, d: mt.d, r: mt.r, v: mt.d ? null : cur.get(k) || null }); });
+    return { rev: y.rev, now: Date.now(), proto: PROTO, cambios: out };
   }
 
   // ---- cliente
@@ -91,13 +104,15 @@
     const y = meta(S), cur = records(S);
     const keys = Object.keys(y.pend);
     const cambios = keys.map((k) => ({ k, m: (y.meta[k] || {}).m || Date.now(), d: (y.meta[k] || {}).d || (cur.has(k) ? 0 : 1), v: cur.get(k) || null }));
-    return { body: { dev: cfg.devId, clave: cfg.clave, now: Date.now(), since: y.peerRev, cambios }, enviados: Object.fromEntries(keys.map((k) => [k, (y.meta[k] || {}).m])) };
+    return { body: { dev: cfg.devId, clave: cfg.clave, now: Date.now(), since: y.peerRev, proto: PROTO, cambios }, enviados: Object.fromEntries(keys.map((k) => [k, (y.meta[k] || {}).m])) };
   }
   function recibir(S, res, enviados, t0) {
     const y = meta(S);
     const off = res.now - Math.round((t0 + Date.now()) / 2);
     let aplicados = 0;
+    const viejo = !(Number(res.proto) >= PROTO);
     (res.cambios || []).forEach((ch) => {
+      if (viejo && nuevo(ch.k)) return; // servidor de versión anterior: no se aceptan sus borrados de fundaciones
       const local = y.meta[ch.k], mLocal = ch.m - off;
       const pendiente = y.pend[ch.k] && !(ch.k in enviados);
       if (pendiente && local && local.m > mLocal) return; // tengo un cambio más nuevo sin enviar
@@ -116,7 +131,7 @@
   }
   // Cliente que se une por primera vez
   function reemplazarPorServidor(S) {
-    S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {};
+    S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {};
     S.__sync = { snap: {}, meta: {}, pend: {}, rev: 0, peerRev: 0 };
   }
   function marcarTodoPendiente(S) {
@@ -125,5 +140,5 @@
     y.peerRev = 0;
   }
 
-  window.Sync = { sellar, base, prepararServidor, atender, respuesta, paquete, recibir, reemplazarPorServidor, marcarTodoPendiente, ordenar, meta };
+  window.Sync = { PROTO, sellar, base, prepararServidor, atender, respuesta, paquete, recibir, reemplazarPorServidor, marcarTodoPendiente, ordenar, meta };
 })();

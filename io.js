@@ -207,5 +207,59 @@
     return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   }
 
-  window.IO = { readWorkbook, exportPlan, num };
+
+  const r1 = (v) => Math.round((v || 0) * 10) / 10;
+  function exportTendidos(state, R, dias, H) {
+    const wb = XLSX.utils.book_new();
+    const ds = [...dias.values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
+    const res = [['Fecha', 'BT (m)', 'MT (m)', 'PAT (m)', 'Total (m)', 'Circuitos', 'Conductores', 'Puntas colocadas', 'Zanjas cerradas', 'Bobinas usadas']];
+    ds.forEach((D) => res.push([D.fecha, r1(D.m.BT), r1(D.m.MT), r1(D.m.PAT), r1(D.total), [...D.circ.values()].filter((o) => o.c.cat !== 'PAT').length, D.nCond, D.nPuntas, D.zanjas.length, [...D.bobinas].join(', ')]));
+    if (ds.length) res.push(['Total', r1(ds.reduce((a, D) => a + D.m.BT, 0)), r1(ds.reduce((a, D) => a + D.m.MT, 0)), r1(ds.reduce((a, D) => a + D.m.PAT, 0)), r1(ds.reduce((a, D) => a + D.total, 0)), '', ds.reduce((a, D) => a + D.nCond, 0), ds.reduce((a, D) => a + D.nPuntas, 0), ds.reduce((a, D) => a + D.zanjas.length, 0), '']);
+    XLSX.utils.book_append_sheet(wb, sheet(res, [12, 10, 10, 10, 11, 10, 11, 15, 14, 40]), 'Por día');
+    const sec = new Set(); ds.forEach((D) => D.sec.forEach((v, k) => sec.add(k)));
+    const ks = [...sec].sort();
+    const ps = [['Fecha', ...ks.map((k) => k.replace('|', ' ') + ' mm² (m)')]];
+    ds.forEach((D) => ps.push([D.fecha, ...ks.map((k) => r1(D.sec.get(k) || 0))]));
+    XLSX.utils.book_append_sheet(wb, sheet(ps, [12, ...ks.map(() => 16)]), 'Por sección');
+    const det = [['Fecha', 'Tipo', 'Circuito', 'Desde (inversor / origen)', 'Hasta', 'Sección (mm²)', 'Conductores tendidos', 'De', 'Metros reales', 'Metros lista', 'Diferencia (m)', 'Bobinas']];
+    ds.forEach((D) => [...D.circ.values()].forEach((o) => { const c = o.c; det.push([D.fecha, c.cat, c.cat === 'PAT' ? 'PAT ' + c.seccion : c.designacion, c.desde, c.hasta, c.seccion, o.fases.length, c.fz.length, r1(o.m), r1(o.teo), r1(o.m - o.teo), [...o.bob].join(', ')]); }));
+    XLSX.utils.book_append_sheet(wb, sheet(det, [12, 6, 14, 26, 26, 12, 12, 5, 12, 11, 12, 22]), 'Circuitos por día');
+    const pu = [['Fecha', 'Tipo', 'Circuito', 'Recorrido', 'Extremo', 'Puntas']];
+    ds.forEach((D) => D.puntas.forEach((x) => pu.push([D.fecha, x.c.cat, x.c.designacion, `${x.c.desde} → ${x.c.hasta}`, H.ladoNom(x.c, x.k), x.n])));
+    XLSX.utils.book_append_sheet(wb, sheet(pu, [12, 6, 14, 40, 26, 8]), 'Puntas por día');
+    const zj = [['Fecha de cierre', 'Zanja', 'Largo (m)', 'Circuitos']];
+    ds.forEach((D) => D.zanjas.forEach((z) => zj.push([D.fecha, z.titulo, r1(z.largo), z.miembros.map((c) => c.designacion).join(', ')])));
+    XLSX.utils.book_append_sheet(wb, sheet(zj, [14, 34, 10, 40]), 'Zanjas cerradas');
+    return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  }
+  function exportPuntas(state, R, H) {
+    const wb = XLSX.utils.book_new();
+    const cs = R.circuitos.filter((c) => c.cat !== 'PAT');
+    const ks = [...new Set(cs.map((c) => `${c.cat}|${c.seccion}`))].sort();
+    const res = [['Tipo', 'Sección (mm²)', 'Circuitos', 'Conductores', 'Puntas totales', 'Colocadas', 'Pendientes', '% colocadas']];
+    ks.forEach((k) => { const [cat, s2] = k.split('|'); const g = cs.filter((c) => `${c.cat}|${c.seccion}` === k).map(H.puntasDe); const t = g.reduce((a, x) => a + x.tot, 0), cc = g.reduce((a, x) => a + x.col, 0); res.push([cat, Number(s2), g.length, g.reduce((a, x) => a + x.n, 0), t, cc, t - cc, t ? Math.round((cc / t) * 1000) / 10 : 0]); });
+    XLSX.utils.book_append_sheet(wb, sheet(res, [6, 12, 10, 12, 14, 11, 11, 12]), 'Resumen');
+    const det = [['Tipo', 'Tramo / STS', 'Circuito', 'Desde', 'Hasta', 'Sección (mm²)', 'Conductores', 'Extremo origen', 'Colocadas origen', 'Fecha origen', 'Extremo destino', 'Colocadas destino', 'Fecha destino', 'Total colocadas', 'De', 'Observaciones']];
+    cs.forEach((c) => { const p = H.puntasDe(c); det.push([c.cat, H.tramo(c), c.designacion, c.desde, c.hasta, c.seccion, p.n, H.ladoNom(c, 'o'), p.o, (p.po && p.o && p.po.fecha) || '', H.ladoNom(c, 'd'), p.d, (p.pd && p.d && p.pd.fecha) || '', p.col, p.tot, [p.po && p.po.obs, p.pd && p.pd.obs].filter(Boolean).join(' · ')]); });
+    XLSX.utils.book_append_sheet(wb, sheet(det, [6, 26, 14, 26, 26, 12, 11, 24, 15, 12, 24, 15, 12, 14, 5, 30]), 'Por circuito');
+    return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  }
+
+  function exportFund(state, ETAPAS, STSL, fundInfo) {
+    const wb = XLSX.utils.book_new();
+    const F = state.fundaciones || {};
+    const res = [['STS', 'Etapas terminadas', 'De', '% avance', 'En curso', 'Inicio de obra', 'Base terminada', 'Próxima etapa']];
+    STSL.forEach((s) => { const i = fundInfo(s); res.push([s, i.done, i.n, Math.round(i.p * 1000) / 10, i.curso.map(([, n]) => n).join(', '), i.ini, i.fin, i.done === i.n ? '' : i.sig[1]]); });
+    XLSX.utils.book_append_sheet(wb, sheet(res, [8, 16, 5, 10, 40, 14, 14, 40]), 'Resumen');
+    const mx = [['#', 'Etapa', ...STSL.flatMap((s) => [s + ' estado', s + ' inicio', s + ' fin'])]];
+    ETAPAS.forEach(([k, n], i) => mx.push([i + 1, n, ...STSL.flatMap((s) => { const v = (F[s] || {})[k] || {}; return [v.ok ? 'terminada' : v.ini ? 'en curso' : 'pendiente', v.ini || '', v.ok ? v.fin || '' : '']; })]));
+    XLSX.utils.book_append_sheet(wb, sheet(mx, [4, 42, ...STSL.flatMap(() => [11, 11, 11])]), 'Por etapa');
+    const ac = [['Fecha de inicio', 'STS', 'N°', 'Etapa', 'Estado', 'Fecha de fin', 'Observación']];
+    const rows = [];
+    STSL.forEach((s) => ETAPAS.forEach(([k, n], i) => { const v = (F[s] || {})[k]; if (v && (v.ini || v.ok)) rows.push([v.ini || '', s, i + 1, n, v.ok ? 'terminada' : 'en curso', v.ok ? v.fin || '' : '', v.obs || '']); }));
+    rows.sort((a, b) => String(a[0]).localeCompare(String(b[0])) || a[1].localeCompare(b[1]) || a[2] - b[2]);
+    XLSX.utils.book_append_sheet(wb, sheet(ac.concat(rows), [14, 8, 4, 42, 11, 13, 30]), 'Actividades');
+    return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  }
+  window.IO = { readWorkbook, exportPlan, exportTendidos, exportPuntas, exportFund, num };
 })();

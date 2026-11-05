@@ -56,6 +56,26 @@
       <text x="50" y="54" class="rv">${fmt(p * 100, p < 0.1 && p > 0 ? 1 : 0)}%</text>${label ? `<text x="50" y="70" class="rl">${esc(label)}</text>` : ''}</svg>`;
   }
 
+
+  // Columnas apiladas por día. days: [{label, sub, parts:[{v,color,name}], tip, sel}]
+  function cols(days, opts = {}) {
+    const W = 640, H = opts.h || 190, L = 44, R = 6, T = 10, B = 24;
+    const max = Math.max(10, ...days.map((d) => d.parts.reduce((a, p) => a + p.v, 0)));
+    const nice = (() => { const e = Math.pow(10, Math.floor(Math.log10(max))); return Math.ceil(max / e) * e; })();
+    const bw = (W - L - R) / Math.max(1, days.length), Y = (v) => T + (1 - v / nice) * (H - T - B);
+    let s = `<svg class="ch" viewBox="0 0 ${W} ${H}" role="img">`;
+    for (let i = 0; i <= 4; i++) { const v = (nice * i) / 4, y = Y(v); s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" class="grid"/><text x="${L - 6}" y="${y + 4}" class="ax" text-anchor="end">${fmt(v)}</text>`; }
+    days.forEach((d, i) => {
+      const x = L + i * bw + bw * 0.15, w = Math.max(2, bw * 0.7);
+      let acc = 0;
+      if (d.sel) s += `<rect x="${L + i * bw}" y="${T}" width="${bw}" height="${H - T - B}" class="selcol"/>`;
+      d.parts.forEach((p) => { if (!(p.v > 0)) return; const y0 = Y(acc), y1 = Y(acc + p.v); s += `<rect x="${x}" y="${y1}" width="${w}" height="${Math.max(0.5, y0 - y1)}" fill="${p.color}" rx="2" class="mk" data-tip="${esc(d.tip || d.label)} · ${esc(p.name)}: ${fmt(p.v)} m"/>`; acc += p.v; });
+      if (d.label && (days.length <= 16 || i % 2 === 0)) s += `<text x="${x + w / 2}" y="${H - 8}" class="ax" text-anchor="middle">${esc(d.label)}</text>`;
+      if (d.key) s += `<rect x="${L + i * bw}" y="${T}" width="${bw}" height="${H - T}" fill="transparent" data-dkey="${d.key}" style="cursor:pointer" data-tip="${esc(d.tip || d.label)}: ${fmt(acc)} m"/>`;
+    });
+    return s + '</svg>';
+  }
+
   function legend(items) { return `<div class="legend">${items.map(([c, n]) => `<span><i style="background:${c}"></i>${esc(n)}</span>`).join('')}</div>`; }
 
   // tooltip global
@@ -72,5 +92,5 @@
     }));
   }
 
-  window.Charts = { hbars, line, ring, legend, bindTips };
+  window.Charts = { hbars, line, ring, legend, bindTips, cols };
 })();
