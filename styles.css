@@ -632,3 +632,36 @@ body.ro .fdate { cursor: default; }
 .ffin { border: 1px solid #2f9e5b; color: #2f7a46; background: #fff; font-weight: 600; } .ffin:hover { background: #2f9e5b; color: #fff; }
 .fic { font-style: normal; font-size: 10px; margin-right: 4px; } .fic.ok { color: #2f9e5b; } .fic.cur { color: #b7791f; }
 .ffl.off { opacity: .45; }
+/* ---------- plano de obra ---------- */
+.plwrap { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
+.plcard { position: relative; padding: 0; overflow: hidden; height: calc(100vh - 230px); min-height: 460px; }
+#plSvg { width: 100%; height: 100%; display: block; background: #fbfcfd; cursor: grab; touch-action: none; user-select: none; }
+#plSvg:active { cursor: grabbing; }
+.pl-sect { fill-opacity: .06; stroke-width: 1.2; stroke-dasharray: 6 4; }
+.pl-sectl { font-size: 22px; font-weight: 800; text-anchor: middle; opacity: .55; pointer-events: none; paint-order: stroke; stroke: #fff; stroke-width: 4px; }
+.pl-trk { fill-opacity: .82; cursor: pointer; } .pl-trk:hover { fill-opacity: 1; stroke: #142033; stroke-width: .5; }
+.pl-z { fill: none; stroke-linecap: round; stroke-linejoin: round; cursor: pointer; } .pl-z:hover { stroke-width: 6px !important; }
+.pl-inv { fill: #142033; cursor: pointer; } .pl-inv.ok { fill: #2f9e5b; }
+.pl-sts { cursor: pointer; } .pl-sts rect { fill: #fff; stroke: #142033; stroke-width: .9; } .pl-sts .pl-stsf { fill: #2f9e5b; stroke: none; opacity: .85; }
+.pl-stst { font-size: 5.5px; font-weight: 700; text-anchor: middle; fill: #142033; paint-order: stroke; stroke: #fff; stroke-width: 2.5px; pointer-events: none; }
+.pl-z, .pl-sect, .pl-ctx, .pl-sts rect { vector-effect: non-scaling-stroke; }
+.pl-on { filter: drop-shadow(0 0 2px #142033) drop-shadow(0 0 6px rgba(124,58,237,.9)); }
+rect.pl-on { stroke: #142033 !important; stroke-width: 1.5px !important; vector-effect: non-scaling-stroke; fill-opacity: 1; }
+polyline.pl-on { stroke-width: 6px !important; }
+.plctl { position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; gap: 4px; }
+.plctl button { width: 32px; height: 32px; border: 1px solid var(--line); background: #fff; border-radius: 8px; font-size: 17px; cursor: pointer; box-shadow: 0 2px 6px rgba(20,32,51,.08); }
+.plctl button:hover { background: #142033; color: #fff; }
+.plcapas { position: absolute; left: 12px; top: 12px; background: rgba(255,255,255,.94); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.plcapas label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.pllegend { position: absolute; left: 12px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; background: rgba(255,255,255,.94); border-radius: 8px; padding: 5px 9px; color: var(--mute); }
+.pllegend i { display: inline-block; width: 14px; height: 4px; border-radius: 2px; margin-right: 5px; vertical-align: middle; } .pllegend i.lw { height: 6px; background: #7a8aa3; }
+.plpanel { max-height: calc(100vh - 230px); overflow: auto; }
+.plpanel h3 { display: flex; align-items: center; gap: 6px; }
+.plf { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 12.8px; } .plf span { color: var(--mute); } .plf b { text-align: right; font-weight: 600; } .plf small { color: var(--mute); font-weight: 400; }
+.plact { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.plsecs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.plsec { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 6px 9px; font: inherit; font-size: 12px; cursor: pointer; text-align: left; }
+.plsec i { width: 18px; height: 4px; border-radius: 2px; } .plsec span { color: var(--mute); font-size: 11px; } .plsec:hover { border-color: #142033; }
+svg.plprint { width: 100%; height: auto; max-height: 170mm; }
+@media (max-width: 1100px) { .plwrap { grid-template-columns: 1fr; } .plcard { height: 70vh; } .plpanel { max-height: none; } }
+@media print { #printArea .pllegend { position: static; } }
