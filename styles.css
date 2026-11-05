@@ -418,3 +418,4 @@ body.ro tr.clk { cursor: default; } body.ro .bob tr.clk:hover td { background: i
 }
 @media (min-width: 861px) { .side-foot { position: sticky; bottom: -18px; background: var(--side); padding-bottom: 18px; margin-bottom: -18px; z-index: 2; } }
 .sfBtn { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; color: #9fb1cb; font: inherit; font-size: 13px; padding: 6px 4px 8px; cursor: pointer; border-radius: 8px; } .sfBtn:hover, .sfBtn.on { color: #fff; } .sfBtn.on .ni { color: var(--acc); opacity: 1; }
+.chipx { border: 0; background: none; color: var(--mute); font-size: 14px; line-height: 1; padding: 0 0 0 5px; margin-left: 2px; cursor: pointer; } .chipx:hover { color: var(--bad, #c0392b); }
