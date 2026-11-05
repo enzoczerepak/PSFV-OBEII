@@ -121,7 +121,7 @@
     const circuitos = (state.circuitos || []).map((c, i) => {
       const cat = catDe(c), seccion = parseSeccion(c.formacion);
       const real = c.real || {}, fz = fasesDe(c);
-      const nReal = fz.filter((f) => real[f] && real[f].bobina).length;
+      const nReal = fz.filter((f) => real[f] && (real[f].bobina || real[f].sinBobina)).length;
       const z = zMap.get(c.vinculo || c.zanjaId);
       const zanja = z ? z.estado : 'no abierta';
       const listo = zanja !== 'no abierta' || nReal > 0;
@@ -145,9 +145,10 @@
     circuitos.forEach((c) => {
       c.fz.forEach((f) => {
         const r = (c.real || {})[f];
-        if (!(r && r.bobina)) return;
-        const b = codigos.get(clave(c.cat, r.bobina));
+        if (!(r && (r.bobina || r.sinBobina))) return;
         const len = r2(Number(r.metros) > 0 ? Number(r.metros) : c.lenFase);
+        if (!r.bobina) { const pz = { cid: c.id, cidx: c.idx, cat: c.cat, key: c.key, fase: f, len, teorico: teorico(c), seccion: c.seccion, bobina: null, sinBobina: true, estado: 'ejecutado', fecha: r.fecha || '', orden: orden++ }; ejecutados.push(pz); piezas.push(pz); return; }
+        const b = codigos.get(clave(c.cat, r.bobina));
         const pz = { cid: c.id, cidx: c.idx, cat: c.cat, key: c.key, fase: f, len, teorico: teorico(c), seccion: c.seccion, bobina: r.bobina, estado: 'ejecutado', fecha: r.fecha || '', orden: orden++ };
         if (!b) { alerts.push({ tipo: 'error', txt: `${c.designacion} ${f}: la bobina ${r.bobina} no existe` }); pz.bobina = null; pz.estado = 'falta'; }
         else { b.consumoReal = r2(b.consumoReal + len); if (b.seccion !== c.seccion) alerts.push({ tipo: 'aviso', txt: `${c.designacion} ${f}: la bobina ${r.bobina} es de otra sección` }); }
@@ -162,7 +163,7 @@
     circuitos.forEach((c) => {
       c.fz.forEach((f) => {
         const r = (c.real || {})[f], cod = (c.asig || {})[f];
-        if ((r && r.bobina) || !cod || !(c.lenFase > 0)) return;
+        if ((r && (r.bobina || r.sinBobina)) || !cod || !(c.lenFase > 0)) return;
         const b = bobCalc.find((x) => x.codigo === cod && x.key === c.key);
         if (!b) { alerts.push({ tipo: 'error', txt: `${c.designacion} ${f}: la bobina elegida ${cod} no existe o es de otra sección` }); return; }
         if (b.saldo + 1e-9 < c.lenFase) { alerts.push({ tipo: 'error', txt: `${c.designacion} ${f}: a la bobina elegida ${cod} no le alcanza (${b.saldo} m para ${c.lenFase} m)` }); return; }
@@ -177,7 +178,7 @@
         if (!filtro(c)) return;
         c.fz.forEach((f) => {
           const r = (c.real || {})[f];
-          if (r && r.bobina) return;
+          if (r && (r.bobina || r.sinBobina)) return;
           if (manKeys.has(c.id + '|' + f)) return;
           if (!(c.lenFase > 0)) return;
           out.push({ cid: c.id, cidx: c.idx, cat: c.cat, key: c.key, fase: f, len: c.lenFase, seccion: c.seccion, estado, orden: orden++ });
@@ -246,7 +247,7 @@
       z.titulo = tituloZanja(z, z.miembros);
       z.nReal = z.miembros.reduce((a, c) => a + c.nReal, 0); z.nCond = z.miembros.reduce((a, c) => a + c.fz.length, 0);
       z.completo = z.miembros.length > 0 && z.miembros.every((c) => c.completo);
-      z.listoCerrar = z.completo && (!z.pat || z.pat.completo);
+      z.listoCerrar = z.completo; // la PAT se registra al cerrar
       z.miembros.forEach((c) => { c.pat = z.pat; c.listoCerrar = z.listoCerrar; c.compartida = z.miembros.length > 1; c.zTitulo = z.titulo; });
     });
 
@@ -288,7 +289,7 @@
     const sinZ = circuitos.filter((c) => !c.listo && !c.vinculo).length;
     if (sinZ) alerts.push({ tipo: 'info', txt: `${sinZ} circuitos sin zanja abierta: su plan es provisorio hasta que se abra la zanja` });
     const paraCerrar = zanjas.BT.nParaCerrar + zanjas.MT.nParaCerrar;
-    if (paraCerrar) alerts.push({ tipo: 'ok', txt: `${paraCerrar} zanjas con cable y PAT tendidos: se pueden cerrar` });
+    if (paraCerrar) alerts.push({ tipo: 'ok', txt: `${paraCerrar} zanja${paraCerrar > 1 ? "s" : ""} con todos sus circuitos tendidos: se pueden cerrar (ahí se registra la PAT)` });
 
     resumen.forEach((r) => { r.desvio = r2(r.tendido - r.tendidoTeo); r.desvioPct = r.tendidoTeo > 0 ? r.desvio / r.tendidoTeo : 0; });
     return { params: p, bobinas, circuitos, piezas, resumen, alerts, zanjas, zlist, compromiso, mejoras, nManuales: manuales.length };
@@ -371,8 +372,11 @@
     const c = state.circuitos.find((x) => x.id === cid); if (!c) return;
     const z = state.zanjas.find((x) => x.id === c.zanjaId);
     if (!z || state.circuitos.filter((x) => x.zanjaId === z.id).length < 2) return;
-    const nz = { id: 'z-' + c.id + '-' + Math.random().toString(36).slice(2, 6), cat: catDe(c), largo: Number(c.lineal) || 0, estado: z.estado };
+    // si el circuito todavía no se tendió, su zanja nueva queda "no abierta" y su plan vuelve a provisorio
+    const tendido = Object.values(c.real || {}).some((r) => r && (r.bobina || r.sinBobina));
+    const nz = { id: 'z-' + c.id + '-' + Math.random().toString(36).slice(2, 6), cat: catDe(c), largo: Number(c.lineal) || 0, estado: tendido ? (z.estado === 'cerrada' ? 'abierta' : z.estado) : 'no abierta' };
     state.zanjas.push(nz); c.zanjaId = nz.id;
+    return nz.id;
   }
 
   // Propuesta de tendidos: lotes de zanjas por zona (STS, inversores consecutivos), del tamaño de una bobina,
