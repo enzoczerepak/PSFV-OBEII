@@ -157,7 +157,7 @@
 
     const cir = [['Tipo', 'Designación', 'Desde', 'Hasta', 'Formación', 'Cantidad (m)', 'm por conductor', 'Largo zanja (m)', 'Zanja', 'Bobinas', 'Estado']];
     R.circuitos.forEach((c) => {
-      const bs = c.fz.map((f) => { const p = c.fasesInfo[f]; return p ? (f === 'C' ? '' : f + ' ') + (p.bobina || 'FALTA') + (p.estado === 'ejecutado' ? ' ✓' : '') : ''; }).join(' | ');
+      const bs = c.fz.map((f) => { const p = c.fasesInfo[f]; return p ? (f === 'C' ? '' : f + ' ') + (p.bobina || (p.sinBobina ? 'sin bobina' : 'FALTA')) + (p.estado === 'ejecutado' ? ' ✓' : '') : ''; }).join(' | ');
       cir.push([c.cat, c.designacion, c.desde, c.hasta, c.formacion, c.cantidad, c.lenFase, c.zanjaLargo, c.zanja, bs, c.estado]);
     });
     XLSX.utils.book_append_sheet(wb, sheet(cir, [6, 16, 24, 24, 20, 12, 14, 14, 11, 50, 18]), 'Circuitos');
