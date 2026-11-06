@@ -49,3 +49,5 @@ nav#tabs button.on { color: var(--acc); }
 .empty { text-align: center; padding: 30px 10px; color: var(--mute); }
 .sel-circ { font-weight: 700; }
 .chips { scrollbar-width: none; } .chips::-webkit-scrollbar { display: none; }
+.hr { display: flex; align-items: center; gap: 10px; } #hSalir { border: 1px solid rgba(255,255,255,.35); background: none; color: #fff; font: inherit; font-size: 13px; font-weight: 600; border-radius: 10px; padding: 6px 11px; }
+#hSalir:active { background: rgba(255,255,255,.15); }

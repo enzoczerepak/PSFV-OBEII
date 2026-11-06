@@ -2,7 +2,8 @@
    Los partes viajan cifrados al buzón; la PC de obra los recibe y se aprueban en la oficina. */
 (function () {
   const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  const W = window.WebCore, KEY = 'campo-sesion', KQ = 'campo-cola', KH = 'campo-hist';
+  const W = window.WebCore, KEY = 'campo-sesion';
+  let KQ = 'campo-cola', KH = 'campo-hist';
   const fmt = (n, d = 0) => Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const hoy = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
@@ -17,6 +18,7 @@
     S = JSON.parse(txt); R = window.Engine.calcular(S); D = d;
     if (!enviar) enviar = await W.enviador(d, id, k).catch(() => null);
     ses = { id, k, nombre, cap: !!(u && (u.cap || u.ed)) };
+    KQ = 'campo-cola-' + id.slice(0, 16); KH = 'campo-hist-' + id.slice(0, 16);
   }
   async function entrar(usuario, pass, rec) {
     const d = await W.bajar();
@@ -33,7 +35,14 @@
     try { const d = await W.bajar(); const u = (d.usuarios || []).find((x) => x.id === st.id); if (!u || !(u.cap || u.ed)) throw 0; await cargar(d, st.id, W.b64d(st.k), st.n, u); arrancar(); return true; }
     catch (_) { return false; }
   }
+  function salir() {
+    const q = ls.get(KQ, []).length;
+    if (q && !confirm(`Tenés ${q} parte${q > 1 ? 's' : ''} sin enviar (sin señal). Quedan guardados en este celular y se envían cuando vuelvas a entrar con tu usuario. ¿Salir igual?`)) return;
+    try { localStorage.removeItem(KEY); sessionStorage.removeItem(KEY); } catch (_) { /* nada */ }
+    location.reload();
+  }
   function arrancar() {
+    $('#hSalir').onclick = salir;
     $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
     $('#hNom').textContent = ses.nombre.split(/\s+/).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
     render(); setInterval(refrescar, 60000); setInterval(vaciarCola, 30000); window.addEventListener('online', vaciarCola); vaciarCola();
