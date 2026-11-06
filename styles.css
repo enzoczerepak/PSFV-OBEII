@@ -829,3 +829,78 @@ svg.plprint { width: 100%; height: auto; max-height: 170mm; }
 td.tolc2 { white-space: nowrap; font-size: 12px; }
 .legend .lperm { margin-left: auto; }
 .bob table th { white-space: nowrap; }
+
+/* ======================= TEMA PARQUE SOLAR ======================= */
+/* barra lateral: noche estrellada arriba y filas de paneles al pie */
+#side { background: linear-gradient(180deg, #0c1728 0%, #0f1b2d 45%, #10223a 100%); position: relative; }
+#side::after { content: ''; position: sticky; display: block; bottom: -18px; margin: auto -12px -18px; height: 86px; flex: none; pointer-events: none; opacity: .5;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 236 86'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='0' y1='0' y2='1'%3E%3Cstop offset='0' stop-color='%232a5b8f'/%3E%3Cstop offset='1' stop-color='%23142a46'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg fill='url(%23g)' stroke='%235fa8e8' stroke-opacity='.35' stroke-width='.6'%3E%3Cpath d='M-4 52h40l8 14H4z'/%3E%3Cpath d='M44 52h40l8 14H52z'/%3E%3Cpath d='M92 52h40l8 14h-40z'/%3E%3Cpath d='M140 52h40l8 14h-40z'/%3E%3Cpath d='M188 52h40l8 14h-40z'/%3E%3Cpath d='M-10 70h46l9 16H-1z'/%3E%3Cpath d='M44 70h46l9 16H53z'/%3E%3Cpath d='M98 70h46l9 16h-46z'/%3E%3Cpath d='M152 70h46l9 16h-46z'/%3E%3Cpath d='M206 70h46l9 16h-46z'/%3E%3C/g%3E%3C/svg%3E") bottom center / 100% auto no-repeat; }
+.side-foot { position: relative; z-index: 1; }
+.logo { width: 40px; height: 36px; overflow: visible; }
+.logo .lg-disco { fill: var(--acc); filter: drop-shadow(0 0 4px rgba(245,165,36,.7)); }
+.logo .lg-rayos { stroke: var(--acc2); stroke-width: 1.8; stroke-linecap: round; transform-origin: 27px 14px; animation: spin 24s linear infinite; }
+.logo .lg-panel { fill: #1f4f86; stroke: #79b8ff; stroke-width: 1.2; stroke-linejoin: round; }
+.logo .lg-grid { stroke: #79b8ff; stroke-width: .9; opacity: .8; fill: none; }
+#nav .ni { stroke-width: 1.7; }
+.secth .ni { color: var(--acc); }
+/* área principal: cielo muy suave */
+#main { background: radial-gradient(1200px 300px at 85% -120px, rgba(255,209,102,.16), transparent 70%), linear-gradient(180deg, #eef3f9 0, var(--bg) 260px); }
+#top { position: relative; }
+#top::after { content: ''; position: absolute; left: 28px; right: 28px; bottom: 4px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, rgba(245,165,36,.0), rgba(245,165,36,.55) 30%, rgba(0,147,154,.45) 70%, rgba(0,147,154,0)); }
+/* encabezado ordenado: reloj arriba, acciones abajo */
+.topcol { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex: none; max-width: 62%; }
+#topR { position: static; }
+#ayudaBtn { width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--line); background: var(--card); cursor: pointer; display: grid; place-items: center; padding: 0; color: #3c4a60; }
+#ayudaBtn .ni { width: 18px; height: 18px; opacity: 1; }
+#ayudaBtn:hover, #ayudaBtn.on { background: #142033; color: #fff; border-color: #142033; }
+/* explicaciones: ocultas salvo que se pida ayuda (ícono ? arriba) */
+#view .hint { display: none; }
+body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+/* menú de exportación */
+.expdd { position: relative; }
+.expdd > .btn { display: inline-flex; align-items: center; gap: 6px; }
+.expdd > .btn .ni { width: 16px; height: 16px; opacity: 1; } .expdd > .btn .chev { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; transform: rotate(90deg); }
+.expm { position: absolute; right: 0; top: calc(100% + 6px); min-width: 190px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(16,30,54,.16); padding: 6px; display: none; z-index: 30; }
+.expdd.on .expm { display: grid; animation: fadeIn .15s; }
+.expm button { text-align: left; background: none; border: 0; padding: 8px 10px; border-radius: 7px; font: inherit; cursor: pointer; color: var(--ink); white-space: nowrap; }
+.expm button:hover { background: var(--bg); }
+/* tarjetas: leve elevación */
+.card { transition: box-shadow .2s, transform .2s; }
+.mcard:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(16,30,54,.06), 0 10px 26px rgba(16,30,54,.09); }
+/* encabezado del inicio */
+.hero { position: relative; border-radius: 16px; overflow: hidden; margin-bottom: 18px; min-height: 170px; color: #fff; box-shadow: var(--sh); display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 18px 22px; }
+.hero.h-dia { background: linear-gradient(180deg, #4aa3e6 0%, #8fd0f5 60%, #cdeefc 100%); }
+.hero.h-alba { background: linear-gradient(180deg, #5b78b8 0%, #f2a774 65%, #ffd9a6 100%); }
+.hero.h-ocaso { background: linear-gradient(180deg, #3b4f8f 0%, #e47c63 60%, #ffc48a 100%); }
+.hero.h-noche { background: linear-gradient(180deg, #0b1630 0%, #18305a 70%, #22406e 100%); }
+.hsky { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hsol { transition: transform 1.2s var(--ease); } .hsold { fill: #ffe08a; stroke: #fff6d0; stroke-width: 2; }
+.hsol circle:first-child { animation: hlatido 5s ease-in-out infinite; transform-origin: 0 0; }
+@keyframes hlatido { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+.hluna circle { fill: #f3f0d8; } .hluna .hlunas { fill: #18305a; }
+.hest { fill: #fff; animation: hbrillo 3s ease-in-out infinite; } @keyframes hbrillo { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+.hnubes { fill: #fff; opacity: .55; animation: hnube 60s linear infinite; } .h-noche .hnubes { opacity: .08; }
+@keyframes hnube { from { transform: translateX(-80px); } to { transform: translateX(260px); } }
+.hcerro { fill: rgba(40,110,70,.35); } .h-noche .hcerro { fill: rgba(10,30,40,.6); }
+.hposte { stroke: #3a4a5e; stroke-width: 2.4; } .hsuelo { stroke: rgba(0,0,0,.18); stroke-width: 2; }
+.htrk { transition: transform 2s var(--ease); transform-box: fill-box; transform-origin: center; } .hceld { stroke: rgba(160,210,255,.45); stroke-width: .8; }
+.htxt { position: relative; z-index: 1; text-shadow: 0 1px 8px rgba(0,0,0,.25); }
+.hsal { font-size: 13px; opacity: .92; } .htxt h2 { margin: 2px 0 4px; font-size: 24px; letter-spacing: -.2px; } .hfecha { font-size: 12.5px; opacity: .9; text-transform: none; }
+.hfecha::first-letter { text-transform: uppercase; }
+.hstats { position: relative; z-index: 1; display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.hstat { background: rgba(10,22,40,.42); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,.18); border-radius: 12px; padding: 8px 12px; min-width: 92px; display: grid; }
+.hstat b { font-size: 20px; } .hstat span { font-size: 11.5px; opacity: .85; }
+/* aviso de actualización */
+.updbar { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 12px; background: #142033; color: #fff; border-radius: 14px; padding: 10px 12px 10px 14px; box-shadow: 0 12px 34px rgba(10,20,40,.35); font-size: 13px; max-width: 92vw; animation: fadeIn .3s; }
+.updbar .muted { color: #9fb1cb; } .updbar .btn.ghost { color: #c9d3e3; }
+.updic .ni { width: 22px; height: 22px; color: var(--acc); opacity: 1; animation: spin 12s linear infinite; }
+/* cartel de precarga de hincado */
+.hpremod { display: flex; gap: 16px; align-items: flex-start; font-size: 13.5px; line-height: 1.55; }
+.hpremod > .ni { width: 54px; height: 54px; color: var(--warn); opacity: 1; flex: none; background: var(--warn-bg); border-radius: 14px; padding: 10px; }
+.hpremod ol { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+.hpremod p { margin: 0 0 6px; }
+@media (max-width: 860px) { .topcol { align-items: stretch; max-width: none; } .hero { flex-direction: column; align-items: flex-start; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+#nav { padding-bottom: 70px; }
+.hero::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,20,40,.38), transparent 45%, transparent 60%, rgba(8,20,40,.25)); z-index: 0; pointer-events: none; }

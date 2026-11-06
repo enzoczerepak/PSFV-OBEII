@@ -1,0 +1,320 @@
+/* PSFV-OBE II · Plan de corte, circuitos y bobinas. */
+// ======================= PLAN =======================
+function vPlan(el, cat) {
+  actions([...(cat !== 'PAT' ? [['Simular tendido', 'btn acc', () => simularTendido(cat)]] : []), ['Replanificar', 'btn ghost', () => replanificar(cat)], ['Exportar Excel', 'btn', exportExcel], ['PDF: solo listos', 'btn', () => printPlan(cat, 'listos')], ['PDF: plan completo', 'btn pri', () => printPlan(cat, 'todo')]]);
+  const secs = R.resumen.filter((r) => r.cat === cat).map((r) => r.seccion);
+  const fsec = ui.sec[cat] || 'all', fest = ui.est[cat] || 'all', q = (ui.q[cat] || '').toLowerCase();
+  const cMap = new Map(R.circuitos.map((c) => [c.id, c]));
+  let bobs = R.bobinas.filter((b) => b.cat === cat && (fsec === 'all' || String(b.seccion) === fsec));
+  if (fest === 'listos') bobs = bobs.filter((b) => b.cortes.some((p) => p.estado === 'listo'));
+  if (fest === 'abiertas') bobs = bobs.filter((b) => b.cortes.length);
+  if (q) bobs = bobs.filter((b) => b.codigo.toLowerCase().includes(q) || String(b.nro).includes(q) ||
+    b.cortes.some((p) => { const c = cMap.get(p.cid); return (c.designacion + ' ' + c.desde + ' ' + c.hasta).toLowerCase().includes(q); }));
+  bobs.sort((a, b) => (b.consumoReal > 0) - (a.consumoReal > 0) || (b.asigListo > 0) - (a.asigListo > 0) || (b.cortes.length > 0) - (a.cortes.length > 0) || a.idx - b.idx);
+  const falta = R.piezas.filter((p) => p.cat === cat && p.estado === 'falta' && (fsec === 'all' || String(p.seccion) === fsec));
+  let h = `<div class="tools"><div class="seg" id="fSec"><button data-v="all">Todas</button>${secs.map((s) => `<button data-v="${s}">${s} mm²</button>`).join('')}</div>
+    <div class="seg" id="fEst"><button data-v="all">Todas las bobinas</button><button data-v="abiertas">Con cortes</button><button data-v="listos">Con cortes listos</button></div>
+    <span class="sp"></span><input type="search" id="fQ" placeholder="Buscar bobina o circuito…" value="${esc(ui.q[cat] || '')}" style="width:240px"></div>
+    <div class="legend" style="margin:-4px 0 12px"><span><i class="c-done"></i>Ejecutado</span><span><i class="c-ready"></i>Listo para cortar (zanja abierta)</span><span><i class="c-prov"></i>Provisorio</span><span><i class="c-rem"></i>Remanente</span>${cat !== 'PAT' ? '<span class="lperm">Permitido: <b class="tl-ok">seguro</b> / <b class="tl-riesgo">máximo</b> por conductor (m)</span>' : ''}</div>
+    <div id="mgStrip">${MG.R === R && MG.datos ? margenStrip(cat) : '<div class="mgs"><div class="mg muted">Calculando el margen disponible…</div></div>'}</div>`;
+  if (falta.length) {
+    const sinB = secs.filter((s) => !R.bobinas.some((b) => b.cat === cat && b.seccion === s));
+    h += `<div class="alert ${sinB.length ? 'aviso' : 'error'}" style="margin-bottom:14px">${falta.length} conductores sin bobina (${fmt(falta.reduce((a, p) => a + p.len, 0))} m)${sinB.length ? ` · cargá las bobinas de ${sinB.map((s) => s + ' mm²').join(', ')} en Bobinas` : ''}</div>`;
+  }
+  h += `<div class="plan stagger">`;
+  // largo permitido por conductor según el margen de la sección (seguro / máximo)
+  const tolCol = cat !== 'PAT';
+  const permTxt = (p, c) => {
+    if (p.estado === 'ejecutado') { const t = Margen.tolerancia(mgDe(c.key), c.lenFase, tolF()); const nv = t ? Margen.nivel(t, p.len) : null; return nv ? `<span class="tl-${nv}" title="tirado ${fmt(p.len, 2)} m">${nv === 'ok' ? '✓' : nv === 'riesgo' ? 'riesgo' : 'excedido'}</span>` : ''; }
+    const g = mgDe(c.key); if (!g) return '<span class="muted">…</span>';
+    const t = Margen.tolerancia(g, p.len - (Number(S.params.margen) || 0), tolF()); if (!t) return '';
+    if (t.sinMargen) return `<span class="tl-falta" title="Sin margen en la sección: no pasarse del plan">≤ ${fmt(p.len, 1)}</span>`;
+    return `<span class="tl-ok" title="Seguro: hasta ${fmt(t.seg, 1)} m">${fmt(t.seg, 1)}</span> / <span class="tl-riesgo" title="Máximo (riesgo): hasta ${fmt(t.max, 1)} m">${fmt(t.max, 1)}</span>`;
+  };
+  bobs.forEach((b) => {
+    const rem = Math.max(0, b.remanente);
+    h += `<div class="bob"><header><div class="code">${esc(b.codigo)}</div><div class="meta">N° ${esc(b.nro)}<br>${b.seccion} mm² · ${fmt(b.entrada)} m</div><span class="pills2">${pill(b.estadoReal)}<span class="muted" title="Cómo queda al final del plan">al final: ${esc(b.estado)}</span></span></header>
+      <div class="bar"><div class="c-done" data-w="${pct(b.consumoReal, b.entrada)}"></div><div class="c-ready" data-w="${pct(b.asigListo, b.entrada)}"></div><div class="c-prov" data-w="${pct(b.asigProv, b.entrada)}"></div><div class="c-rem" data-w="${pct(rem, b.entrada)}"></div></div>
+      <div class="nums"><span>Saldo actual <b>${fmt(b.saldoActual, 1)} m</b></span><span>Listo <b>${fmt(b.asigListo, 1)}</b></span><span>Prov. <b>${fmt(b.asigProv, 1)}</b></span><span>Final <b>${fmt(b.remanente, 1)} m</b></span></div>`;
+    if (!b.cortes.length) h += `<div class="closed">Sin cortes asignados: queda cerrada.</div>`;
+    else {
+      h += `<table><thead><tr><th>#</th><th>Circuito</th><th>Desde → Hasta</th><th>${cat === 'PAT' ? '' : 'Fase'}</th><th class="n" title="Largo de corte del conductor (en los ejecutados, lo tirado real)">${cat === 'PAT' ? 'Metros' : 'A tender'}</th>${tolCol ? '<th class="n" title="Largo máximo que se puede tirar: seguro / máximo (riesgo). Más que el máximo, falta cable al final.">Permitido</th>' : ''}<th class="n">Saldo</th></tr></thead><tbody>`;
+      b.cortes.forEach((p) => { const c = cMap.get(p.cid); h += `<tr class="${p.estado} ${p.estado !== 'ejecutado' ? 'clk' : ''}" data-cid="${p.cid}" title="${p.estado}${p.manual ? ' · bobina elegida a mano' : ''}${p.estado !== 'ejecutado' ? ' · clic para elegir otra bobina o corregir el largo' : ''}"><td><span class="dot ${p.estado}"></span>${p.corte}${p.manual ? '<i class="pin">●</i>' : ''}</td><td class="mono">${esc(c.designacion)}</td><td>${esc(c.desde)} → ${esc(c.hasta)}</td><td>${p.fase === 'C' ? '' : p.fase}</td><td class="n">${fmt(p.len, 2)}</td>${tolCol ? `<td class="n tolc2">${permTxt(p, c)}</td>` : ''}<td class="n">${fmt(p.saldo, 1)}</td></tr>`; });
+      h += `</tbody></table>`;
+    }
+    h += `</div>`;
+  });
+  if (!bobs.length) h += `<div class="empty"><b>${R.bobinas.some((b) => b.cat === cat) ? 'No hay bobinas con ese filtro' : 'Todavía no hay bobinas de ' + CATN[cat]}</b>${R.bobinas.some((b) => b.cat === cat) ? '' : 'Cargalas en la sección Bobinas (a mano o importando la planilla de control).'}</div>`;
+  el.innerHTML = h + '</div>';
+  $$('tr.clk', el).forEach((tr) => { tr.onclick = () => elegirBobina(tr.dataset.cid); });
+  segBind('#fSec', fsec, (v) => { ui.sec[cat] = v; render(true); });
+
+  segBind('#fEst', fest, (v) => { ui.est[cat] = v; render(true); });
+  searchBind('#fQ', (v) => { ui.q[cat] = v; });
+}
+
+async function replanificar(cat) {
+  if (window.READONLY) return;
+  if (!(await confirmar('Replanificar', `Los cortes listos de ${CATN[cat]} se vuelven a asignar desde cero buscando el mejor aprovechamiento. Puede cambiar la bobina de cortes que ya figuran en una hoja de corte impresa. Lo ya tendido no se toca.`, 'Replanificar'))) return;
+  const ids = new Set(S.circuitos.filter((c) => c.cat === cat).map((c) => c.id));
+  Object.keys(S.compromiso || {}).forEach((k) => { if (ids.has(k.split('|')[0])) delete S.compromiso[k]; });
+  commit(`Plan de ${CATN[cat]} recalculado`);
+}
+
+// ======================= CIRCUITOS =======================
+function vCircuitos(el, cat) {
+  const n = ui.sel.size ? ` (${ui.sel.size})` : '', dis = ui.sel.size ? '' : ' dis';
+  const isPat = cat === 'PAT';
+  actions(isPat ? [] : [['Importar…', 'btn', () => menuImportar(cat)], ['+ Circuito', 'btn', () => editCircuito(null, cat)],
+    [`Misma zanja${n}`, 'btn' + (ui.sel.size > 1 ? '' : ' dis'), () => unir(zidsSel())], [`Cerrar zanja${n}`, 'btn' + dis, () => bulkZanja('cerrada')], [`Abrir zanja${n}`, 'btn acc' + dis, () => bulkZanja('abierta')]]);
+  const all = R.circuitos.filter((c) => c.cat === cat);
+  const stss = [...new Set(all.map((c) => c.hasta))].sort();
+  const ests = ['listo para tender', 'en espera de zanja', 'tendido parcial', 'tendido', 'falta bobina'];
+  const fsts = ui.sts[cat] || 'all', fce = ui.cest[cat] || 'all', zf = ui.zf[cat] || 'all', q = (ui.q['c' + cat] || '').toLowerCase();
+  const list = all.filter((c) => (fsts === 'all' || c.hasta === fsts) && (fce === 'all' || c.estado === fce) && (zf === 'all' || c.zanja === zf)
+    && (!q || `${c.designacion} ${c.desde} ${c.hasta}`.toLowerCase().includes(q)));
+  let h = `<div class="tools"><select id="fSts"><option value="all">${cat === 'BT' ? 'Todos los STS' : 'Todos los destinos'}</option>${stss.map((s) => `<option>${esc(s)}</option>`).join('')}</select>
+    <select id="fCE"><option value="all">Todos los estados</option>${ests.map((s) => `<option>${s}</option>`).join('')}</select>
+    <div class="seg" id="fZ"><button data-v="all">Toda zanja</button><button data-v="no abierta">No abierta</button><button data-v="abierta">Abierta</button><button data-v="cerrada">Cerrada</button></div>
+    <span class="muted">${list.length} ${isPat ? 'tendidos' : 'circuitos'}</span><span class="sp"></span><input type="search" id="fCQ" placeholder="Buscar…" value="${esc(ui.q['c' + cat] || '')}" style="width:220px"></div>
+    <div class="tblwrap"><table class="tbl"><thead><tr>${isPat ? '' : '<th><input type="checkbox" id="selAll"></th>'}<th>Designación</th><th>Desde</th><th>Hasta</th><th>Sección</th><th class="n">${isPat ? 'Largo' : cat === 'MT' ? 'm / conductor' : 'm / fase'}</th>
+    <th>Zanja</th><th>${isPat ? 'Bobina' : 'Conductores · bobina'}</th><th class="n">Real vs lista</th><th>Estado</th><th></th></tr></thead><tbody>`;
+  list.forEach((c) => {
+    h += `<tr data-id="${c.id}" class="${ui.sel.has(c.id) ? 'sel' : ''}">${isPat ? '' : `<td><input type="checkbox" class="sel" ${ui.sel.has(c.id) ? 'checked' : ''}></td>`}
+      <td class="mono">${esc(c.designacion)}${c.obs ? ` <span title="${esc(c.obs)}">ⓘ</span>` : ''}</td><td>${esc(c.desde)}</td><td>${esc(c.hasta)}</td><td>${c.seccion ?? '?'}</td>
+      <td class="n">${fmt(c.lenFase, 2)}</td><td>${isPat ? pill(c.zanja) : zSeg(c.zid, c.zanja, c.listoCerrar) + (c.compartida ? ` <span class="shr" title="Zanja compartida: ${esc(c.zTitulo)}">⫘</span>` : '')}</td><td>${phases(c)}</td><td class="n">${desv(c)}</td><td>${pill(c.estado)}</td>
+      <td style="white-space:nowrap"><button class="btn sm acc" data-a="tender">Tender</button> <button class="btn sm" data-a="bob" title="Elegir bobina y corregir largo">Bobina / largo</button><button class="btn sm ghost" data-a="edit" title="Editar">✎</button></td></tr>`;
+  });
+  h += `</tbody></table>${list.length ? '' : '<div class="empty"><b>Sin resultados</b></div>'}</div>`;
+  if (isPat) h += `<p class="hint">Cada zanja lleva un solo conductor de Cu desnudo (25 mm² en BT, 95 mm² en MT) con el largo de la zanja, aunque la compartan varios circuitos. El estado de zanja se toma del circuito. Con ✎ podés corregir el largo de un tendido de PAT.</p>`;
+  el.innerHTML = h;
+  $('#fSts').value = fsts; $('#fCE').value = fce;
+  $('#fSts').onchange = (e) => { ui.sts[cat] = e.target.value; render(false); };
+  $('#fCE').onchange = (e) => { ui.cest[cat] = e.target.value; render(false); };
+  segBind('#fZ', zf, (v) => { ui.zf[cat] = v; render(false); });
+  searchBind('#fCQ', (v) => { ui.q['c' + cat] = v; });
+  if (!isPat) { bindSel(el, list); bindZSeg(el); }
+  $$('tbody tr', el).forEach((tr) => {
+    const id = tr.dataset.id;
+    tr.querySelector('[data-a=tender]').onclick = () => tender(id);
+    tr.querySelector('[data-a=bob]').onclick = () => elegirBobina(id);
+    tr.querySelector('[data-a=edit]').onclick = () => (isPat ? editPat(id) : editCircuito(id, cat));
+    tr.ondblclick = (e) => { if (!e.target.closest('button,input')) tender(id); };
+  });
+}
+
+async function elegirBobina(id) {
+  if (window.READONLY) return;
+  const c = S.circuitos.find((x) => x.id === id), rc = R.circuitos.find((x) => x.id === id);
+  const bobs = R.bobinas.filter((b) => b.key === rc.key);
+  if (!bobs.length) { toast(`No hay bobinas de ${CATN[rc.cat]} ${rc.seccion} mm² cargadas`, { err: true }); return; }
+  const lista = Math.round((Number(c.cantidad) || 0) / rc.fz.length * 100) / 100;
+  const aj = Number(((S.params.ajuste || {})[rc.cat]) || 0);
+  const conAj = Math.round(lista * (1 + aj / 100) * 100) / 100;
+  const asig = c.asig || {};
+  const opts = (sel) => `<option value="">Automático (mejor aprovechamiento)</option>` + bobs.map((b) => `<option value="${esc(b.codigo)}" ${sel === b.codigo ? 'selected' : ''}>${esc(b.codigo)} · saldo actual ${fmt(b.saldoActual, 1)} m${b.estadoReal === 'en uso' ? ' · en uso' : b.estadoReal === 'sin abrir' ? ' · sin abrir' : ''}</option>`).join('');
+  const rows = rc.fz.map((f) => { const r = (c.real || {})[f], p = rc.fasesInfo[f] || {};
+    if (r && (r.bobina || r.sinBobina)) return `<div class="phase-row" style="grid-template-columns:56px 1fr 180px"><b>${f === "C" ? "Cu" : f}</b><span class="muted">Ya tendida desde ${esc(r.bobina || "(sin bobina)")} (${fmt(r.metros, 2)} m)</span><span></span></div>`;
+    return `<div class="phase-row eb" data-f="${f}" style="grid-template-columns:56px 1fr 180px"><b>${f === 'C' ? 'Cu' : f}</b><select class="bob">${opts(asig[f] || '')}</select><span class="muted">plan actual: ${esc(p.bobina || '—')}${p.manual ? ' (elegida)' : ''}</span></div>`; }).join('');
+  const res = await modal({ title: `Bobina y largo · ${c.designacion}`, sub: `${esc(c.desde)} → ${esc(c.hasta)} · ${esc(c.formacion)}`, wide: true,
+    body: `<div class="form"><label>Largo a cortar por conductor (m)<input type="number" step="0.01" min="0" name="largo" value="${c.largoCorte || ''}" placeholder="${fmt(conAj, 2)}"></label>
+      <label>Referencia<input type="text" disabled value="Lista ${fmt(lista, 2)} m${aj ? ` · con ajuste ${aj > 0 ? '+' : ''}${fmt(aj, 1)} % = ${fmt(conAj, 2)} m` : ''}"></label></div>
+      <p class="hint">Vacío = largo de la lista (con el ajuste % del tipo, si hay). Cargá un valor si en campo este circuito necesita otro largo.</p>
+      <h4 style="margin:14px 0 4px">Bobina por conductor</h4>
+      ${rc.fz.length > 1 ? `<div class="phase-row" style="grid-template-columns:56px 1fr 180px"><span class="muted">Todas</span><select id="ebAll"><option value="-">— elegir para todas —</option>${opts('')}</select><span></span></div>` : ''}${rows}
+      <p class="hint">Elegí una bobina solo en casos especiales (por ejemplo, para no mover bobinas en el campo). El resto del plan se recalcula completo para aprovechar mejor las demás bobinas.</p>`,
+    buttons: [['Quitar elecciones', 'btn', () => 'clear'], ['Cancelar', 'btn', () => null], ['Guardar y recalcular', 'btn pri', (box) => {
+      const a = {}; $$('.eb', box).forEach((row) => { const v = $('.bob', row).value; if (v) a[row.dataset.f] = v; });
+      const l = Number($('[name=largo]', box).value);
+      return { a, l };
+    }]] });
+  if (!res) return;
+  if (res === 'clear') { delete c.asig; }
+  else { if (Object.keys(res.a).length) c.asig = res.a; else delete c.asig; if (res.l > 0) c.largoCorte = Math.round(res.l * 100) / 100; else delete c.largoCorte; }
+  recalcularTodo(rc.cat);
+  ui.flash = [id];
+  commit(res === 'clear' ? `${c.designacion}: vuelve a bobina automática · plan recalculado` : `${c.designacion} actualizado · plan recalculado`);
+}
+document.addEventListener('change', (e) => { if (e.target.id === 'ebAll' && e.target.value !== '-') { $$('.mbox .eb .bob').forEach((s2) => { s2.value = e.target.value; }); } });
+// libera los compromisos de un tipo para que el plan se rearme completo (respetando lo tendido y lo elegido a mano)
+function recalcularTodo(cat) {
+  const ids = new Set(S.circuitos.filter((c) => c.cat === cat).map((c) => c.id));
+  Object.keys(S.compromiso || {}).forEach((k) => { if (ids.has(k.split('|')[0])) delete S.compromiso[k]; });
+}
+function desv(c) {
+  if (!c.teoTot) return '<span class="muted">–</span>';
+  const pc = c.desvio / c.teoTot * 100, cls = Math.abs(c.desvio) < 0.005 ? '' : c.desvio > 0 ? 'pos' : 'neg';
+  return `<span class="dv ${cls}" title="${fmt(c.realTot, 2)} m tirados vs ${fmt(c.teoTot, 2)} m de lista">${c.desvio > 0 ? '+' : ''}${fmt(c.desvio, 1)} m · ${c.desvio > 0 ? '+' : ''}${fmt(pc, 1)}%</span>`;
+}
+async function tender(id) {
+  if (window.READONLY) return;
+  const c = S.circuitos.find((x) => x.id === id), rc = R.circuitos.find((x) => x.id === id);
+  const bobs = R.bobinas.filter((b) => b.key === rc.key);
+  if (!bobs.length && rc.cat !== 'PAT') { toast(`No hay bobinas de ${CATN[rc.cat]} ${rc.seccion} mm² cargadas`, { err: true }); return; }
+  const opts = (sel) => `<option value="">—</option>${rc.cat === 'PAT' ? `<option value="__sin" ${sel === '__sin' ? 'selected' : ''}>Sin bobina registrada</option>` : ''}` + bobs.map((b) => `<option value="${esc(b.codigo)}" ${sel === b.codigo ? 'selected' : ''}>${esc(b.codigo)} · saldo ${fmt(b.saldoActual, 1)} m</option>`).join('');
+  const lbl = (f) => (f === 'C' ? 'Cu' : f);
+  const teo = Math.round((Number(c.cantidad) || 0) / rc.fz.length * 100) / 100;
+  const rows = rc.fz.map((f) => {
+    const r = (c.real || {})[f], plan = rc.fasesInfo[f] || {}, done = !!(r && (r.bobina || r.sinBobina));
+    return `<div class="phase-row pr6" data-f="${f}"><label class="fz"><input type="checkbox" class="on" ${done ? 'checked' : ''}> ${lbl(f)}</label>
+      <select class="bob">${opts(done ? r.bobina || '__sin' : plan.bobina || '')}</select>
+      <span class="teo">${fmt(teo, 2)}</span>
+      <input type="number" class="m" step="0.01" min="0" value="${done ? r.metros : rc.lenFase}" title="Metros realmente tirados">
+      <span class="dif"></span>
+      <input type="date" class="d" value="${done ? r.fecha || '' : today()}"></div>`;
+  }).join('');
+  setTimeout(() => {
+    const box = $('.mbox'); if (!box) return;
+    const upd = () => {
+      let tr = 0, tt = 0;
+      $$('.phase-row', box).forEach((row) => {
+        const m = Number($('.m', row).value) || 0, d = Math.round((m - teo) * 100) / 100, on = $('.on', row).checked;
+        const el = $('.dif', row); el.textContent = (d > 0 ? '+' : '') + fmt(d, 2); el.className = 'dif ' + (Math.abs(d) < 0.005 ? '' : d > 0 ? 'pos' : 'neg');
+        const nv = rc.cat !== 'PAT' && m > 0 ? Margen.nivel(Margen.tolerancia(mgDe(rc.key), rc.lenFase, tolF()), m) : null;
+        $('.m', row).classList.remove('lv-ok', 'lv-riesgo', 'lv-falta'); if (nv) $('.m', row).classList.add('lv-' + nv);
+        row.classList.toggle('off', !on); if (on) { tr += m; tt += teo; }
+      });
+      const d = tr - tt;
+      $('#tTot', box).innerHTML = tt ? `Tildado: <b>${fmt(tr, 2)} m</b> tirados vs <b>${fmt(tt, 2)} m</b> de lista · diferencia <b class="${d > 0.005 ? 'pos' : d < -0.005 ? 'neg' : ''}">${d > 0 ? '+' : ''}${fmt(d, 2)} m (${d > 0 ? '+' : ''}${fmt(d / tt * 100, 1)} %)</b>` : '';
+    };
+    $$('.phase-row input', box).forEach((i) => { i.addEventListener('input', upd); i.addEventListener('change', upd); });
+    upd();
+  }, 30);
+  const nAll = rc.fz.length;
+  const res = await modal({
+    title: `Registrar tendido · ${c.designacion}`, wide: true, sub: `${esc(c.desde)} → ${esc(c.hasta)} · ${esc(c.formacion)} · ${fmt(rc.lenFase, 2)} m por conductor · zanja ${rc.zanja}`,
+    body: `<div class="muted pr6 prh"><span>${nAll === 1 ? 'Cond.' : 'Fase'}</span><span>Bobina usada</span><span>Lista</span><span>Tirado real</span><span>Dif.</span><span>Fecha</span></div>${rows}
+      <div class="tot" id="tTot"></div>
+      ${rc.cat !== 'PAT' ? `<div class="tolb" id="tolBox" data-key="${rc.key}" data-l="${rc.lenFase}">${tolHTML(mgDe(rc.key), rc.lenFase)}</div>` : ''}
+      <p class="hint">Tildá lo que ya se tendió. Se propone la bobina del plan y el largo de la lista; cargá los metros realmente tirados y el saldo de la bobina se ajusta. La diferencia con la lista queda registrada para el seguimiento.</p>`,
+    buttons: [['Borrar registro', 'btn danger', (box) => { $$('.on', box).forEach((x) => { x.checked = false; }); return save(box); }],
+      ['Cancelar', 'btn', () => null], [nAll === 1 ? 'Marcar y guardar' : `Marcar ${nAll === 3 ? 'las 3' : 'todas'} y guardar`, 'btn', (box) => { $$('.on', box).forEach((x) => { x.checked = true; }); return save(box); }], ['Guardar', 'btn pri', (box) => save(box)]],
+  });
+  function save(box) {
+    const real = {};
+    for (const row of $$('.phase-row', box)) {
+      if (!$('.on', row).checked) continue;
+      const b = $('.bob', row).value, m = Number($('.m', row).value);
+      if (!b) { toast(`${lbl(row.dataset.f)}: elegí la bobina`, { err: true }); return false; }
+      const met = m > 0 ? Math.round(m * 100) / 100 : rc.cat === 'PAT' ? rc.lenFase : teo;
+      real[row.dataset.f] = b === '__sin' ? { sinBobina: true, metros: met, fecha: $('.d', row).value } : { bobina: b, metros: met, fecha: $('.d', row).value };
+    }
+    c.real = real;
+    return 'ok';
+  }
+  if (res === 'ok') {
+    ui.flash = [id, c.vinculo || c.zanjaId];
+    const zc = S.zanjas.find((z) => z.id === (c.vinculo || c.zanjaId));
+    if (Object.keys(c.real).length && zc && zc.estado === 'no abierta') zc.estado = 'abierta';
+    const antes = zc ? (R.zlist.find((z) => z.id === zc.id) || {}).completo : false;
+    commit(`Tendido de ${c.designacion} actualizado`);
+    // último circuito de la zanja: ofrecer cerrarla y registrar la PAT
+    const rz = zc && !c.vinculo ? R.zlist.find((z) => z.id === zc.id) : null;
+    if (rz && rz.completo && !antes && rz.estado !== 'cerrada') setTimeout(() => cerrarZanjas([rz.id], true), 350);
+  }
+}
+
+async function editCircuito(id, cat) {
+  if (window.READONLY) return;
+  const nuevo = !id;
+  const c = nuevo ? { id: uid('c'), cat, designacion: '', desde: '', hasta: '', formacion: cat === 'MT' ? '1x50/25 mm² Al/Cu' : '1x240 mm² Al', fases: 3, cantidad: 0, lineal: 0, real: {} } : S.circuitos.find((x) => x.id === id);
+  const rc = nuevo ? null : R.circuitos.find((x) => x.id === id);
+  const res = await modal({
+    title: nuevo ? `Nuevo circuito ${CATN[cat]}` : `Editar ${c.designacion}`, wide: true,
+    body: `<div class="form"><label>Designación<input type="text" name="designacion" value="${esc(c.designacion)}"></label>
+      <label>Formación<input type="text" name="formacion" value="${esc(c.formacion)}"></label>
+      <label>Desde<input type="text" name="desde" value="${esc(c.desde)}"></label><label>Hasta<input type="text" name="hasta" value="${esc(c.hasta)}"></label>
+      <label>Cantidad final (m, todos los conductores)<input type="number" step="0.01" name="cantidad" value="${c.cantidad}"></label>
+      <label>Conductores (fases)<input type="number" name="fases" value="${c.fases || 3}" min="1" max="12"></label>
+      <label>Longitud lineal (m)<input type="number" step="0.1" name="lineal" value="${c.lineal || 0}"></label>
+      <label>Zanja<input type="text" disabled value="${rc ? esc(rc.zTitulo) + ' · ' + fmt(rc.zanjaLargo, 1) + ' m · ' + rc.zanja : 'propia (se crea al guardar)'}"></label>
+      <label class="full">Observaciones<input type="text" name="obs" value="${esc(c.obs || '')}"></label></div>
+      <p class="hint">El estado, el largo y la PAT se manejan por zanja (sección Zanjas). Para que varios circuitos compartan zanja, tildalos y tocá "Misma zanja".</p>`,
+    buttons: [...(nuevo ? [] : [['Eliminar', 'btn danger', () => 'del']]), ['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (box) => {
+      const g = (n) => $(`[name=${n}]`, box).value;
+      if (!g('designacion').trim() || !(Number(g('cantidad')) > 0)) { toast('Completá designación y cantidad', { err: true }); return false; }
+      Object.assign(c, { designacion: g('designacion').trim(), formacion: g('formacion').trim(), desde: g('desde').trim(), hasta: g('hasta').trim(),
+        cantidad: Number(g('cantidad')), fases: Number(g('fases')) || 3, lineal: Number(g('lineal')) || 0, obs: g('obs').trim() });
+      if (nuevo) c.zanjaLargo = c.lineal;
+      return 'ok';
+    }]],
+  });
+  if (res === 'del') { if (await confirmar('Eliminar circuito', `¿Eliminar ${esc(c.designacion)} y su tendido de PAT?`, 'Eliminar')) { S.circuitos = S.circuitos.filter((x) => x !== c); commit('Circuito eliminado'); } }
+  else if (res === 'ok') { if (nuevo) { c._o = Date.now(); S.circuitos.push(c); } commit('Circuito guardado'); }
+}
+async function editPat(id) {
+  if (window.READONLY) return;
+  const c = S.circuitos.find((x) => x.id === id), base = R.zlist.find((x) => x.id === c.vinculo);
+  const res = await modal({
+    title: `Editar ${c.designacion}`, sub: `Zanja ${esc(base.titulo)} · ${fmt(base.largo, 1)} m`,
+    body: `<div class="form"><label>Formación<input type="text" name="formacion" value="${esc(c.formacion)}"></label>
+      <label>Largo (m) – vacío = largo de la zanja<input type="number" step="0.1" name="largo" value="${c.largoManual || ''}" placeholder="${base.largo}"></label></div>`,
+    buttons: [['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (box) => {
+      c.formacion = $('[name=formacion]', box).value.trim() || c.formacion;
+      const l = Number($('[name=largo]', box).value); if (l > 0) c.largoManual = l; else delete c.largoManual; return 'ok';
+    }]],
+  });
+  if (res === 'ok') commit('Tendido de PAT actualizado');
+}
+
+// ======================= BOBINAS =======================
+function vBobinas(el) {
+  actions([['Importar…', 'btn', () => menuImportar(null, true)], ['+ Bobina', 'btn pri', () => editBobina(null)]]);
+  const q = (ui.q.bob || '').toLowerCase();
+  const list = R.bobinas.filter((b) => (ui.bobCat === 'all' || b.cat === ui.bobCat) && (!q || `${b.codigo} ${b.nro} ${b.remito}`.toLowerCase().includes(q)));
+  let h = `<div class="tools"><div class="seg" id="fBC"><button data-v="all">Todas</button><button data-v="BT">${CATN.BT}</button><button data-v="MT">${CATN.MT}</button><button data-v="PAT">PAT Cu desnudo</button></div>
+    <span class="muted">${list.length} bobinas · ${list.filter((b) => b.estadoReal === 'sin abrir').length} sin abrir · ${list.filter((b) => b.estadoReal === 'en uso').length} en uso · ${list.filter((b) => b.estadoReal === 'terminada').length} terminadas</span><span class="sp"></span><input type="search" id="fBQ" placeholder="Buscar código, N°, remito…" value="${esc(ui.q.bob || '')}" style="width:240px"></div>
+    <div class="tblwrap"><table class="tbl"><thead><tr><th>Tipo</th><th>Código</th><th>N° fabricante</th><th>Sección</th><th class="n">Entrada</th><th class="n">Ya tendido</th>
+    <th class="n">Saldo actual</th><th>Uso real</th><th>Estado real</th><th class="n">Plan pendiente</th><th class="n">Remanente previsto</th><th>Al final</th><th></th></tr></thead><tbody>`;
+  list.forEach((b) => {
+    h += `<tr data-id="${b.id}"><td><span class="chip">${b.cat}</span></td><td><b>${esc(b.codigo)}</b></td><td class="mono" title="Remito ${esc(b.remito || '–')} · ingreso ${esc(b.fecha || '–')}">${esc(b.nro)}</td><td>${b.seccion ?? '?'}</td>
+      <td class="n">${fmt(b.entrada)}</td><td class="n">${fmt(b.consumoReal, 1)}</td><td class="n"><b>${fmt(b.saldoActual, 1)}</b></td>
+      <td><span class="mini ok"><div data-w="${(b.usoReal * 100).toFixed(1)}%" style="width:0"></div></span> <span class="muted">${fmt(b.usoReal * 100, b.usoReal > 0 && b.usoReal < 0.1 ? 1 : 0)}%</span></td><td>${pill(b.estadoReal)}</td>
+      <td class="n">${fmt(b.asigListo + b.asigProv, 1)}</td><td class="n">${fmt(b.remanente, 1)}</td><td>${pill(b.estado)}</td>
+      <td><button class="btn sm ghost">✎</button></td></tr>`;
+  });
+  el.innerHTML = h + `</tbody></table>${list.length ? '' : '<div class="empty"><b>Sin bobinas de este tipo</b>Cargalas con "+ Bobina" o importá la planilla de control.</div>'}</div>`;
+  segBind('#fBC', ui.bobCat, (v) => { ui.bobCat = v; render(false); });
+  searchBind('#fBQ', (v) => { ui.q.bob = v; });
+  $$('tbody tr', el).forEach((tr) => { $('button', tr).onclick = () => editBobina(tr.dataset.id); tr.ondblclick = () => editBobina(tr.dataset.id); });
+}
+const SEC_DEF = { BT: '1x240', MT: '1x50/25', PAT: '1x25 Cu desnudo' };
+async function editBobina(id) {
+  if (window.READONLY) return;
+  const nuevo = !id, defCat = ui.bobCat !== 'all' ? ui.bobCat : 'BT';
+  const b = nuevo ? { id: uid('b'), cat: defCat, fecha: today(), remito: '', nro: '', seccion: SEC_DEF[defCat], entrada: 0, codigo: '', obs: '' } : S.bobinas.find((x) => x.id === id);
+  const rb = R.bobinas.find((x) => x.id === id);
+  const usada = !nuevo && S.circuitos.some((c) => c.cat === b.cat && Object.values(c.real || {}).some((r) => r.bobina === rb.codigo));
+  const res = await modal({
+    title: nuevo ? 'Nueva bobina' : `Editar bobina ${rb.codigo} (${b.cat})`,
+    body: `<div class="form"><label>Tipo<select name="cat" ${usada ? 'disabled' : ''}>${Object.keys(CATS).map((k) => `<option value="${k}" ${b.cat === k ? 'selected' : ''}>${CATN[k]}</option>`).join('')}</select></label>
+      <label>Sección<input type="text" name="seccion" value="${esc(b.seccion)}" placeholder="1x240 · 1x50/25 · 1x25"></label>
+      <label>Fecha de ingreso<input type="date" name="fecha" value="${esc(b.fecha || '')}"></label><label>Remito<input type="text" name="remito" value="${esc(b.remito || '')}"></label>
+      <label>N° de bobina (fabricante)<input type="text" name="nro" value="${esc(b.nro)}"></label><label>Cantidad de entrada (m)<input type="number" name="entrada" value="${b.entrada}"></label>
+      <label>Código interno<input type="text" name="codigo" value="${esc(b.codigo || '')}" placeholder="automático: n/sección"></label><label>Observaciones<input type="text" name="obs" value="${esc(b.obs || '')}"></label></div>
+      <p class="hint">El código interno se numera por tipo y sección (ej. 1/25 para la primera bobina de Cu desnudo de 25 mm²).${usada ? ' Tiene tendidos registrados: si cambiás el código se actualizan solos.' : ''}</p>`,
+    buttons: [...(nuevo ? [] : [['Eliminar', 'btn danger', () => 'del']]), ['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (box) => {
+      const g = (n) => $(`[name=${n}]`, box).value.trim();
+      if (!g('nro') || !(Number(g('entrada')) > 0) || Engine.parseSeccion(g('seccion')) == null) { toast('Completá N° de bobina, sección y metros', { err: true }); return false; }
+      const old = rb && rb.codigo;
+      Object.assign(b, { cat: usada ? b.cat : g('cat'), fecha: g('fecha'), remito: g('remito'), nro: g('nro'), seccion: g('seccion'), entrada: Number(g('entrada')), codigo: g('codigo'), obs: g('obs') });
+      if (old && b.codigo && old !== b.codigo) S.circuitos.forEach((c) => { if (c.cat === b.cat) Object.values(c.real || {}).forEach((r) => { if (r.bobina === old) r.bobina = b.codigo; }); });
+      return 'ok';
+    }]],
+  });
+  if (res === 'del') {
+    if (usada) { toast('No se puede eliminar: tiene tendidos registrados', { err: true }); return; }
+    if (await confirmar('Eliminar bobina', `¿Eliminar la bobina ${esc(b.nro)}?`, 'Eliminar')) { S.bobinas = S.bobinas.filter((x) => x !== b); commit('Bobina eliminada'); }
+  } else if (res === 'ok') {
+    if (nuevo) {
+      b._o = Date.now();
+      if (!b.codigo) { // código fijo desde el alta, para que sea el mismo en todas las PCs
+        const sec = Engine.parseSeccion(b.seccion), usados = new Set(R.bobinas.filter((x) => x.cat === b.cat).map((x) => x.codigo));
+        let n = R.bobinas.filter((x) => x.cat === b.cat && x.seccion === sec).length + 1; while (usados.has(`${n}/${sec}`)) n++;
+        b.codigo = `${n}/${sec}`;
+      }
+      S.bobinas.push(b);
+    }
+    commit('Bobina guardada');
+  }
+}
