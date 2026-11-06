@@ -665,3 +665,11 @@ polyline.pl-on { stroke-width: 6px !important; }
 svg.plprint { width: 100%; height: auto; max-height: 170mm; }
 @media (max-width: 1100px) { .plwrap { grid-template-columns: 1fr; } .plcard { height: 70vh; } .plpanel { max-height: none; } }
 @media print { #printArea .pllegend { position: static; } }
+#campoBtn { font-size: 12px; font-weight: 700; text-decoration: none; color: #fff; background: #00939a; border-radius: 16px; padding: 5px 11px; }
+
+/* ---------- partes de campo ---------- */
+.nbadge { font-style: normal; margin-left: auto; background: #f5a524; color: #142033; font-size: 11px; font-weight: 800; border-radius: 9px; padding: 0 7px; }
+.ptc { margin-bottom: 12px; } .ptc.aprobado { opacity: .75; } .ptc.rechazado { opacity: .6; }
+.pth { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; } .pth b { font-size: 15px; }
+.pt-f { margin-top: 8px; } .pt-row { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pt-obs { margin-top: 8px; background: #fff8e8; border-left: 3px solid #f5a524; padding: 6px 10px; border-radius: 6px; font-style: italic; }

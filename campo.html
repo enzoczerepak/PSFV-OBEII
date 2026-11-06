@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#142033">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Campo OBEII">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; connect-src 'self' https://api.github.com http://localhost:4999">
+<link rel="icon" href="icon.png"><link rel="apple-touch-icon" href="icon.png"><link rel="manifest" href="campo.webmanifest">
+<title>Campo · PSFV-OBEII</title>
+<link rel="stylesheet" href="campo.css">
+</head>
+<body>
+<div id="login" class="scr"><form id="lgForm" class="lgbox"><img src="icon.png" alt="" class="lglogo"><h1>PSFV-OBEII</h1><p>Carga de campo</p>
+<label>Usuario<input type="text" id="lgU" autocomplete="username" autocapitalize="none" required></label>
+<label>Contraseña<input type="password" id="lgP" autocomplete="current-password" required></label>
+<label class="chk"><input type="checkbox" id="lgR" checked> Recordarme en este celular</label>
+<button class="b pri" id="lgB" type="submit">Ingresar</button><div id="lgE" class="err"></div></form></div>
+<div id="app" class="hidden">
+  <header><div><b id="hNom"></b><small id="hFecha"></small></div><div id="hEst"></div></header>
+  <main id="v"></main>
+  <nav id="tabs"><button data-t="plan" class="on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>Plan del día</button><button data-t="cargar"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Cargar</button><button data-t="mios"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg>Mis partes<i id="tBadge"></i></button></nav>
+</div>
+<div id="toast"></div>
+<script src="engine.js"></script>
+<script src="core.js"></script>
+<script src="campo.js"></script>
+</body>
+</html>

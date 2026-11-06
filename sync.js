@@ -2,11 +2,11 @@
    Cada PC guarda sus datos; los cambios se intercambian por registro (bobina, circuito, zanja, ajustes, compromisos).
    Conflictos: gana el cambio más reciente (con corrección de diferencia de reloj entre PCs). */
 (function () {
-  const KINDS = [['b', 'bobinas'], ['c', 'circuitos'], ['z', 'zanjas'], ['k', 'cronoTareas']];
+  const KINDS = [['b', 'bobinas'], ['c', 'circuitos'], ['z', 'zanjas'], ['k', 'cronoTareas'], ['p', 'partes']];
   // Versión del protocolo: 2 agrega fundaciones STS ('f:') y conserva registros de tipos desconocidos.
   // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
   const PROTO = 2;
-  const nuevo = (k) => k.startsWith('f:') || k.startsWith('k:') || k === 'km';
+  const nuevo = (k) => k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km';
   const conocido = (k) => k === 'cfg' || k === 'comp' || k === 'km' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
 
   // JSON con claves ordenadas: el orden interno de los campos no cuenta como cambio
@@ -133,7 +133,7 @@
   }
   // Cliente que se une por primera vez
   function reemplazarPorServidor(S) {
-    S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {}; S.cronoTareas = []; S.cronoMeta = null;
+    S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {}; S.cronoTareas = []; S.cronoMeta = null; S.partes = [];
     S.__sync = { snap: {}, meta: {}, pend: {}, rev: 0, peerRev: 0 };
   }
   function marcarTodoPendiente(S) {

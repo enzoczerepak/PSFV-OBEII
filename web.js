@@ -34,7 +34,9 @@ window.READONLY = true;
   const b64big = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
   async function prepararEditor(d, id, kekRaw, nombre) {
     window.__editor = null;
-    const u = (d.usuarios || []).find((x) => x.id === id); if (!u || !u.tok || !d.repo) return;
+    const u = (d.usuarios || []).find((x) => x.id === id);
+    window.__capataz = !!(u && (u.cap || u.ed));
+    if (!u || !u.tok || !d.repo || (u.ed === undefined ? !!u.cap : !u.ed)) return;
     try {
       const kd = await crypto.subtle.importKey('raw', kekRaw, 'AES-GCM', false, ['decrypt', 'encrypt']);
       const token = new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(u.tiv) }, kd, b64d(u.tok)));
@@ -85,6 +87,7 @@ window.READONLY = true;
     document.getElementById('login').classList.add('ok');
     setTimeout(() => { const l = document.getElementById('login'); if (l) l.style.display = 'none'; }, 400);
     await prepararEditor(d, id, kekRaw, nombre);
+    if (window.__capataz && !document.getElementById('campoBtn')) { const a = document.createElement('a'); a.id = 'campoBtn'; a.href = 'campo.html'; a.textContent = '📱 Carga de campo'; const t = document.getElementById('topR'); if (t) t.prepend(a); }
     resolver({ text: txt, path: null });
     setTimeout(() => saludo(nombre), 450);
     setTimeout(() => {

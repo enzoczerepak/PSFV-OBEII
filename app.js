@@ -21,6 +21,7 @@
     st.params = Object.assign({ margen: 0, minUtil: 30, cola: 0 }, st.params || {});
     st.fundaciones = st.fundaciones || {};
     st.cronoTareas = st.cronoTareas || [];
+    st.partes = st.partes || [];
     // una vez: descartar borrados de fundaciones que generaba una versión anterior en red (no eran borrados reales)
     const y0 = st.__sync;
     if (y0 && !y0.fmig) { Object.keys(y0.meta || {}).forEach((k) => { if (k.startsWith('f:') && y0.meta[k].d) { delete y0.meta[k]; if (y0.pend) delete y0.pend[k]; if (y0.snap) delete y0.snap[k]; } }); y0.fmig = 1; }
@@ -153,6 +154,7 @@
     cables: ['Resumen de tendido', () => 'Stock, requerido, tendido y remanente por sección · zanjas · alertas'],
     avance: ['Avance', () => 'Tendido de cables, puntas y fundaciones STS: gráficos de avance'],
     diario: ['Tendido por fecha', () => 'Elegí un día del calendario para ver qué se tendió: metros, secciones, circuitos e inversores'],
+    partes: ['Partes de campo', () => 'Lo que cargan los capataces desde el celular: revisá, corregí si hace falta y aprobá para registrarlo'],
     plano: ['Plano de obra', () => 'Sectores, trackers, inversores, STS y zanjas de BT y MT con su estado · tocá un elemento para ver su información'],
     crono: ['Resumen del cronograma', () => `${esc((S.cronoMeta || {}).nombre || 'Cronograma de obra')} · avance real vs. esperado al día de hoy`],
     gantt: ['Diagrama de Gantt', () => 'Actividades del cronograma en el tiempo · tocá una para cambiar fechas o avance'],
@@ -194,7 +196,8 @@
   function render(anim) {
     const [t, sub] = VIEWS[view];
     const vc = view.split('-')[0];
-    $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
+    setTimeout(badgePartes, 0);
+    $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
     $('#vTitle').innerHTML = (CATN[vc] && view.includes('-') ? `<span class="cchip c-${vc}">${CATL[vc]}</span>` : '') + esc(t); $('#vSub').innerHTML = sub();
     $('#projName').textContent = S.nombre;
     const el = $('#view'), sc = el.scrollTop;
@@ -205,7 +208,7 @@
     const [cat, kind] = view.split('-');
     if (kind === 'plan') vPlan(el, cat);
     else if (kind === 'circ') vCircuitos(el, cat);
-    else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
+    else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
     if (anim) { void el.offsetWidth; el.classList.add('enter'); el.scrollTop = 0; countUp(el); }
     else {
       el.scrollTop = sc;
@@ -1059,7 +1062,7 @@
         <label>Repositorio<input type="text" id="wRepo" value="${esc(WEB.repo || '')}" placeholder="ej. obera-ii"></label>
         <label class="full">Token de acceso de GitHub<input type="password" id="wTok" value="${esc(WEB.token || '')}" placeholder="github_pat_…"></label></div>
       <h4 style="margin:14px 0 6px">Usuarios del visor</h4>
-      <div id="wUs">${us.map((u) => `<div class="phase-row wu" style="grid-template-columns:1fr 1fr auto auto"><input type="text" class="wn" value="${esc(u.nombre)}" readonly><input type="password" class="wp" placeholder="(sin cambios)"><label class="chkl wed" title="Puede enviar cronogramas actualizados desde el visor"><input type="checkbox" class="we" ${u.editor ? 'checked' : ''}> Editor</label><button class="btn sm ghost danger wx">Quitar</button></div>`).join('')}</div>
+      <div id="wUs">${us.map((u) => `<div class="phase-row wu" style="grid-template-columns:1fr 1fr auto auto auto"><input type="text" class="wn" value="${esc(u.nombre)}" readonly><input type="password" class="wp" placeholder="(sin cambios)"><label class="chkl wed" title="Puede enviar cronogramas actualizados desde el visor"><input type="checkbox" class="we" ${u.editor ? 'checked' : ''}> Editor</label><label class="chkl wed" title="Puede cargar partes de campo desde el celular (campo.html)"><input type="checkbox" class="wc" ${u.capataz ? 'checked' : ''}> Capataz</label><button class="btn sm ghost danger wx">Quitar</button></div>`).join('')}</div>
       <button class="btn sm" id="wAdd" style="margin-top:6px">+ Usuario</button>
       <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13px"><input type="checkbox" id="wAuto" ${WEB.auto !== false ? 'checked' : ''}> Publicar automáticamente cuando haya cambios (como máximo cada 90 segundos)</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn pri" id="wSave">Guardar</button><button class="btn" id="wViz">Instalar / actualizar visor</button><button class="btn acc" id="wPub" ${webListo() ? '' : 'disabled'}>Publicar ahora</button></div>
@@ -1067,17 +1070,19 @@
         <li>Crear una cuenta en github.com (gratis) y un repositorio <b>público</b> nuevo, por ejemplo "obera-ii", marcando "Add a README".</li>
         <li>En GitHub: <i>Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token</i>. Elegir solo ese repositorio y dar permiso <b>Contents: Read and write</b> y <b>Pages: Read and write</b>. Copiar el token.</li>
         <li>Acá: cargar usuario de GitHub, repositorio y token, agregar los usuarios del visor con su contraseña (mínimo 8 caracteres) y tocar <b>Guardar</b>.</li>
+        <li><b>Capataz</b>: entra desde el celular a <b>…/campo.html</b> (mismo sitio del visor), ve el plan de corte del día y envía partes de tendido, PAT, largo real de zanja y observaciones. Llegan a <b>Partes de campo</b> para aprobarlos.</li>
         <li><b>Editor</b>: ese usuario puede enviar desde el visor un cronograma actualizado de MS Project (.mpp o .xml). Llega cifrado a esta PC, que lo aplica sola cada 2 minutos mientras el programa esté abierto. Los editores reciben el token de GitHub cifrado con su contraseña: marcá solo a personas de confianza.</li>
         <li>Tocar <b>Instalar / actualizar visor</b> y después <b>Publicar ahora</b>. Si GitHub Pages no se activa solo: en el repositorio, <i>Settings → Pages → Deploy from a branch → main / (root)</i>.</li>
         <li>Pasar la dirección del visor y a cada persona su usuario y contraseña. La primera publicación tarda 1 a 2 minutos en aparecer.</li></ol>
         <p class="hint">Los datos viajan y quedan guardados cifrados (AES-256); sin usuario y contraseña no se pueden leer. Para quitarle el acceso a alguien, se lo quita de la lista: desde la próxima publicación ya no puede abrir los datos.</p></details>`;
-    const fila = () => `<div class="phase-row wu" style="grid-template-columns:1fr 1fr auto auto"><input type="text" class="wn" placeholder="usuario (ej. Juan Pérez)"><input type="password" class="wp" placeholder="contraseña"><label class="chkl wed" title="Puede enviar cronogramas actualizados desde el visor"><input type="checkbox" class="we"> Editor</label><button class="btn sm ghost danger wx">Quitar</button></div>`;
+    const fila = () => `<div class="phase-row wu" style="grid-template-columns:1fr 1fr auto auto auto"><input type="text" class="wn" placeholder="usuario (ej. Juan Pérez)"><input type="password" class="wp" placeholder="contraseña"><label class="chkl wed" title="Puede enviar cronogramas actualizados desde el visor"><input type="checkbox" class="we"> Editor</label><label class="chkl wed" title="Puede cargar partes de campo desde el celular (campo.html)"><input type="checkbox" class="wc"> Capataz</label><button class="btn sm ghost danger wx">Quitar</button></div>`;
+    if (!$('#wAdd')) return; // la vista cambió mientras se cargaba la configuración
     $('#wAdd').onclick = () => { $('#wUs').insertAdjacentHTML('beforeend', fila()); bindX(); };
     const bindX = () => $$('.wx', box).forEach((b) => { b.onclick = () => b.closest('.wu').remove(); });
     bindX();
     if ($('#wUrl')) $('#wUrl').onclick = (e) => { e.preventDefault(); window.api.openUrl(webUrl()); };
     $('#wSave').onclick = async () => {
-      const usuarios = $$('.wu', box).map((r) => ({ nombre: $('.wn', r).value.trim(), password: $('.wp', r).value, editor: $('.we', r).checked }));
+      const usuarios = $$('.wu', box).map((r) => ({ nombre: $('.wn', r).value.trim(), password: $('.wp', r).value, editor: $('.we', r).checked, capataz: $('.wc', r).checked }));
       const nuevosSinClave = usuarios.filter((u) => u.nombre && !u.password && !us.some((x) => x.nombre.toLowerCase() === u.nombre.toLowerCase()));
       if (nuevosSinClave.length) { toast(`Falta la contraseña de ${nuevosSinClave.map((u) => u.nombre).join(', ')}`, { err: true }); return; }
       if (usuarios.some((u) => u.password && u.password.length < 8)) { toast('Las contraseñas deben tener al menos 8 caracteres', { err: true }); return; }
@@ -1787,13 +1792,14 @@
       const hechos = [];
       for (const it of r.items) {
         if (it.error) { hechos.push(it.ruta); toast(`Buzón: se descartó un archivo (${it.error})`, { err: true, ms: 8000 }); continue; }
+        if (it.ext === 'parte') { try { recibirParte(JSON.parse(it.text), it.nombre); hechos.push(it.ruta); } catch (e) { hechos.push(it.ruta); } continue; }
         try { const d = it.json || leerMSPDI(it.text); aplicarCrono(d, { keep: true, fuente: it.archivo, por: it.nombre }); hechos.push(it.ruta); toast(`Cronograma actualizado desde el visor por ${it.nombre} (${it.archivo})`, { ms: 9000 }); }
         catch (e) { hechos.push(it.ruta); toast(`No se pudo aplicar ${it.archivo}: ${e.message}`, { err: true, ms: 9000 }); }
       }
       if (hechos.length) { await window.api.webBuzonBorrar(hechos); publicarWeb(false); }
     } catch (_) { /* reintenta */ } finally { buzonBusy = false; }
   }
-  setInterval(revisarBuzon, 120000); setTimeout(revisarBuzon, 20000);
+  setInterval(revisarBuzon, 60000); setTimeout(revisarBuzon, 15000);
   async function exportCrono() {
     const C = cronoCalc();
     const p = await window.api.saveBinary(IO.exportCrono(C, S.cronoMeta || {}), `Cronograma ${today()}.xlsx`, 'xlsx', 'Excel');
@@ -1954,6 +1960,102 @@
     printHTML(prHead('Plano de obra') + `<div class="card">${cl.outerHTML}<div class="pllegend">${$('.pllegend').innerHTML}</div></div>`, `Plano de obra ${today()}.pdf`, true);
   }
 
+  // ======================= PARTES DE CAMPO =======================
+  function recibirParte(p, autor) {
+    S.partes = S.partes || [];
+    if (!p || !p.id || S.partes.some((x) => x.id === p.id)) return;
+    S.partes.push(Object.assign({}, p, { autor, recibido: new Date().toISOString(), estado: 'pendiente', _o: Date.now() }));
+    commit(`Parte de campo recibido de ${autor}`);
+    toast(`📱 Nuevo parte de campo de ${autor}: ${parteTxt(p)}`, { ms: 9000, action: ['Ver', () => go('partes')] });
+    badgePartes();
+  }
+  const parteTxt = (p) => p.tipo === 'tendido' ? `${p.designacion} · ${p.fases.length} conductor${p.fases.length > 1 ? 'es' : ''}` : p.tipo === 'pat' ? `PAT ${p.titulo} · ${fmt(p.metros, 1)} m` : p.tipo === 'zanja' ? `zanja ${p.titulo} · ${fmt(p.largo, 1)} m` : 'observación';
+  function badgePartes() {
+    const n = (S.partes || []).filter((p) => p.estado === 'pendiente').length;
+    const b = $('#nav button[data-view="partes"]'); if (!b) return;
+    let i = $('.nbadge', b); if (!i) { i = document.createElement('i'); i.className = 'nbadge'; b.appendChild(i); }
+    i.textContent = n || ''; i.style.display = n ? '' : 'none';
+  }
+  function vPartes(el) {
+    const f = ui.pf || 'pend';
+    const lista = (S.partes || []).slice().sort((a, b) => String(b.recibido).localeCompare(String(a.recibido))).filter((p) => (f === 'pend' ? p.estado === 'pendiente' : f === 'ok' ? p.estado !== 'pendiente' : true));
+    const pend = (S.partes || []).filter((p) => p.estado === 'pendiente');
+    actions(pend.length > 1 && !window.READONLY ? [['Aprobar todos los válidos', 'btn pri', aprobarTodos]] : []);
+    const TIPO = { tendido: ['Tendido', '#00939a'], pat: ['PAT', '#6a5acd'], zanja: ['Zanja', '#c97b12'], obs: ['Observación', '#7a8aa3'] };
+    let h = `<div class="tools"><div class="seg" id="pF"><button data-v="pend">Pendientes (${pend.length})</button><button data-v="ok">Resueltos</button><button data-v="all">Todos</button></div></div>`;
+    if (!lista.length) h += `<div class="card empty"><b>${f === 'pend' ? 'No hay partes pendientes' : 'Sin partes'}</b>Los capataces cargan desde el celular en <b>campo.html</b>, en el mismo sitio del visor. Esta PC los recibe cada minuto si el programa está abierto.</div>`;
+    lista.forEach((p) => {
+      const t = TIPO[p.tipo] || ['', '#999'], pe = p.estado === 'pendiente' && !window.READONLY;
+      let cuerpo = '';
+      if (p.tipo === 'tendido') {
+        const rc = R.circuitos.find((c) => c.id === p.circuito);
+        const bobs = rc ? R.bobinas.filter((b) => b.key === rc.key) : [];
+        cuerpo = `<div class="muted">${esc(p.desde)} → ${esc(p.hasta)}${rc ? ` · ${rc.cat} ${rc.seccion} mm² · lista ${fmt(rc.lenFase, 1)} m/conductor` : ' · <b style="color:var(--bad)">circuito inexistente</b>'}</div>
+          <table class="tbl dtbl pt-f"><thead><tr><th>Fase</th><th>Bobina</th><th class="num">Metros</th><th class="num">Dif. lista</th><th>Estado actual</th></tr></thead><tbody>${p.fases.map((x, i) => { const ya = rc && rc.fasesInfo[x.f] && rc.fasesInfo[x.f].estado === 'ejecutado'; const dif = rc ? x.metros - rc.lenFase : 0;
+            return `<tr data-i="${i}"><td><b>${x.f === 'C' ? 'Cu' : x.f}</b></td><td>${pe ? `<select class="pb">${bobs.map((b) => `<option ${b.codigo === x.bobina ? 'selected' : ''}>${esc(b.codigo)}</option>`).join('')}${bobs.some((b) => b.codigo === x.bobina) ? '' : `<option selected value="">${esc(x.bobina)} (no existe)</option>`}</select>` : esc(x.bobina)}</td>
+              <td class="num">${pe ? `<input type="number" step="0.1" class="pm" value="${x.metros}" style="width:90px">` : fmt(x.metros, 1)}</td><td class="num ${Math.abs(dif) > 0.05 * (rc ? rc.lenFase : 1) ? 'tneg' : ''}">${rc ? (dif >= 0 ? '+' : '') + fmt(dif, 1) : ''}</td><td>${ya ? '<span class="kst" style="--c:#d64545">ya registrada</span>' : '<span class="muted">sin registrar</span>'}</td></tr>`; }).join('')}</tbody></table>`;
+      } else if (p.tipo === 'pat') {
+        const rz = R.zlist.find((z) => z.id === p.zanja), bobs = rz && rz.pat ? R.bobinas.filter((b) => b.key === rz.pat.key) : [];
+        cuerpo = `<div class="muted">Zanja ${esc(p.titulo)}${rz ? ` · largo ${fmt(rz.largo, 1)} m · PAT ${rz.pat ? rz.pat.seccion + ' mm²' : '–'}${rz.pat && rz.pat.completo ? ' · <b style="color:var(--bad)">ya registrada</b>' : ''}` : ' · <b style="color:var(--bad)">zanja inexistente</b>'}</div>
+          <div class="pt-row">Metros ${pe ? `<input type="number" step="0.1" class="pm" value="${p.metros}" style="width:100px">` : `<b>${fmt(p.metros, 1)}</b>`} &nbsp; Bobina ${pe ? `<select class="pb"><option value="">Sin bobina registrada</option>${bobs.map((b) => `<option ${b.codigo === p.bobina ? 'selected' : ''}>${esc(b.codigo)}</option>`).join('')}</select>` : `<b>${esc(p.bobina || 'sin bobina')}</b>`}</div>`;
+      } else if (p.tipo === 'zanja') {
+        const rz = R.zlist.find((z) => z.id === p.zanja);
+        cuerpo = `<div class="muted">Zanja ${esc(p.titulo)}${rz ? ` · largo actual ${fmt(rz.largo, 1)} m (plano)` : ''}</div><div class="pt-row">Largo real ${pe ? `<input type="number" step="0.1" class="pm" value="${p.largo}" style="width:100px">` : `<b>${fmt(p.largo, 1)} m</b>`}${rz ? ` <span class="muted">dif. ${fmt(p.largo - rz.largo, 1)} m</span>` : ''}</div>`;
+      } else cuerpo = p.titulo ? `<div class="muted">Sobre zanja ${esc(p.titulo)}</div>` : '';
+      h += `<div class="card ptc ${p.estado}" data-id="${p.id}"><div class="pth"><span class="kst" style="--c:${t[1]}">${t[0]}</span><b>${esc(p.tipo === 'tendido' ? p.designacion : p.titulo || '')}</b><span class="muted">${esc(p.autor)} · ${fechaCorta(p.fecha)} · recibido ${new Date(p.recibido).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+          <span class="sp"></span>${p.estado === 'pendiente' ? '<span class="kst" style="--c:#1d5fa8">pendiente</span>' : p.estado === 'aprobado' ? '<span class="kst" style="--c:#2f9e5b">aprobado</span>' : `<span class="kst" style="--c:#d64545">rechazado</span>`}</div>
+        ${cuerpo}${p.obs ? `<div class="pt-obs">«${esc(p.obs)}»</div>` : ''}${p.motivo ? `<div class="muted">Motivo: ${esc(p.motivo)}</div>` : ''}
+        ${pe ? `<div class="plact"><button class="btn sm danger" data-rech="${p.id}">Rechazar</button><button class="btn sm pri" data-apr="${p.id}">${p.tipo === 'obs' ? 'Marcar como vista' : 'Aprobar y registrar'}</button></div>` : ''}</div>`;
+    });
+    el.innerHTML = h;
+    segBind('#pF', f, (v) => { ui.pf = v; render(false); });
+    $$('[data-apr]', el).forEach((b) => { b.onclick = () => aprobarParte(b.dataset.apr, b.closest('.ptc')); });
+    $$('[data-rech]', el).forEach((b) => { b.onclick = () => rechazarParte(b.dataset.rech); });
+    badgePartes();
+  }
+  // aplica un parte; devuelve texto de error si no se puede
+  function aplicarParte(p, box) {
+    if (p.tipo === 'tendido') {
+      const c = S.circuitos.find((x) => x.id === p.circuito), rc = R.circuitos.find((x) => x.id === p.circuito); if (!c || !rc) return 'el circuito no existe';
+      const fases = p.fases.map((x, i) => { const tr = box && $(`tr[data-i="${i}"]`, box); return { f: x.f, bobina: tr ? $('.pb', tr).value : x.bobina, metros: tr ? Number($('.pm', tr).value) : x.metros }; });
+      for (const x of fases) { if (!x.bobina || !R.bobinas.some((b) => b.key === rc.key && b.codigo === x.bobina)) return `la bobina de ${x.f} no existe para ${rc.seccion} mm²`; if (!(x.metros > 0)) return `faltan los metros de ${x.f}`; }
+      c.real = Object.assign({}, c.real); fases.forEach((x) => { c.real[x.f] = { bobina: x.bobina, metros: Math.round(x.metros * 100) / 100, fecha: p.fecha, por: p.autor }; });
+      const z = S.zanjas.find((zz) => zz.id === c.zanjaId); if (z && z.estado === 'no abierta') z.estado = 'abierta';
+      p.fases = fases; return null;
+    }
+    if (p.tipo === 'pat') {
+      const rz = R.zlist.find((z) => z.id === p.zanja); if (!rz || !rz.pat) return 'la zanja no existe o no lleva PAT';
+      const m = box ? Number($('.pm', box).value) : p.metros, b = box ? $('.pb', box).value : p.bobina; if (!(m > 0)) return 'faltan los metros';
+      const pc = S.circuitos.find((x) => x.id === rz.pat.id); pc.real = { C: b ? { bobina: b, metros: m, fecha: p.fecha, por: p.autor } : { sinBobina: true, metros: m, fecha: p.fecha, por: p.autor } };
+      p.metros = m; p.bobina = b; return null;
+    }
+    if (p.tipo === 'zanja') {
+      const z = S.zanjas.find((x) => x.id === p.zanja); if (!z) return 'la zanja no existe';
+      const m = box ? Number($('.pm', box).value) : p.largo; if (!(m > 0)) return 'falta el largo';
+      if (z.largoPlano == null) z.largoPlano = z.largo; z.largo = m; z.largoReal = p.fecha; p.largo = m; return null;
+    }
+    return null;
+  }
+  function aprobarParte(id, box) {
+    const p = S.partes.find((x) => x.id === id); if (!p) return;
+    const err = aplicarParte(p, box); if (err) { toast('No se puede aprobar: ' + err, { err: true }); return; }
+    p.estado = 'aprobado'; p.resuelto = new Date().toISOString();
+    if (p.tipo !== 'tendido' && p.tipo !== 'pat' && p.tipo !== 'zanja') p.estado = 'aprobado';
+    ui.flash = [id]; commit(`Parte de ${p.autor} aprobado: ${parteTxt(p)}`);
+  }
+  async function rechazarParte(id) {
+    const p = S.partes.find((x) => x.id === id); if (!p) return;
+    const m = await modal({ title: 'Rechazar parte', sub: `${esc(p.autor)} · ${esc(parteTxt(p))}`, body: `<div class="form"><label class="full">Motivo (lo ve el capataz)<input name="m" placeholder="Ej.: la bobina no corresponde, revisar metros"></label></div>`,
+      buttons: [['Cancelar', 'btn', () => null], ['Rechazar', 'btn danger', (b) => $('[name=m]', b).value.trim() || 'sin motivo']] });
+    if (!m) return;
+    p.estado = 'rechazado'; p.motivo = m; p.resuelto = new Date().toISOString(); commit(`Parte de ${p.autor} rechazado`);
+  }
+  function aprobarTodos() {
+    let ok = 0, no = 0;
+    (S.partes || []).filter((p) => p.estado === 'pendiente').forEach((p) => { const box = $(`.ptc[data-id="${p.id}"]`); const e = aplicarParte(p, box); if (e) no++; else { p.estado = 'aprobado'; p.resuelto = new Date().toISOString(); ok++; } });
+    commit(`${ok} partes aprobados${no ? ` · ${no} quedaron pendientes por datos inválidos` : ''}`);
+  }
+
   // ======================= impresión =======================
   async function printPlan(cat, modo) {
     const cMap = new Map(R.circuitos.map((c) => [c.id, c]));
@@ -2019,6 +2121,6 @@
     go('resumen');
   }
   function recargar(text) { const st = JSON.parse(text); S = normalizar(st); Sync.ordenar(S); R = Engine.calcular(S); render(false); toast('Datos actualizados'); }
-  window.__app = { revisarBuzon, aplicarCrono, tareasDeProject, fechaEtapa, cronoCalc, editTarea, leerMSPDI, setEtapa, printFund, exportFund, printDia, printMes, printAvance, printPuntas, exportTendidos, exportPuntas, registrarPuntas, recargar, get S() { return S; }, get R() { return R; }, go, commit, setZanja, tender, cerrarZanjas, sacarDeZanja, Engine, conectar, syncNow, get NET() { return NET; }, get netStatus() { return netStatus; } };
+  window.__app = { recibirParte, aprobarParte, revisarBuzon, aplicarCrono, tareasDeProject, fechaEtapa, cronoCalc, editTarea, leerMSPDI, setEtapa, printFund, exportFund, printDia, printMes, printAvance, printPuntas, exportTendidos, exportPuntas, registrarPuntas, recargar, get S() { return S; }, get R() { return R; }, go, commit, setZanja, tender, cerrarZanjas, sacarDeZanja, Engine, conectar, syncNow, get NET() { return NET; }, get netStatus() { return netStatus; } };
   init();
 })();
