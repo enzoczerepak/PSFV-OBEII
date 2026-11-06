@@ -1,0 +1,73 @@
+// Margen de tendido: cuánto más largo que el plan puede salir lo que falta tender sin quedarse sin cable,
+// y la tolerancia que se acepta al tender cada conductor (seguro / riesgo / falta de cable).
+// Se usa en el programa, el visor y la app de campo. Necesita Engine.
+(function (root) {
+  const E = () => root.Engine || (typeof require !== 'undefined' ? require('./engine.js') : null);
+  const conAjuste = (st, cat, x) => {
+    const aj0 = Number(((st.params || {}).ajuste || {})[cat]) || 0;
+    return Object.assign({}, st, { params: Object.assign({}, st.params, { ajuste: Object.assign({}, (st.params || {}).ajuste, { [cat]: ((1 + aj0 / 100) * (1 + x / 100) - 1) * 100 }) }) });
+  };
+  const faltaDe = (st, key) => { const r = E().calcular(st).resumen.find((q) => q.key === key); return r ? r.faltante : 0; };
+  // mayor exceso % sobre el plan, en todo lo no tendido de esa sección, que el stock todavía cubre
+  function pct(st, cat, key, it) {
+    it = it || 12;
+    const f = (x) => faltaDe(conAjuste(st, cat, x), key);
+    if (f(0) > 0) { let lo = -40, hi = 0; if (f(lo) > 0) return { x: null, ya: true }; for (let i = 0; i < 9; i++) { const m = (lo + hi) / 2; if (f(m) > 0) hi = m; else lo = m; } return { x: lo, ya: true }; }
+    let lo = 0, hi = 200; if (f(hi) === 0) return { x: 200, mas: true };
+    for (let i = 0; i < it; i++) { const m = (lo + hi) / 2; if (f(m) > 0) hi = m; else lo = m; }
+    return { x: lo };
+  }
+  // mayor largo extra fijo por conductor (sobre el margen por corte actual)
+  function metros(st, cat, key, it) {
+    it = it || 15;
+    const m0 = Number((st.params || {}).margen) || 0;
+    const f = (x) => faltaDe(Object.assign({}, st, { params: Object.assign({}, st.params, { margen: m0 + x }) }), key);
+    if (f(0) > 0) return { x: null, ya: true };
+    let lo = 0, hi = 1000; if (f(hi) === 0) return { x: 1000, mas: true };
+    for (let i = 0; i < it; i++) { const m = (lo + hi) / 2; if (f(m) > 0) hi = m; else lo = m; }
+    return { x: lo };
+  }
+  function base(R, r) {
+    const pend = R.piezas.filter((x) => x.key === r.key && x.estado !== 'ejecutado');
+    return { key: r.key, cat: r.cat, seccion: r.seccion, bobinas: r.bobinas, nCond: pend.length, mPend: pend.reduce((a, x) => a + x.len, 0), faltante: r.faltante,
+      sobra: (r.stock || 0) - (r.tendido || 0) - (r.listo || 0) - (r.provisorio || 0) - (r.faltante || 0) };
+  }
+  const secciones = (R, cats) => R.resumen.filter((r) => (!cats || cats.includes(r.cat)) && (r.requerido > 0 || r.bobinas) && R.piezas.some((x) => x.key === r.key && x.estado !== 'ejecutado'));
+  // todo junto (sincrónico)
+  function calcular(st, R, opts) {
+    opts = opts || {};
+    return secciones(R, opts.cats).map((r) => Object.assign(base(R, r), { pct: pct(st, r.cat, r.key, opts.it), m: opts.metros === false ? null : metros(st, r.cat, r.key) }));
+  }
+  // de a una sección por vez, sin trabar la pantalla; cancelar() corta si cambió el estado
+  function enSegundoPlano(st, R, opts, cb) {
+    opts = opts || {};
+    const rs = secciones(R, opts.cats), out = []; let i = 0, vivo = true;
+    const paso = () => {
+      if (!vivo) return;
+      if (i >= rs.length) { cb(out); return; }
+      const r = rs[i++]; out.push(Object.assign(base(R, r), { pct: pct(st, r.cat, r.key, opts.it), m: opts.metros === false ? null : metros(st, r.cat, r.key) }));
+      setTimeout(paso, 15);
+    };
+    setTimeout(paso, opts.demora || 50);
+    return { cancelar: () => { vivo = false; } };
+  }
+  // tolerancia para un conductor de largo de plan L en una sección con margen g (fraccion segura f, 0..1)
+  function tolerancia(g, L, f) {
+    f = f == null ? 0.5 : f;
+    if (!g || !(L > 0)) return null;
+    if (g.faltante > 0 || !g.pct || g.pct.x == null || g.pct.x <= 0) return { L, seg: L, max: L, P: g.pct && g.pct.x != null ? g.pct.x : 0, sinMargen: true };
+    const P = Math.min(g.pct.x, 200);
+    return { L, P, seg: Math.round(L * (1 + P * f / 100) * 10) / 10, max: Math.round(L * (1 + P / 100) * 10) / 10 };
+  }
+  // nivel de unos metros tirados: 'ok' (seguro o de menos), 'riesgo', 'falta'
+  function nivel(t, m) {
+    if (!t || !(m > 0)) return null;
+    if (m <= t.seg + 0.05) return 'ok';
+    if (m <= t.max + 0.05) return 'riesgo';
+    return 'falta';
+  }
+  // color del margen de una sección: ok / warn / bad
+  const color = (g) => (!g || g.faltante > 0 || !g.pct || g.pct.x == null || g.pct.x < 1 ? 'bad' : g.pct.x < 3 ? 'warn' : 'ok');
+  const api = { pct, metros, calcular, enSegundoPlano, tolerancia, nivel, color, secciones };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Margen = api;
+})(typeof window !== 'undefined' ? window : globalThis);

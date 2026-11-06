@@ -7,8 +7,21 @@
   const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
   const uid = (p) => p + Math.random().toString(36).slice(2, 9);
   const CATS = Engine.CATS;
+  const ED = window.EDICION || { blank: false, app: 'PSFV-OBE II', corto: 'PSFV-OBEII' };
   const CATN = { BT: 'BT 0,8 kV', MT: 'MT 33 kV', PAT: 'PAT Cu desnudo' };
   const CATL = { BT: 'BT · 0,8 kV', MT: 'MT · 33 kV', PAT: 'PAT · Cu desnudo' };
+  window.CATN = CATN;
+  let STSL = ['STS 1', 'STS 2', 'STS 3', 'STS 4'];
+  const kvTxt = (v) => String(v).replace('.', ',');
+  // datos del parque (versión en blanco): tensiones, sección de PAT y estaciones transformadoras
+  function aplicarParque(st) {
+    const P = st.parque; if (!P) return;
+    const bt = P.kvBT || 0.8, mt = P.kvMT || 33;
+    CATN.BT = `BT ${kvTxt(bt)} kV`; CATN.MT = `MT ${kvTxt(mt)} kV`; CATL.BT = `BT · ${kvTxt(bt)} kV`; CATL.MT = `MT · ${kvTxt(mt)} kV`;
+    Engine.CATS.BT.nombre = `Baja tensión ${kvTxt(bt)} kV`; Engine.CATS.MT.nombre = `Media tensión ${kvTxt(mt)} kV`;
+    Engine.PAT_SEC.BT = `1x${P.patBT || 25} mm² Cu desnudo`; Engine.PAT_SEC.MT = `1x${P.patMT || 95} mm² Cu desnudo`;
+    STSL = (P.sts || []).map((x) => x.id);
+  }
   const ctag = (c) => `<i class="cdot c-${c}"></i>`;
 
   let S = null, R = null, view = 'resumen', seedCache = null;
@@ -20,6 +33,7 @@
   function normalizar(st) {
     st.params = Object.assign({ margen: 0, minUtil: 30, cola: 0 }, st.params || {});
     st.fundaciones = st.fundaciones || {};
+    normalizarHincado(st);
     st.cronoTareas = st.cronoTareas || [];
     st.partes = st.partes || [];
     // una vez: descartar borrados de fundaciones que generaba una versión anterior en red (no eran borrados reales)
@@ -39,6 +53,8 @@
     Engine.sincronizarPAT(st);
     // ajustes de obra informados (se aplican una sola vez)
     st.migr = st.migr || {};
+    if (ED.blank) Object.assign(st.migr, { mt120: true, lista0110: true, tx2_12: true });
+    aplicarParque(st);
     if (!st.migr.mt120) {
       const c = st.circuitos.find((x) => x.cat === 'MT' && x.designacion === 'C33-02');
       if (c && /95\/25/.test(c.formacion) && !Object.keys(c.real || {}).length) { c.formacion = '1x120/25 mm² Al/Cu'; c.obs = 'Sección reemplazada a 120 mm² (la lista rev.3 indica 95)'; }
@@ -144,12 +160,16 @@
   }
   function actions(btns) {
     const a = $('#vActions'); a.innerHTML = '';
-    if (window.READONLY) btns = btns.filter(([t]) => /Exportar|PDF/.test(t) || (window.__editor && /Actualizar cronograma/.test(t)));
+    if (window.READONLY) btns = btns.filter(([t]) => /Exportar|PDF|Simular/.test(t) || (window.__editor && /Actualizar cronograma/.test(t)));
     btns.forEach(([txt, cls, fn]) => { const b = document.createElement('button'); b.className = cls; b.innerHTML = txt; b.onclick = fn; a.appendChild(b); });
   }
 
   // ======================= navegación =======================
   const VIEWS = {
+    hincado: ['Avance de hincado', () => 'Trackers e hincas por sector y configuración de la discretización Trina · recepciones verificadas'],
+    htrk: ['Distribución de hincas por tracker', () => 'Qué hinca va en cada posición de cada tracker, por color y código · registro de hincado'],
+    hrec: ['Recepción de hincas', () => 'Cada entrega se verifica contra el manual de Trina: código, color de punta, largo y perfil'],
+    hcat: ['Catálogo y distribución Trina', () => 'Hincas del manual CIV-DW-26050-2402-0B y código por posición para cada configuración de tracker'],
     resumen: ['Resumen', () => `${esc(S.nombre)} · tendido, puntas de cable y fundaciones STS`],
     cables: ['Resumen de tendido', () => 'Stock, requerido, tendido y remanente por sección · zanjas · alertas'],
     avance: ['Avance', () => 'Tendido de cables, puntas y fundaciones STS: gráficos de avance'],
@@ -158,15 +178,15 @@
     plano: ['Plano de obra', () => 'Sectores, trackers, inversores, STS y zanjas de BT y MT con su estado · tocá un elemento para ver su información'],
     crono: ['Resumen del cronograma', () => `${esc((S.cronoMeta || {}).nombre || 'Cronograma de obra')} · avance real vs. esperado al día de hoy`],
     gantt: ['Diagrama de Gantt', () => 'Actividades del cronograma en el tiempo · tocá una para cambiar fechas o avance'],
-    fundaciones: ['Fundaciones STS', () => 'Avance de las bases de los 4 STS por etapa: iniciá y finalizá cada etapa con su fecha'],
+    fundaciones: ['Fundaciones STS', () => `Avance de las bases de ${STSL.length === 1 ? 'la STS' : `las ${STSL.length} STS`} por etapa: iniciá y finalizá cada etapa con su fecha`],
     puntas: ['Puntas de cable', () => 'Terminales colocados en cada extremo: lado inversor y lado STS en BT; entre STS, sala de celdas, piquete y ET en MT'],
     propuesta: ['Propuesta de tendido', () => 'Lotes de zanjas por zona, del tamaño de una bobina, en el orden sugerido para abrir'],
-    zanjas: ['Zanjas', () => 'Estado de cada zanja (BT y MT) y metros realizados. Se tiende de a un circuito; la zanja se cierra con todos sus circuitos tendidos y ahí se registra la PAT'],
+    zanjas: ['Zanjas', () => 'Estado de cada zanja (BT y MT). Se tiende de a un circuito; la PAT se carga por zanja y al cerrar se confirma (si no se cargó, se pide ahí). Las compartidas admiten cierre parcial'],
     'BT-plan': ['Plan de corte', () => 'Cables de aluminio inversor → STS · los cortes listos quedan fijos en su bobina'],
     'BT-circ': ['Circuitos', () => 'Tendidos inversor → STS: zanja y registro de lo ejecutado'],
     'MT-plan': ['Plan de corte', () => 'Cables de media tensión entre STS, sala de celdas y LMT · los cortes listos quedan fijos en su bobina'],
-    'MT-circ': ['Circuitos', () => 'STS 4 → 3 → sala de celdas · STS 1 → 2 → sala de celdas · sala de celdas → LMT · fin LMT → ET'],
-    'PAT-plan': ['Plan de corte', () => 'Cobre desnudo: 25 mm² en zanjas de BT, 95 mm² en zanjas de MT · los cortes listos quedan fijos en su bobina'],
+    'MT-circ': ['Circuitos', () => (ED.blank ? 'Circuitos de media tensión: zanja y registro de lo ejecutado' : 'STS 4 → 3 → sala de celdas · STS 1 → 2 → sala de celdas · sala de celdas → LMT · fin LMT → ET')],
+    'PAT-plan': ['Plan de corte', () => `Cobre desnudo: ${(S.parque && S.parque.patBT) || 25} mm² en zanjas de BT, ${(S.parque && S.parque.patMT) || 95} mm² en zanjas de MT · los cortes listos quedan fijos en su bobina`],
     'PAT-circ': ['Tendidos', () => 'Un conductor de Cu desnudo por zanja (compartida o no), con el largo de la zanja'],
     bobinas: ['Bobinas', () => 'Ingreso de bobinas de BT, MT y PAT, saldo actual y remanente previsto'],
     ajustes: ['Ajustes', () => 'Parámetros del cálculo y datos del proyecto'],
@@ -183,7 +203,23 @@
     try { const st = JSON.parse(localStorage.getItem('navSect') || '{}'); st[x.dataset.sect] = open; localStorage.setItem('navSect', JSON.stringify(st)); } catch (_) { /* sin storage */ }
     pillUpd(); setTimeout(() => pillUpd(), 320);
   }
+  // grupos BT / MT / PAT del menú: se abren y cierran
+  const grpAbiertos = () => { try { return JSON.parse(localStorage.getItem('navGrp') || '[]'); } catch (_) { return []; } };
+  function grpToggle(cat, abrir) {
+    const g = $(`#nav .grp[data-cat="${cat}"]`); if (!g) return;
+    const on = abrir == null ? !g.classList.contains('open') : abrir;
+    g.classList.toggle('open', on);
+    try { const a = new Set(grpAbiertos()); on ? a.add(cat) : a.delete(cat); localStorage.setItem('navGrp', JSON.stringify([...a])); } catch (_) { /* nada */ }
+  }
+  setTimeout(() => {
+    const ab = grpAbiertos();
+    $$('#nav .grp[data-cat]').forEach((g) => { g.classList.toggle('open', ab.includes(g.dataset.cat)); const h = $('.gh', g); if (h) h.onclick = () => grpToggle(g.dataset.cat); });
+  }, 0);
   function go(v) {
+    const gc = /^(BT|MT|PAT)-/.exec(v); if (gc) { const g = $(`#nav .grp[data-cat="${gc[1]}"]`); if (g && !g.classList.contains('open')) grpToggle(gc[1], true); }
+    if (v === 'hplano') { ui.pl = ui.pl || { capas: new Set(PL_CAPAS.map((c) => c[0])), color: 'disc', zcol: 'estado', vb: null, sel: null }; ui.pl.color = ui.pl.color === 'hinc' ? 'hinc' : 'disc'; view = 'plano'; ui.sel.clear();
+      $$('#nav button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === 'hplano')); $$('.sfBtn').forEach((b) => b.classList.remove('on'));
+      const sec = $('#nav [data-sect="hinc"]'); if (sec && !sec.classList.contains('open')) abrirSect(sec, true); $$('#nav .sect').forEach((x) => x.classList.toggle('act', x === sec)); pillUpd(true); render(true); return; }
     view = v; ui.sel.clear();
     $$('.sfBtn').forEach((b) => b.classList.toggle('on', b.dataset.view === v)); 
     $$('#nav button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
@@ -194,10 +230,12 @@
     render(true);
   }
   function render(anim) {
+    setTimeout(margenAlDia, 0);
+    if (S && S.parque) aplicarParque(S);
     const [t, sub] = VIEWS[view];
     const vc = view.split('-')[0];
     setTimeout(badgePartes, 0);
-    $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
+    $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : view === 'fundaciones' ? 'Fundaciones STS' : ['hincado', 'htrk', 'hrec', 'hcat'].includes(view) ? 'Hincado' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
     $('#vTitle').innerHTML = (CATN[vc] && view.includes('-') ? `<span class="cchip c-${vc}">${CATL[vc]}</span>` : '') + esc(t); $('#vSub').innerHTML = sub();
     $('#projName').textContent = S.nombre;
     const el = $('#view'), sc = el.scrollTop;
@@ -208,7 +246,7 @@
     const [cat, kind] = view.split('-');
     if (kind === 'plan') vPlan(el, cat);
     else if (kind === 'circ') vCircuitos(el, cat);
-    else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
+    else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hrec: vHRec, hcat: vHCat, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
     if (anim) { void el.offsetWidth; el.classList.add('enter'); el.scrollTop = 0; countUp(el); }
     else {
       el.scrollTop = sc;
@@ -318,7 +356,7 @@
     actions([['Exportar Excel', 'btn', exportExcel]]);
     const L = Engine.propuesta(S, cat);
     const tz = L.reduce((a, l) => a + l.zanjas.length, 0), mz = L.reduce((a, l) => a + l.metrosZanja, 0), mc = L.reduce((a, l) => a + l.metrosCable, 0);
-    let h = `<div class="tools"><div class="seg" id="fPC"><button data-v="BT">BT 0,8 kV</button><button data-v="MT">MT 33 kV</button></div>
+    let h = `<div class="tools"><div class="seg" id="fPC"><button data-v="BT">${CATN.BT}</button><button data-v="MT">${CATN.MT}</button></div>
       <span class="muted">${L.length} lotes · ${tz} zanjas · ${fmt(mz)} m de zanja · ${fmt(mc)} m de cable</span></div>`;
     if (!L.length) { el.innerHTML = h + `<div class="card empty"><b>No hay zanjas pendientes de abrir en ${CATN[cat]}</b>${R.bobinas.some((b) => b.cat === cat) ? '' : 'Cargá las bobinas de este tipo para poder armar la propuesta.'}</div>`; segBind('#fPC', cat, (v) => { ui.propCat = v; render(true); }); return; }
     h += `<p class="hint" style="margin:-4px 0 14px">Cada lote junta zanjas vecinas (mismo STS, inversores consecutivos) con el cable de aproximadamente una bobina. Si se abren en este orden, quedan pocas bobinas empezadas a la vez y cada lote termina las que indica. Al abrir un lote sus cortes pasan a la hoja de corte.</p><div class="lotes stagger">`;
@@ -380,11 +418,11 @@
     list.forEach((z) => {
       const patOk = z.pat && z.pat.completo;
       h += `<tr data-id="${z.id}" class="${ui.sel.has(z.id) ? 'sel' : ''}"><td><input type="checkbox" class="sel" ${ui.sel.has(z.id) ? 'checked' : ''}></td><td><span class="chip">${z.cat}</span></td>
-        <td>${esc(z.titulo)}${z.miembros.length > 1 ? ' <span class="pill p-warn" title="Zanja compartida">compartida</span>' : ''}</td>
+        <td class="ztit">${esc(z.titulo)}${z.miembros.length > 1 ? ' <span class="pill p-warn" title="Zanja compartida">compartida</span>' : ''}</td>
         <td><div class="chips">${z.miembros.map((c) => `<span class="chip ${c.completo ? 'lista' : ''}" title="${esc(c.desde)} → ${esc(c.hasta)}${c.completo ? ' · tendido' : ''}">${c.completo ? '✓ ' : ''}${esc(c.designacion)}${z.miembros.length > 1 && !c.completo && !window.READONLY ? `<button class="chipx" data-sacar="${c.id}" title="Sacar de esta zanja (queda con zanja propia, para más adelante)">×</button>` : ''}</span>`).join('')}</div></td>
         <td class="n"><input type="number" class="zl" step="0.1" min="0" value="${z.largo}" title="Largo de zanja según plano"></td><td>${zSeg(z.id, z.estado, z.listoCerrar)}</td><td>${z.nReal}/${z.nCond} ${z.completo ? '✓' : ''}</td>
-        <td>${patOk ? `<span class="pill p-done">${esc(z.pat.fasesInfo.C.bobina || 'sin bobina')} · ${fmt(z.pat.fasesInfo.C.len, 1)} m</span>` : '<span class="muted">al cerrar</span>'}</td>
-        <td style="white-space:nowrap"><button class="btn sm acc" data-a="tc">Cable</button> <button class="btn sm" data-a="tp">PAT</button><button class="btn sm ghost" data-a="ez" title="Editar zanja">✎</button></td></tr>`;
+        <td style="white-space:nowrap">${patOk ? `<button class="pill p-done pbtn" data-a="tp" title="PAT cargada · tocá para corregir">${esc(z.pat.fasesInfo.C.bobina || 'sin bobina')} · ${fmt(z.pat.fasesInfo.C.len, 1)} m</button>` : z.pat && !window.READONLY && z.estado !== 'no abierta' ? '<button class="btn sm" data-a="tp" title="Cargar los metros de PAT tendidos en esta zanja">Cargar PAT</button>' : `<span class="muted">${z.estado === 'no abierta' ? '–' : 'sin cargar'}</span>`}</td>
+        <td style="white-space:nowrap"><button class="btn sm acc" data-a="tc">Cable</button><button class="btn sm ghost" data-a="ez" title="Editar zanja">✎</button></td></tr>`;
     });
     el.innerHTML = h + `</tbody></table></div><p class="hint">Si varios circuitos van por la misma zanja, tildalos y tocá <b>Misma zanja</b>: quedan con un solo estado, un solo largo y una sola PAT. El largo se carga directo en la tabla (por ejemplo, del plano); con ✎ cambiás el nombre o separás un circuito. Abierta: se puede tender, de a un circuito, y el plan se recalcula con cada tendido. <b>Cerrar</b> se habilita cuando están tendidos todos los circuitos de la zanja: ahí se registra la PAT con el largo de la zanja (editable). Si un circuito de una zanja compartida queda para más adelante, sacalo con la <b>×</b> de su nombre: pasa a zanja propia y libera su bobina para el recálculo.</p>`;
     segBind('#fZT', ui.zTipo, (v) => { ui.zTipo = v; render(false); });
@@ -395,13 +433,15 @@
     $$('tbody tr', el).forEach((tr) => {
       const z = R.zlist.find((x) => x.id === tr.dataset.id);
       tr.querySelector('[data-a=tc]').onclick = () => tenderZanja(z);
-      tr.querySelector('[data-a=tp]').onclick = () => z.pat && tender(z.pat.id);
+      const tp = tr.querySelector('[data-a=tp]'); if (tp) tp.onclick = () => z.pat && tender(z.pat.id);
+      const cp = tr.querySelector('[data-a=cp]'); if (cp) cp.onclick = () => cierreParcial(z.id);
       tr.querySelector('[data-a=ez]').onclick = () => editZanja(z.id);
       $('.zl', tr).onchange = (e) => { const sz = S.zanjas.find((x) => x.id === z.id); sz.largo = Math.max(0, Number(e.target.value) || 0); sz.largoPlano = true; commit(`Zanja ${z.titulo}: ${fmt(sz.largo, 1)} m`); };
     });
   }
-  const zSeg = (zid, est, okCerrar) => `<span class="zseg" data-id="${zid}">${Engine.ZANJA.map((z) => `<button data-z="${z}" class="${est === z ? 'on z' + z.replace(' ', '') : ''}" ${z === 'cerrada' && !okCerrar && est !== 'cerrada' ? 'title="Faltan tender circuitos de esta zanja"' : ''}>${z === 'no abierta' ? 'No' : z === 'abierta' ? 'Abierta' : 'Cerrada'}</button>`).join('')}</span>`;
+  const zSeg = (zid, est, okCerrar) => `<span class="zseg" data-id="${zid}">${Engine.ZANJA.map((z) => `<button data-z="${z}" class="${est === z ? 'on z' + z.replace(' ', '') : ''}" ${z === 'cerrada' && !okCerrar && est !== 'cerrada' ? 'title="Faltan tender circuitos de esta zanja"' : ''}>${z === 'no abierta' ? 'No' : z === 'abierta' ? 'Abierta' : 'Cerrada'}</button>`).join('')}</span>${!window.READONLY && R && parcialPosible(R.zlist.find((x) => x.id === zid)) ? `<button class="zpar" data-zp="${zid}" title="Cerrar el tramo con los circuitos ya tendidos; los pendientes pasan a zanja propia">Cierre parcial</button>` : ''}`;
   function bindZSeg(el) {
+    $$('.zpar', el).forEach((b) => { b.onclick = (e) => { e.stopPropagation(); cierreParcial(b.dataset.zp); }; });
     $$('.zseg button', el).forEach((b) => { b.onclick = async (e) => { e.stopPropagation(); const tr = b.closest('tr[data-id]'); ui.flashKeep = tr ? [tr.dataset.id] : null; await setZanja([b.parentElement.dataset.id], b.dataset.z); }; });
   }
   async function setZanja(zids, est) {
@@ -496,8 +536,8 @@
       const z = inc[0];
       await modal({ title: inc.length === 1 ? `No se puede cerrar ${esc(z.titulo)}` : 'No se pueden cerrar', sub: 'Faltan tender circuitos',
         body: inc.map((z) => `<h4 style="margin:6px 0">${esc(z.titulo)}</h4>` + z.miembros.map((c) => `<div class="phase-row" style="grid-template-columns:1fr auto auto"><div><b class="mono">${esc(c.designacion)}</b> · ${esc(c.desde)} → ${esc(c.hasta)}</div><span class="pill ${c.completo ? 'p-done' : 'p-warn'}">${c.completo ? 'tendido' : `${c.nReal}/${c.fz.length}`}</span>${!c.completo && z.miembros.length > 1 ? `<button class="btn sm" data-sep="${c.id}">Sacar de la zanja</button>` : '<span></span>'}</div>`).join('')).join('')
-          + `<p class="hint">Una zanja se cierra cuando están tendidos todos sus circuitos. Si alguno queda para más adelante, sacalo de la zanja: pasa a zanja propia y libera su bobina.</p>`,
-        buttons: [['Entendido', 'btn pri', () => null]] });
+          + `<p class="hint">Una zanja se cierra completa cuando están tendidos todos sus circuitos. Si es compartida y ya hay circuitos tendidos, podés hacer un <b>cierre parcial</b>: se cierra el tramo de los tendidos y los pendientes quedan en una zanja propia, abierta.</p>`,
+        buttons: [['Entendido', 'btn', () => null]].concat(inc.length === 1 && parcialPosible(z) ? [['Cierre parcial…', 'btn pri', () => 'parcial']] : []) }).then((r) => { if (r === 'parcial') cierreParcial(z.id); });
       return;
     }
     const bobsDe = (k) => R.bobinas.filter((b) => b.key === k);
@@ -506,6 +546,12 @@
       const bobs = p ? bobsDe(p.key) : [];
       const sel = real ? real.bobina || '' : pf.bobina || '';
       const largo = real && real.metros ? real.metros : z.largo;
+      const cargada = real && (real.bobina || real.sinBobina) && real.metros > 0;
+      if (cargada) return `<div class="phase-row" data-z="${z.id}" data-ok="1" style="grid-template-columns:minmax(150px,1fr) 70px 1fr 130px">
+        <div><b>${esc(z.titulo)}</b><div class="muted">${z.miembros.length} circuito${z.miembros.length > 1 ? 's' : ''} · zanja ${fmt(z.largo, 1)} m</div></div>
+        <span class="chip">${p.seccion} mm²</span>
+        <div class="patok"><span class="pill p-done">PAT cargada ✓</span> <b>${fmt(real.metros, 1)} m</b> · ${esc(real.bobina || 'sin bobina')} · ${fechaCorta(real.fecha)}</div>
+        <input type="date" class="pd" value="${today()}" title="Fecha de cierre"></div>`;
       return `<div class="phase-row" data-z="${z.id}" style="grid-template-columns:minmax(150px,1fr) 70px 200px 96px 130px">
         <div><b>${esc(z.titulo)}</b><div class="muted">${z.miembros.length} circuito${z.miembros.length > 1 ? 's' : ''} · zanja ${fmt(z.largo, 1)} m</div></div>
         <span class="chip">${p ? p.seccion + ' mm²' : '—'}</span>
@@ -514,14 +560,16 @@
         <input type="date" class="pd" value="${(real && real.fecha) || today()}"></div>`;
     };
     const res = await modal({ title: ok.length === 1 ? `Cerrar zanja ${esc(ok[0].titulo)}` : `Cerrar ${ok.length} zanjas`, wide: true,
-      sub: auto ? 'Están tendidos todos los circuitos de la zanja' : 'PAT de Cu desnudo: 25 mm² en BT, 95 mm² en MT',
+      sub: (auto ? 'Están tendidos todos los circuitos de la zanja. ' : '') + 'Cerrar la zanja confirma que la PAT está tendida.',
       body: `<div class="muted phase-row prh" style="grid-template-columns:minmax(150px,1fr) 70px 200px 96px 130px"><span>Zanja</span><span>PAT</span><span>Bobina</span><span>Largo (m)</span><span>Fecha</span></div>${ok.map(fila).join('')}
         ${inc.length ? `<p class="hint" style="color:var(--warn)">No se cierran (faltan circuitos por tender): ${inc.map((z) => esc(z.titulo)).join(', ')}.</p>` : ''}
-        <p class="hint">La PAT se da por tendida con el largo de la zanja; corregilo si en campo fue distinto. Se propone la bobina del plan.</p>`,
+        <p class="hint">Si la PAT ya se cargó (botón <b>Cargar PAT</b> en Zanjas, o un parte de campo) solo se confirma. Si no, cargá ahora los metros tendidos: se propone el largo de la zanja y la bobina del plan.</p>`,
       buttons: [[auto ? 'Más tarde' : 'Cancelar', 'btn', () => null], [ok.length === 1 ? 'Cerrar zanja' : 'Cerrar zanjas', 'btn pri', (box) => {
         const out = [];
         for (const row of $$('.phase-row[data-z]', box)) {
+          if (row.dataset.ok) { out.push({ zid: row.dataset.z, ya: true, fecha: $('.pd', row).value }); continue; }
           const pb = $('.pb', row); const m = Number($('.pm', row).value) || 0;
+          if (pb && !(m > 0)) { $('.pm', row).classList.add('bad'); $('.pm', row).focus(); return false; }
           out.push({ zid: row.dataset.z, bobina: pb ? pb.value : null, metros: m, fecha: $('.pd', row).value, conPat: !!pb });
         }
         return out;
@@ -529,14 +577,55 @@
     if (!res) return;
     res.forEach((r) => {
       const z = S.zanjas.find((x) => x.id === r.zid), rzz = R.zlist.find((x) => x.id === r.zid);
-      if (r.conPat && rzz.pat) {
+      if (!r.ya && r.conPat && rzz.pat) {
         const pc = S.circuitos.find((x) => x.id === rzz.pat.id);
         pc.real = { C: r.bobina ? { bobina: r.bobina, metros: r.metros, fecha: r.fecha } : { sinBobina: true, metros: r.metros, fecha: r.fecha } };
       }
       z.estado = 'cerrada'; z.fechaCierre = r.fecha || today();
     });
     ui.flash = [...res.map((r) => r.zid), ...ok.flatMap((z) => z.miembros.map((c) => c.id))]; ui.sel.clear();
-    commit(res.length === 1 ? `Zanja ${ok[0].titulo} cerrada · PAT ${fmt(res[0].metros, 1)} m` : `${res.length} zanjas cerradas con su PAT`);
+    commit(res.length === 1 ? `Zanja ${ok[0].titulo} cerrada${res[0].ya ? ' · PAT confirmada' : ` · PAT ${fmt(res[0].metros, 1)} m`}` : `${res.length} zanjas cerradas con su PAT`);
+  }
+  const parcialPosible = (z) => z && z.miembros.length > 1 && z.estado !== 'cerrada' && z.miembros.some((c) => c.completo) && z.miembros.some((c) => !c.completo);
+  // Cierre parcial de una zanja compartida: el tramo con los circuitos tendidos se cierra (con su PAT) y los
+  // circuitos pendientes pasan a una zanja nueva, que queda abierta con el largo que todavía falta.
+  async function cierreParcial(zid) {
+    if (window.READONLY) return;
+    const z = R.zlist.find((x) => x.id === zid);
+    if (!parcialPosible(z)) { toast('El cierre parcial es para zanjas compartidas con algún circuito tendido y alguno pendiente'); return; }
+    const ten = z.miembros.filter((c) => c.completo), pen = z.miembros.filter((c) => !c.completo);
+    const p = z.pat, real = p ? (S.circuitos.find((x) => x.id === p.id).real || {}).C : null;
+    const bobs = p ? R.bobinas.filter((b) => b.key === p.key) : [];
+    const selB = real ? real.bobina || '' : p ? (p.fasesInfo.C || {}).bobina || '' : '';
+    const lTen = Math.max(...ten.map((c) => Number(c.lineal) || 0)), lPen = Math.max(...pen.map((c) => Number(c.lineal) || 0));
+    const cerr = Math.min(z.largo, lTen || z.largo), queda = Math.max(0, Math.round((lPen || z.largo) * 100) / 100);
+    const li = (c) => `<div class="phase-row" style="grid-template-columns:1fr auto"><div><b class="mono">${esc(c.designacion)}</b> · ${esc(c.desde)} → ${esc(c.hasta)}</div><span class="muted">${fmt(c.lineal, 1)} m</span></div>`;
+    const res = await modal({ title: `Cierre parcial · ${esc(z.titulo)}`, wide: true, sub: `Zanja compartida de ${fmt(z.largo, 1)} m · ${ten.length} tendido${ten.length > 1 ? 's' : ''}, ${pen.length} pendiente${pen.length > 1 ? 's' : ''}`,
+      body: `<div class="grid2c"><div><h4 style="margin:4px 0">Se cierra con</h4>${ten.map(li).join('')}</div><div><h4 style="margin:4px 0">Pasan a zanja propia</h4>${pen.map(li).join('')}</div></div>
+        <div class="form" style="margin-top:12px">
+          <label>Largo de zanja cerrado (m)<input type="number" step="0.1" min="0" id="cpL" value="${cerr}"></label>
+          <label>Fecha de cierre<input type="date" id="cpF" value="${today()}"></label>
+          ${p ? `<label>PAT tendida en el tramo cerrado (m)<input type="number" step="0.1" min="0" id="cpP" value="${real && real.metros ? real.metros : cerr}"></label>
+          <label>Bobina de PAT<select id="cpB"><option value="">Sin bobina registrada</option>${bobs.map((b) => `<option value="${esc(b.codigo)}" ${selB === b.codigo ? 'selected' : ''}>${esc(b.codigo)} · saldo ${fmt(b.saldoActual, 1)} m</option>`).join('')}</select></label>` : ''}
+          <label>Largo que queda abierto para los pendientes (m)<input type="number" step="0.1" min="0" id="cpQ" value="${queda}"></label>
+          <label>Estado de la zanja de los pendientes<select id="cpE"><option value="abierta">Abierta (sigue abierta en obra)</option><option value="no abierta">No abierta (se tapa y se reabre después)</option></select></label></div>
+        <p class="hint">Cerrar confirma la PAT del tramo cerrado. La zanja nueva lleva su propia PAT con el largo que queda abierto; se carga o se confirma cuando se cierre. Si la zanja de los pendientes sigue abierta, sus cortes listos conservan la bobina; si se tapa, vuelven a provisorio.</p>`,
+      buttons: [['Cancelar', 'btn', () => null], ['Cerrar tramo', 'btn pri', (box) => {
+        const n = (id) => { const e = $(id, box); return e ? Number(e.value) || 0 : 0; };
+        if (p && !(n('#cpP') > 0)) { $('#cpP', box).classList.add('bad'); $('#cpP', box).focus(); return false; }
+        return { largo: n('#cpL') || z.largo, fecha: $('#cpF', box).value || today(), pat: n('#cpP'), bobina: p ? $('#cpB', box).value : null, queda: n('#cpQ'), estado: $('#cpE', box).value };
+      }]] });
+    if (!res) return;
+    const sz = S.zanjas.find((x) => x.id === zid);
+    const nz = { id: 'z-' + pen[0].id + '-' + Math.random().toString(36).slice(2, 6), cat: sz.cat, largo: res.queda, estado: res.estado, parcialDe: zid };
+    S.zanjas.push(nz);
+    pen.forEach((c) => { S.circuitos.find((x) => x.id === c.id).zanjaId = nz.id; });
+    sz.largo = res.largo; sz.estado = 'cerrada'; sz.fechaCierre = res.fecha; sz.parcial = true;
+    if (p) { const pc = S.circuitos.find((x) => x.id === p.id); pc.real = { C: res.bobina ? { bobina: res.bobina, metros: res.pat, fecha: res.fecha } : { sinBobina: true, metros: res.pat, fecha: res.fecha } }; }
+    if (res.estado === 'no abierta') { const ids = new Set(pen.map((c) => c.id)); Object.keys(S.compromiso || {}).forEach((k) => { if (ids.has(k.split('|')[0])) delete S.compromiso[k]; }); }
+    Engine.sincronizarPAT(S);
+    ui.flash = [zid, nz.id]; ui.sel.clear();
+    commit(`Cierre parcial de ${z.titulo}: ${ten.length} circuito${ten.length > 1 ? 's' : ''} cerrado${ten.length > 1 ? 's' : ''}${p ? ` · PAT ${fmt(res.pat, 1)} m` : ''} · ${pen.length} pendiente${pen.length > 1 ? 's' : ''} en zanja ${res.estado}`);
   }
   function bindSel(el, list) {
     const all = $('#selAll', el);
@@ -544,9 +633,214 @@
     $$('tbody tr .sel', el).forEach((cb) => { const id = cb.closest('tr').dataset.id; cb.onchange = (e) => { e.target.checked ? ui.sel.add(id) : ui.sel.delete(id); render(false); }; });
   }
 
+
+  // ======================= SIMULAR TENDIDO =======================
+  // Prueba sin guardar nada: los circuitos listos para tender se dan por tendidos con un exceso sobre la lista,
+  // se recalcula el plan y se compara el aprovechamiento (faltantes, remanentes, margen de stock para lo que falta).
+  const clonEstado = () => JSON.parse(JSON.stringify(S, (k, v) => (k === '__sync' ? undefined : v)));
+  const margenStock = (st, cat, key) => Margen.pct(st, cat, key);
+  const margenMetros = (st, cat, key) => Margen.metros(st, cat, key);
+  // ---- reloj de margen: se recalcula en segundo plano cada vez que cambia el plan
+  const MG = { R: null, datos: null, tarea: null };
+  const tolF = () => Math.max(0, Math.min(100, Number(S.params.tolSeg != null ? S.params.tolSeg : 50))) / 100;
+  const mgDe = (key) => (MG.R === R && MG.datos ? MG.datos.find((g) => g.key === key) : null);
+  function margenAlDia() {
+    if (MG.R === R || !R) return;
+    if (MG.tarea && MG.tarea.R === R) return;
+    if (MG.tarea) MG.tarea.cancelar();
+    const R0 = R; dibujarReloj(true);
+    MG.tarea = Margen.enSegundoPlano(clonEstado(), R0, { demora: 250 }, (d) => {
+      if (R !== R0) return;
+      MG.R = R0; MG.datos = d; MG.tarea = null; dibujarReloj();
+      if (/^(BT|MT)-plan$/.test(view)) render(false);
+      else { const box = $('#mgStrip'); if (box && /-plan$/.test(view)) box.innerHTML = margenStrip(view.split('-')[0]); }
+      const tb = $('#tolBox'); if (tb && tb.dataset.key) tb.innerHTML = tolHTML(mgDe(tb.dataset.key), Number(tb.dataset.l));
+    });
+    MG.tarea.R = R0;
+  }
+  const enFalta = (g) => g.faltante > 0 || g.pct.x == null;
+  function peorMargen() {
+    // la aguja muestra la sección más ajustada que todavía tiene margen; las que ya no alcanzan van aparte, en rojo
+    const ds = (MG.datos || []).filter((g) => g.nCond > 0 && !enFalta(g));
+    return ds.length ? ds.slice().sort((a, b) => a.pct.x - b.pct.x)[0] : null;
+  }
+  // dibujo del reloj: aguja en la sección más ajustada con margen; las que no alcanzan, en rojo aparte
+  function relojHTML(ds, calc) {
+    const vivas = ds.filter((g) => g.nCond > 0 && !enFalta(g)), fal = ds.filter((g) => g.nCond > 0 && enFalta(g));
+    const g = vivas.length ? vivas.slice().sort((a, b) => a.pct.x - b.pct.x)[0] : null, MAX = 15;
+    const avisoF = fal.length ? `<div class="rlj-f">⚠ ${fal.map((x) => `${x.cat} ${x.seccion} mm²: faltan ${fmt(x.faltante)} m`).join('<br>⚠ ')}</div>` : '';
+    if (!g && !fal.length) return { cls: 'rlj', html: '', vacio: true };
+    if (!g) return { cls: 'rlj bad', html: `<div class="rlj-v">Falta cable</div>${avisoF}` };
+    const v = Math.max(0, Math.min(MAX, g.pct.x));
+    const ang = Math.PI * (1 - v / MAX), cx = 70, cy = 66, r = 52;
+    const px = (a, rr) => [cx + rr * Math.cos(a), cy - rr * Math.sin(a)];
+    const pt = (a, rr) => px(a, rr).map((n) => n.toFixed(1)).join(',');
+    const arco = (a0, a1, cls) => `<path class="${cls}" d="M${pt(Math.PI * (1 - a0 / MAX), r)} A${r},${r} 0 0 1 ${pt(Math.PI * (1 - a1 / MAX), r)}"/>`;
+    const n = px(ang, r - 10);
+    return { cls: 'rlj ' + Margen.color(g) + (fal.length ? ' conf' : '') + (calc ? ' calc' : ''),
+      html: `<svg viewBox="0 0 140 76">${arco(0, 1, 'z-bad')}${arco(1, 3, 'z-warn')}${arco(3, MAX, 'z-ok')}
+        <line class="ndl" x1="${cx}" y1="${cy}" x2="${n[0].toFixed(1)}" y2="${n[1].toFixed(1)}"/><circle class="hub" cx="${cx}" cy="${cy}" r="4.5"/>
+        <text x="${cx - r}" y="${cy + 9}" class="tk" text-anchor="middle">0</text><text x="${cx + r}" y="${cy + 9}" class="tk" text-anchor="middle">${MAX}%</text></svg>
+        <div class="rlj-v">+${fmt(g.pct.x, 1)} %${g.pct.mas ? '+' : ''}</div>
+        <div class="rlj-t">margen · ${esc(g.cat + ' ' + g.seccion)} mm²${g.m && g.m.x != null ? ` · ${fmt(g.m.x, 1)} m/cond.` : ''}</div>${avisoF}` };
+  }
+  function dibujarReloj(calc) {
+    // un reloj por grupo, dentro del plan de corte de BT, MT o PAT (junto a las tarjetas de margen)
+    const el = $('#mgReloj'); if (!el) return;
+    const cat = el.dataset.cat;
+    if (!MG.datos || MG.R !== R) { el.className = 'mgr rlj calc'; el.innerHTML = '<div class="rlj-t">Calculando el margen…</div>'; return; }
+    const sec = (ui.sec || {})[cat] || 'all';
+    const o = relojHTML(MG.datos.filter((g) => g.cat === cat && (sec === 'all' || String(g.seccion) === sec)), calc);
+    const tit = `Reloj de margen · ${CATN[cat]}${sec === 'all' ? '' : ` · ${sec} mm²`}`;
+    el.className = 'mgr ' + o.cls; el.innerHTML = o.vacio ? `<div class="mgrh">${tit}</div><div class="rlj-t">Todo tendido</div>` : `<div class="mgrh">${tit}</div>` + o.html; el.onclick = verMargenes;
+  }
+  function tolHTML(g, L) {
+    if (!g) return '<span class="muted">Calculando la tolerancia…</span>';
+    const t = Margen.tolerancia(g, L, tolF());
+    if (!t) return '';
+    if (t.sinMargen) return `<span class="tl bad">Sin margen en ${g.seccion} mm²</span> · no conviene pasarse de <b>${fmt(L, 1)} m</b> por conductor (tirar de menos siempre suma)`;
+    return `<span class="tl">Tolerancia ${g.cat} ${g.seccion} mm² (margen +${fmt(t.P, 1)} %)</span>
+      <span class="tlv ok">Seguro ≤ <b>${fmt(t.seg, 1)} m</b></span><span class="tlv warn">Riesgo ≤ <b>${fmt(t.max, 1)} m</b></span><span class="tlv bad">Más: falta de cable</span>`;
+  }
+  async function verMargenes() {
+    margenAlDia();
+    const ds = MG.datos || [];
+    const f = tolF();
+    const fila = (g) => { const c = Margen.color(g), fal = g.faltante > 0 || g.pct.x == null;
+      return `<tr><td><span class="chip">${g.cat}</span> <b>${g.seccion} mm²</b></td><td class="n"><span class="sv ${c}">${fal ? 'falta' : `+${fmt(g.pct.x, 1)} %${g.pct.mas ? ' o más' : ''}`}</span></td>
+        <td class="n">${g.m && g.m.x != null ? `+${fmt(g.m.x, 1)} m${g.m.mas ? '+' : ''}` : '–'}</td><td class="n">${fal ? '–' : `+${fmt(g.pct.x * f, 1)} %`}</td>
+        <td class="n">${fmt(g.nCond)} · ${fmt(g.mPend)} m</td><td class="n ${g.sobra < 0 ? 'neg' : ''}">${fmt(g.sobra)} m</td><td>${fal ? `<span class="pill p-bad">faltan ${fmt(g.faltante)} m</span>` : c === 'ok' ? '<span class="pill p-done">holgado</span>' : c === 'warn' ? '<span class="pill p-warn">ajustado</span>' : '<span class="pill p-bad">crítico</span>'}</td></tr>`; };
+    await modal({ title: 'Margen de tendido', wide: true, sub: 'Cuánto más largo que el plan puede salir lo que falta tender, con el cable que hay, sin que falte al final. Cambia con cada zanja que se abre y cada tendido que se registra.',
+      body: ds.length ? `<table class="tbl"><thead><tr><th>Sección</th><th class="n">Margen</th><th class="n">o por conductor</th><th class="n">Tolerancia segura</th><th class="n">Por tender</th><th class="n">Sobrante final</th><th>Estado</th></tr></thead><tbody>${ds.map(fila).join('')}</tbody></table>
+        <div class="tolx"><div><span class="tlv ok">Seguro</span> hasta el plan + ${fmt(f * 100)} % del margen</div><div><span class="tlv warn">Riesgo</span> hasta el plan + todo el margen</div><div><span class="tlv bad">Falta de cable</span> más que eso: si todo lo que falta saliera así, no alcanza</div></div>
+        <p class="hint">Tirar de menos siempre es favorable. Los valores de cada conductor (seguro / riesgo) aparecen al registrar el tendido, en el plan de corte y en la app de campo. La parte "segura" del margen se ajusta en Ajustes (hoy ${fmt(f * 100)} %).</p>`
+        : '<p class="muted">Calculando… volvé a abrir en unos segundos.</p>', buttons: [['Cerrar', 'btn pri', () => null]] });
+  }
+  const margenesCache = (cat) => (MG.datos || []).filter((g) => g.cat === cat);
+  const nivel = (g) => (g.pct.x == null || g.m.x == null || g.faltante > 0 ? 'bad' : g.pct.x < 1 || g.m.x < 0.5 ? 'bad' : g.pct.x < 3 ? 'warn' : 'ok');
+  function margenStrip(cat) {
+    const sec = (ui.sec || {})[cat] || 'all';
+    const gs = margenesCache(cat).filter((g) => sec === 'all' || String(g.seccion) === sec);
+    if (!gs.length) return '';
+    setTimeout(() => dibujarReloj(), 0);
+    return `<div class="mgrow"><div class="mgs">${gs.map((g) => {
+      const nv = nivel(g);
+      const cuerpo = g.faltante > 0 || g.pct.x == null
+        ? `<b class="bad">No alcanza</b><span>faltan ${fmt(g.faltante)} m aun cortando justo</span>`
+        : `<b class="${nv}">+${fmt(g.pct.x, 1)} %${g.pct.mas ? ' o más' : ''}</b><span>o <b>+${fmt(g.m.x, 1)} m</b>${g.m.mas ? ' o más' : ''} por conductor</span>`;
+      return `<div class="mg ${nv}" title="Cuánto más largo que el plan puede salir, en promedio, cada conductor que falta tender sin que se acabe el cable de ${g.seccion} mm² (contando cómo entran los cortes en cada bobina). El % es proporcional al largo de cada circuito; los metros son fijos por conductor. Son alternativas, no se suman.">
+        <div class="mgt">${g.seccion} mm² <small>${CATN[cat].split(' ')[0]} · margen disponible</small></div>${cuerpo}
+        <small>${g.nCond ? `${g.nCond} conductores por tender (${fmt(g.mPend)} m)` : 'todo tendido'} · sobrante ${fmt(g.sobra)} m${g.nCond ? ` ≈ ${fmt(g.sobra / g.nCond, 1)} m/cond.` : ''}</small>
+        ${g.faltante > 0 || g.pct.x == null ? '' : `<small>Al tender: <b class="ok">seguro</b> hasta +${fmt(g.pct.x * tolF(), 1)} % · <b class="warn">riesgo</b> hasta +${fmt(g.pct.x, 1)} %</small>`}</div>`;
+    }).join('')}</div><button class="mgr rlj calc" id="mgReloj" data-cat="${cat}" title="Margen de tendido de ${CATN[cat]}: tocá para ver el detalle"></button></div>`;
+  }
+  function simAplicar(base, cat, filas, opts) {
+    const T = JSON.parse(JSON.stringify(base));
+    T.params = Object.assign({}, T.params, { margen: opts.margen, ajuste: Object.assign({}, T.params.ajuste, { [cat]: opts.ajuste }) });
+    const hoy = today();
+    filas.forEach((f) => {
+      const c = T.circuitos.find((x) => x.id === f.id); if (!c) return; c.real = Object.assign({}, c.real);
+      f.fases.forEach((fz) => { if (fz.bobina) c.real[fz.f] = { bobina: fz.bobina, metros: f.m, fecha: hoy, sim: true }; });
+    });
+    if (opts.peor) { const aj = Number(T.params.ajuste[cat]) || 0; T.params.ajuste[cat] = ((1 + aj / 100) * (1 + opts.pct / 100) - 1) * 100; }
+    return T;
+  }
+  async function simularTendido(cat) {
+    const base = clonEstado();
+    const cands = R.circuitos.filter((c) => c.cat === cat && !c.vinculo && c.listo && c.nReal < c.fz.length);
+    const sel = cands.filter((c) => ui.sel.has(c.id));
+    const ajIni = Number((S.params.ajuste || {})[cat]) || 0, mgIni = Number(S.params.margen) || 0;
+    // exceso observado en lo ya tendido de este tipo (sugerencia inicial)
+    const rs = R.resumen.filter((r) => r.cat === cat && r.tendidoTeo > 0);
+    const obs = rs.reduce((a, r) => a + r.tendidoTeo, 0) ? rs.reduce((a, r) => a + r.desvio, 0) / rs.reduce((a, r) => a + r.tendidoTeo, 0) * 100 : 0;
+    const st = { pct: Math.max(0, Math.round(obs * 10) / 10) || 2, mas: 0, peor: false, margen: mgIni, ajuste: ajIni, solo: sel.length ? 'sel' : 'listos', man: {} };
+    const filasDe = () => (st.solo === 'sel' ? sel : cands).map((c) => {
+      const fases = c.fz.filter((f) => !(c.real && c.real[f] && (c.real[f].bobina || c.real[f].sinBobina))).map((f) => ({ f, bobina: (c.fasesInfo[f] || {}).bobina }));
+      const lista = Math.round((c.lenFase - (Number(S.params.margen) || 0)) * 100) / 100; // corte previsto por el plan (lista con corrección, o largo elegido a mano)
+      const m = st.man[c.id] != null ? st.man[c.id] : Math.round((lista * (1 + st.pct / 100) + st.mas) * 100) / 100;
+      return { id: c.id, c, fases, lista, m };
+    });
+    const secs = R.resumen.filter((r) => r.cat === cat && (r.requerido > 0 || r.bobinas)).map((r) => r.key);
+    const margenAct = {}, margenActM = {}; secs.forEach((k) => { margenAct[k] = margenStock(base, cat, k); margenActM[k] = margenMetros(base, cat, k); });
+    const mmtxt = (o) => (o && o.x != null ? `<br><small>o +${fmt(o.x, 1)} m/cond.${o.mas ? ' o más' : ''}</small>` : '');
+    const mtxt = (o, k) => { if (!o) return '–'; if (o.x == null) return '<span class="sv bad">ya no alcanza</span>'; const r = R.resumen.find((q) => q.key === k);
+      const pend = r ? Math.max(0, r.requerido - r.tendido) : 0; const v = `${o.x >= 0 ? '+' : ''}${fmt(o.x, 1)} %${o.mas ? ' o más' : ''}`;
+      return `<span class="sv ${o.ya || o.x < 1 ? 'bad' : o.x < 3 ? 'warn' : 'ok'}">${v}</span><small> ≈ ${fmt(Math.abs(o.x) / 100 * pend)} m</small>`; };
+    const sobra = (r) => (r.stock || 0) - (r.tendido || 0) - (r.listo || 0) - (r.provisorio || 0) - (r.faltante || 0);
+    const flecha = (a, b, d = 0, malo = 'up') => { const ch = Math.abs(b - a) > 0.004; const peor = malo === 'up' ? b > a : b < a;
+      return `${fmt(a, d)}${ch ? ` <span class="ar ${peor ? 'bad' : 'ok'}">→ ${fmt(b, d)}</span>` : ''}`; };
+    const body = `<div class="simw">
+      <div class="simc"><div class="simh">1 · Qué se simula</div>
+        <div class="seg sm" id="sScope"><button data-v="listos" class="${st.solo === 'listos' ? 'on' : ''}">Listos para tender (${cands.length})</button>${sel.length ? `<button data-v="sel" class="${st.solo === 'sel' ? 'on' : ''}">Seleccionados (${sel.length})</button>` : ''}</div>
+        <div class="form simf"><label>Exceso por conductor (% sobre la lista)<input type="number" step="0.5" id="sPct" value="${st.pct}"></label><label>Metros extra por conductor<input type="number" step="0.5" id="sMas" value="0"></label></div>
+        <p class="hint">Sugerido: ${obs ? `${obs > 0 ? '+' : ''}${fmt(obs, 1)} % es lo que viene dando lo tendido de ${CATN[cat]} contra la lista` : 'todavía no hay tendidos para comparar'}. El exceso se aplica sobre el corte previsto por el plan. Cada fila se puede corregir a mano.</p>
+        <div class="simt" id="sFilas"></div></div>
+      <div class="simc"><div class="simh">2 · Escenario y parámetros</div>
+        <label class="chkl"><input type="checkbox" id="sPeor"> Aplicar el mismo exceso a <b>todo lo que falta tender</b> de ${CATN[cat]} (peor caso)</label>
+        <div class="simh" style="margin-top:14px">Probar parámetros más estrictos</div>
+        <div class="form simf"><label>Margen por corte (m por conductor)<input type="number" step="0.1" min="0" id="sMg" value="${mgIni}"></label><label>Corrección de largo ${CATN[cat]} (%)<input type="number" step="0.1" id="sAj" value="${ajIni}"></label></div>
+        <p class="hint">El margen y la corrección agrandan los cortes que todavía no se hicieron: se reserva más cable por circuito y el plan avisa antes si no alcanza.</p></div>
+      <div class="simc simfull"><div class="simh">Resultado <span class="muted" id="sCalc"></span></div><div id="sRes"></div></div></div>`;
+    const calcular = () => {
+      const box = $('.mbox'); if (!box || !$('#sRes', box)) return;
+      const filas = filasDe();
+      const T = simAplicar(base, cat, filas, st);
+      const RT = Engine.calcular(T);
+      // filas
+      $('#sFilas', box).innerHTML = filas.length ? `<table class="tbl"><thead><tr><th>Circuito</th><th>Bobina (plan)</th><th class="r" title="Largo de corte previsto por el plan (lista con la corrección %, o el largo corregido a mano)">Plan m/cond.</th><th class="r">Simulado m/cond.</th><th class="r">Exceso</th></tr></thead><tbody>${filas.map((f) =>
+        `<tr><td><b>${esc(f.c.designacion)}</b> <span class="muted">${esc(f.c.desde)}</span>${f.fases.length < f.c.fz.length ? ` <small class="muted">(${f.fases.map((x) => x.f).join(',')})</small>` : ''}</td><td>${[...new Set(f.fases.map((x) => x.bobina || 'sin bobina'))].map(esc).join(' · ')}</td><td class="r">${fmt(f.lista, 2)}</td>
+        <td class="r"><input type="number" step="0.1" class="sM" data-id="${f.id}" value="${f.m}"></td><td class="r ${f.m > f.lista ? 'pos' : ''}">${f.m >= f.lista ? '+' : ''}${fmt((f.m - f.lista) * f.fases.length, 1)} m</td></tr>`).join('')}</tbody></table>`
+        : `<p class="muted">No hay circuitos de ${CATN[cat]} listos para tender (con zanja abierta y sin tender). Igual podés probar el peor caso y los parámetros.</p>`;
+      $$('.sM', box).forEach((i) => { i.onchange = () => { st.man[i.dataset.id] = Number(i.value) || 0; prog(); }; });
+      // resultado por sección
+      const opts2 = Object.assign({}, st); // margen de stock luego de simular (sin el peor caso: lo calcula la función)
+      const T2 = simAplicar(base, cat, filas, Object.assign({}, opts2, { peor: false }));
+      const filasR = secs.map((k) => {
+        const a = R.resumen.find((q) => q.key === k) || {}, b = RT.resumen.find((q) => q.key === k) || {};
+        const mb = margenStock(T2, cat, k), mm = margenMetros(T2, cat, k);
+        return `<tr><td><b>${a.seccion || b.seccion} mm²</b><small class="muted"> · ${a.bobinas || 0} bob.</small></td>
+          <td class="r">${flecha(a.faltante || 0, b.faltante || 0)}</td><td class="r">${flecha(sobra(a), sobra(b), 0, 'down')}</td>
+          <td class="r">${flecha(a.remUtil || 0, b.remUtil || 0, 0, 'down')}</td><td class="r">${flecha(a.descarte || 0, b.descarte || 0)}</td><td class="r">${flecha(a.noSeUsa || 0, b.noSeUsa || 0, 0, 'down')}</td>
+          <td class="r">${mtxt(margenAct[k], k)}${mmtxt(margenActM[k])}</td><td class="r">${mtxt(mb, k)}${mmtxt(mm)}</td></tr>`;
+      }).join('');
+      // bobinas que no alcanzan y conductores sin bobina
+      const neg = RT.bobinas.filter((b) => b.cat === cat && (b.saldoActual || 0) < -0.01);
+      const faltaA = new Set(R.piezas.filter((x) => x.cat === cat && x.estado === 'falta').map((x) => x.cid + x.fase));
+      const faltaB = RT.piezas.filter((x) => x.cat === cat && x.estado === 'falta' && !faltaA.has(x.cid + x.fase));
+      const cirN = [...new Set(faltaB.map((x) => x.cid))].map((id) => RT.circuitos.find((c) => c.id === id)).filter(Boolean);
+      const tot = filas.reduce((a, f) => a + (f.m - f.lista) * f.fases.length, 0);
+      $('#sRes', box).innerHTML = `<div class="simk"><div><span>Exceso simulado</span><b>${tot >= 0 ? '+' : ''}${fmt(tot, 1)} m</b><small>${filas.length} circuito${filas.length === 1 ? '' : 's'}</small></div>
+          <div><span>Faltante ${CATN[cat]}</span><b class="${RT.resumen.filter((r) => r.cat === cat).reduce((a, r) => a + r.faltante, 0) > 0 ? 'bad' : 'ok'}">${fmt(RT.resumen.filter((r) => r.cat === cat).reduce((a, r) => a + r.faltante, 0))} m</b><small>hoy ${fmt(R.resumen.filter((r) => r.cat === cat).reduce((a, r) => a + r.faltante, 0))} m</small></div></div>
+        <table class="tbl simr"><thead><tr><th>Sección</th><th class="r">Faltante (m)</th><th class="r" title="Stock de bobinas menos lo tendido y lo que falta cortar. Negativo: no alcanza.">Sobrante final (m)</th><th class="r">Remanente útil</th><th class="r">Descarte</th><th class="r">Bobinas sin usar</th><th class="r" title="Cuánto más largo que la lista puede salir, en promedio, todo lo que falta tender sin que se acabe el cable">Margen hoy</th><th class="r">Margen tras simular</th></tr></thead><tbody>${filasR}</tbody></table>
+        <p class="hint"><b>Margen</b>: cuánto más largo que el plan puede salir cada conductor que falta tender de esa sección antes de quedarse sin cable (contando todas las bobinas y cómo entran los cortes). En % (proporcional al largo de cada circuito) o en metros fijos por conductor: son alternativas, no se suman. En rojo, menos de 1 %; en amarillo, menos de 3 %.</p>
+        ${neg.length ? `<div class="alert error">${neg.map((b) => `Bobina <b>${esc(b.codigo)}</b> quedaría en ${fmt(b.saldoActual, 1)} m: el último corte habría que completarlo con otra bobina.`).join('<br>')}</div>` : ''}
+        ${cirN.length ? `<div class="alert error">Se quedarían sin cable: ${cirN.map((c) => `<b>${esc(c.designacion)}</b> ${esc(c.desde)}`).join(', ')}</div>` : ''}
+        ${!neg.length && !cirN.length ? '<div class="alert ok">Con este escenario el cable alcanza para todo el plan de ' + CATN[cat] + '.</div>' : ''}`;
+      $('#sCalc', box).textContent = '';
+      const bAp = $$('.mfoot button', box).pop();
+      if (bAp) { const ch = st.margen !== mgIni || st.ajuste !== ajIni; bAp.disabled = !ch || window.READONLY; bAp.style.display = window.READONLY ? 'none' : ''; }
+    };
+    let tm = null; const prog = () => { const c = $('#sCalc'); if (c) c.textContent = 'calculando…'; clearTimeout(tm); tm = setTimeout(calcular, 120); };
+    setTimeout(() => {
+      const box = $('.mbox'); if (!box) return;
+      const num = (id, k) => { $(id, box).oninput = () => { st[k] = Number($(id, box).value) || 0; if (k === 'pct' || k === 'mas') st.man = {}; prog(); }; };
+      num('#sPct', 'pct'); num('#sMas', 'mas'); num('#sMg', 'margen'); num('#sAj', 'ajuste');
+      $('#sPeor', box).onchange = (e) => { st.peor = e.target.checked; prog(); };
+      $$('#sScope button', box).forEach((b) => { b.onclick = () => { st.solo = b.dataset.v; $$('#sScope button', box).forEach((x) => x.classList.toggle('on', x === b)); prog(); }; });
+      calcular();
+    }, 30);
+    const r = await modal({ title: `Simular tendido · ${CATN[cat]}`, wide: true,
+      sub: 'Prueba sin registrar nada: se dan por tendidos los circuitos listos con el exceso que indiques y se recalcula el aprovechamiento de las bobinas. Al cerrar no queda ningún cambio.',
+      body, buttons: [['Cerrar', 'btn', () => null], ['Aplicar margen y corrección', 'btn pri', () => 'ap']] });
+    if (r !== 'ap' || window.READONLY) return;
+    S.params.margen = Math.max(0, st.margen); S.params.ajuste = Object.assign({}, S.params.ajuste || {}, { [cat]: Math.max(-30, Math.min(30, st.ajuste)) });
+    recalcularTodo(cat);
+    commit(`Parámetros de ${CATN[cat]} actualizados (margen ${fmt(S.params.margen, 1)} m · corrección ${fmt(S.params.ajuste[cat], 1)} %) · plan recalculado`);
+  }
+
   // ======================= PLAN =======================
   function vPlan(el, cat) {
-    actions([['Replanificar', 'btn ghost', () => replanificar(cat)], ['Exportar Excel', 'btn', exportExcel], ['PDF: solo listos', 'btn', () => printPlan(cat, 'listos')], ['PDF: plan completo', 'btn pri', () => printPlan(cat, 'todo')]]);
+    actions([...(cat !== 'PAT' ? [['Simular tendido', 'btn acc', () => simularTendido(cat)]] : []), ['Replanificar', 'btn ghost', () => replanificar(cat)], ['Exportar Excel', 'btn', exportExcel], ['PDF: solo listos', 'btn', () => printPlan(cat, 'listos')], ['PDF: plan completo', 'btn pri', () => printPlan(cat, 'todo')]]);
     const secs = R.resumen.filter((r) => r.cat === cat).map((r) => r.seccion);
     const fsec = ui.sec[cat] || 'all', fest = ui.est[cat] || 'all', q = (ui.q[cat] || '').toLowerCase();
     const cMap = new Map(R.circuitos.map((c) => [c.id, c]));
@@ -560,12 +854,22 @@
     let h = `<div class="tools"><div class="seg" id="fSec"><button data-v="all">Todas</button>${secs.map((s) => `<button data-v="${s}">${s} mm²</button>`).join('')}</div>
       <div class="seg" id="fEst"><button data-v="all">Todas las bobinas</button><button data-v="abiertas">Con cortes</button><button data-v="listos">Con cortes listos</button></div>
       <span class="sp"></span><input type="search" id="fQ" placeholder="Buscar bobina o circuito…" value="${esc(ui.q[cat] || '')}" style="width:240px"></div>
-      <div class="legend" style="margin:-4px 0 12px"><span><i class="c-done"></i>Ejecutado</span><span><i class="c-ready"></i>Listo para cortar (zanja abierta)</span><span><i class="c-prov"></i>Provisorio</span><span><i class="c-rem"></i>Remanente</span></div>`;
+      <div class="legend" style="margin:-4px 0 12px"><span><i class="c-done"></i>Ejecutado</span><span><i class="c-ready"></i>Listo para cortar (zanja abierta)</span><span><i class="c-prov"></i>Provisorio</span><span><i class="c-rem"></i>Remanente</span>${cat !== 'PAT' ? '<span class="lperm">Permitido: <b class="tl-ok">seguro</b> / <b class="tl-riesgo">máximo</b> por conductor (m)</span>' : ''}</div>
+      <div id="mgStrip">${MG.R === R && MG.datos ? margenStrip(cat) : '<div class="mgs"><div class="mg muted">Calculando el margen disponible…</div></div>'}</div>`;
     if (falta.length) {
       const sinB = secs.filter((s) => !R.bobinas.some((b) => b.cat === cat && b.seccion === s));
       h += `<div class="alert ${sinB.length ? 'aviso' : 'error'}" style="margin-bottom:14px">${falta.length} conductores sin bobina (${fmt(falta.reduce((a, p) => a + p.len, 0))} m)${sinB.length ? ` · cargá las bobinas de ${sinB.map((s) => s + ' mm²').join(', ')} en Bobinas` : ''}</div>`;
     }
     h += `<div class="plan stagger">`;
+    // largo permitido por conductor según el margen de la sección (seguro / máximo)
+    const tolCol = cat !== 'PAT';
+    const permTxt = (p, c) => {
+      if (p.estado === 'ejecutado') { const t = Margen.tolerancia(mgDe(c.key), c.lenFase, tolF()); const nv = t ? Margen.nivel(t, p.len) : null; return nv ? `<span class="tl-${nv}" title="tirado ${fmt(p.len, 2)} m">${nv === 'ok' ? '✓' : nv === 'riesgo' ? 'riesgo' : 'excedido'}</span>` : ''; }
+      const g = mgDe(c.key); if (!g) return '<span class="muted">…</span>';
+      const t = Margen.tolerancia(g, p.len - (Number(S.params.margen) || 0), tolF()); if (!t) return '';
+      if (t.sinMargen) return `<span class="tl-falta" title="Sin margen en la sección: no pasarse del plan">≤ ${fmt(p.len, 1)}</span>`;
+      return `<span class="tl-ok" title="Seguro: hasta ${fmt(t.seg, 1)} m">${fmt(t.seg, 1)}</span> / <span class="tl-riesgo" title="Máximo (riesgo): hasta ${fmt(t.max, 1)} m">${fmt(t.max, 1)}</span>`;
+    };
     bobs.forEach((b) => {
       const rem = Math.max(0, b.remanente);
       h += `<div class="bob"><header><div class="code">${esc(b.codigo)}</div><div class="meta">N° ${esc(b.nro)}<br>${b.seccion} mm² · ${fmt(b.entrada)} m</div><span class="pills2">${pill(b.estadoReal)}<span class="muted" title="Cómo queda al final del plan">al final: ${esc(b.estado)}</span></span></header>
@@ -573,8 +877,8 @@
         <div class="nums"><span>Saldo actual <b>${fmt(b.saldoActual, 1)} m</b></span><span>Listo <b>${fmt(b.asigListo, 1)}</b></span><span>Prov. <b>${fmt(b.asigProv, 1)}</b></span><span>Final <b>${fmt(b.remanente, 1)} m</b></span></div>`;
       if (!b.cortes.length) h += `<div class="closed">Sin cortes asignados: queda cerrada.</div>`;
       else {
-        h += `<table><thead><tr><th>#</th><th>Circuito</th><th>Desde → Hasta</th><th>${cat === 'PAT' ? '' : 'Fase'}</th><th class="n">Metros</th><th class="n">Saldo</th></tr></thead><tbody>`;
-        b.cortes.forEach((p) => { const c = cMap.get(p.cid); h += `<tr class="${p.estado} ${p.estado !== 'ejecutado' ? 'clk' : ''}" data-cid="${p.cid}" title="${p.estado}${p.manual ? ' · bobina elegida a mano' : ''}${p.estado !== 'ejecutado' ? ' · clic para elegir otra bobina o corregir el largo' : ''}"><td><span class="dot ${p.estado}"></span>${p.corte}${p.manual ? '<i class="pin">●</i>' : ''}</td><td class="mono">${esc(c.designacion)}</td><td>${esc(c.desde)} → ${esc(c.hasta)}</td><td>${p.fase === 'C' ? '' : p.fase}</td><td class="n">${fmt(p.len, 2)}</td><td class="n">${fmt(p.saldo, 1)}</td></tr>`; });
+        h += `<table><thead><tr><th>#</th><th>Circuito</th><th>Desde → Hasta</th><th>${cat === 'PAT' ? '' : 'Fase'}</th><th class="n" title="Largo de corte del conductor (en los ejecutados, lo tirado real)">${cat === 'PAT' ? 'Metros' : 'A tender'}</th>${tolCol ? '<th class="n" title="Largo máximo que se puede tirar: seguro / máximo (riesgo). Más que el máximo, falta cable al final.">Permitido</th>' : ''}<th class="n">Saldo</th></tr></thead><tbody>`;
+        b.cortes.forEach((p) => { const c = cMap.get(p.cid); h += `<tr class="${p.estado} ${p.estado !== 'ejecutado' ? 'clk' : ''}" data-cid="${p.cid}" title="${p.estado}${p.manual ? ' · bobina elegida a mano' : ''}${p.estado !== 'ejecutado' ? ' · clic para elegir otra bobina o corregir el largo' : ''}"><td><span class="dot ${p.estado}"></span>${p.corte}${p.manual ? '<i class="pin">●</i>' : ''}</td><td class="mono">${esc(c.designacion)}</td><td>${esc(c.desde)} → ${esc(c.hasta)}</td><td>${p.fase === 'C' ? '' : p.fase}</td><td class="n">${fmt(p.len, 2)}</td>${tolCol ? `<td class="n tolc2">${permTxt(p, c)}</td>` : ''}<td class="n">${fmt(p.saldo, 1)}</td></tr>`; });
         h += `</tbody></table>`;
       }
       h += `</div>`;
@@ -583,6 +887,7 @@
     el.innerHTML = h + '</div>';
     $$('tr.clk', el).forEach((tr) => { tr.onclick = () => elegirBobina(tr.dataset.cid); });
     segBind('#fSec', fsec, (v) => { ui.sec[cat] = v; render(true); });
+
     segBind('#fEst', fest, (v) => { ui.est[cat] = v; render(true); });
     searchBind('#fQ', (v) => { ui.q[cat] = v; });
   }
@@ -599,7 +904,7 @@
   function vCircuitos(el, cat) {
     const n = ui.sel.size ? ` (${ui.sel.size})` : '', dis = ui.sel.size ? '' : ' dis';
     const isPat = cat === 'PAT';
-    actions(isPat ? [] : [['Importar Excel', 'btn', () => importExcel(cat)], ['+ Circuito', 'btn', () => editCircuito(null, cat)],
+    actions(isPat ? [] : [['Importar…', 'btn', () => menuImportar(cat)], ['+ Circuito', 'btn', () => editCircuito(null, cat)],
       [`Misma zanja${n}`, 'btn' + (ui.sel.size > 1 ? '' : ' dis'), () => unir(zidsSel())], [`Cerrar zanja${n}`, 'btn' + dis, () => bulkZanja('cerrada')], [`Abrir zanja${n}`, 'btn acc' + dis, () => bulkZanja('abierta')]]);
     const all = R.circuitos.filter((c) => c.cat === cat);
     const stss = [...new Set(all.map((c) => c.hasta))].sort();
@@ -704,6 +1009,8 @@
         $$('.phase-row', box).forEach((row) => {
           const m = Number($('.m', row).value) || 0, d = Math.round((m - teo) * 100) / 100, on = $('.on', row).checked;
           const el = $('.dif', row); el.textContent = (d > 0 ? '+' : '') + fmt(d, 2); el.className = 'dif ' + (Math.abs(d) < 0.005 ? '' : d > 0 ? 'pos' : 'neg');
+          const nv = rc.cat !== 'PAT' && m > 0 ? Margen.nivel(Margen.tolerancia(mgDe(rc.key), rc.lenFase, tolF()), m) : null;
+          $('.m', row).classList.remove('lv-ok', 'lv-riesgo', 'lv-falta'); if (nv) $('.m', row).classList.add('lv-' + nv);
           row.classList.toggle('off', !on); if (on) { tr += m; tt += teo; }
         });
         const d = tr - tt;
@@ -717,6 +1024,7 @@
       title: `Registrar tendido · ${c.designacion}`, wide: true, sub: `${esc(c.desde)} → ${esc(c.hasta)} · ${esc(c.formacion)} · ${fmt(rc.lenFase, 2)} m por conductor · zanja ${rc.zanja}`,
       body: `<div class="muted pr6 prh"><span>${nAll === 1 ? 'Cond.' : 'Fase'}</span><span>Bobina usada</span><span>Lista</span><span>Tirado real</span><span>Dif.</span><span>Fecha</span></div>${rows}
         <div class="tot" id="tTot"></div>
+        ${rc.cat !== 'PAT' ? `<div class="tolb" id="tolBox" data-key="${rc.key}" data-l="${rc.lenFase}">${tolHTML(mgDe(rc.key), rc.lenFase)}</div>` : ''}
         <p class="hint">Tildá lo que ya se tendió. Se propone la bobina del plan y el largo de la lista; cargá los metros realmente tirados y el saldo de la bobina se ajusta. La diferencia con la lista queda registrada para el seguimiento.</p>`,
       buttons: [['Borrar registro', 'btn danger', (box) => { $$('.on', box).forEach((x) => { x.checked = false; }); return save(box); }],
         ['Cancelar', 'btn', () => null], [nAll === 1 ? 'Marcar y guardar' : `Marcar ${nAll === 3 ? 'las 3' : 'todas'} y guardar`, 'btn', (box) => { $$('.on', box).forEach((x) => { x.checked = true; }); return save(box); }], ['Guardar', 'btn pri', (box) => save(box)]],
@@ -790,10 +1098,10 @@
 
   // ======================= BOBINAS =======================
   function vBobinas(el) {
-    actions([['Importar Excel', 'btn', () => importExcel(null)], ['+ Bobina', 'btn pri', () => editBobina(null)]]);
+    actions([['Importar…', 'btn', () => menuImportar(null, true)], ['+ Bobina', 'btn pri', () => editBobina(null)]]);
     const q = (ui.q.bob || '').toLowerCase();
     const list = R.bobinas.filter((b) => (ui.bobCat === 'all' || b.cat === ui.bobCat) && (!q || `${b.codigo} ${b.nro} ${b.remito}`.toLowerCase().includes(q)));
-    let h = `<div class="tools"><div class="seg" id="fBC"><button data-v="all">Todas</button><button data-v="BT">BT 0,8 kV</button><button data-v="MT">MT 33 kV</button><button data-v="PAT">PAT Cu desnudo</button></div>
+    let h = `<div class="tools"><div class="seg" id="fBC"><button data-v="all">Todas</button><button data-v="BT">${CATN.BT}</button><button data-v="MT">${CATN.MT}</button><button data-v="PAT">PAT Cu desnudo</button></div>
       <span class="muted">${list.length} bobinas · ${list.filter((b) => b.estadoReal === 'sin abrir').length} sin abrir · ${list.filter((b) => b.estadoReal === 'en uso').length} en uso · ${list.filter((b) => b.estadoReal === 'terminada').length} terminadas</span><span class="sp"></span><input type="search" id="fBQ" placeholder="Buscar código, N°, remito…" value="${esc(ui.q.bob || '')}" style="width:240px"></div>
       <div class="tblwrap"><table class="tbl"><thead><tr><th>Tipo</th><th>Código</th><th>N° fabricante</th><th>Sección</th><th class="n">Entrada</th><th class="n">Ya tendido</th>
       <th class="n">Saldo actual</th><th>Uso real</th><th>Estado real</th><th class="n">Plan pendiente</th><th class="n">Remanente previsto</th><th>Al final</th><th></th></tr></thead><tbody>`;
@@ -857,13 +1165,14 @@
     el.innerHTML = `<div class="grid g2 stagger"><div class="card"><h3>Parámetros del cálculo</h3><div class="form">
       <label>Margen por corte (m por conductor)<input type="number" step="0.1" min="0" id="pM" value="${p.margen}"></label>
       <label>Remanente mínimo útil (m)<input type="number" step="1" min="0" id="pU" value="${p.minUtil}"></label>
+      <label title="Del margen disponible de cada sección, qué parte se considera segura al tender. El resto es riesgo.">Tolerancia segura (% del margen)<input type="number" step="5" min="0" max="100" id="pTS" value="${p.tolSeg != null ? p.tolSeg : 50}"></label>
       <label>Cola no utilizable por bobina (m)<input type="number" step="1" min="0" id="pC" value="${p.cola}"></label></div>
       <h4 style="margin:16px 0 6px">Corrección de largo por tipo (%)</h4>
       <div class="form">${['BT', 'MT', 'PAT'].map((k) => { const rs = R.resumen.filter((r) => r.cat === k && r.tendidoTeo > 0); const teo = rs.reduce((a, r) => a + r.tendidoTeo, 0), dv = rs.reduce((a, r) => a + r.desvio, 0);
         const sug = teo > 0 ? Math.round((dv / teo) * 1000) / 10 : null;
         return `<label>${CATN[k]}<input type="number" step="0.1" class="pAj" data-k="${k}" value="${(p.ajuste || {})[k] || 0}"><span class="muted" style="font-weight:400">${sug != null ? `Según lo tendido: ${sug > 0 ? '+' : ''}${fmt(sug, 1)} % (${fmt(teo)} m) <a href="#" class="useSug" data-k="${k}" data-v="${sug}">usar</a>` : 'Sin tendidos para sugerir'}</span></label>`; }).join('')}</div>
       <p class="hint">Si en campo sobra cable al tirar lo que dice la lista, poné un % negativo (por ejemplo −2 %): se corrigen todos los largos a cortar de ese tipo y el plan se recalcula. Para un circuito puntual, usá "Bobina / largo" en Circuitos. El margen por corte se suma a cada conductor solo si querés tolerancia extra.</p></div>
-      <div class="card"><h3>Proyecto</h3><div class="form"><label class="full">Nombre<input type="text" id="pN" value="${esc(S.nombre)}"></label></div>
+      <div class="card"><h3>Proyecto</h3>${ED.blank ? parqueResumen() : `<div class="form"><label class="full">Nombre<input type="text" id="pN" value="${esc(S.nombre)}"></label></div>`}
       <p class="hint">${esc(S.fuente || '')}</p><p class="hint">Los cambios se guardan solos en esta PC con un respaldo diario (se conservan 30). "Guardar copia" genera un archivo .obra para otra computadora.</p>
       <p class="hint" id="pInfo"></p><div style="display:flex;gap:8px;margin-top:10px"><button class="btn" id="pOpenData">Abrir carpeta de datos</button><button class="btn danger" id="pReset">Restaurar datos iniciales</button></div></div>
       <div class="card" id="netCard"><h3>Trabajo en red</h3><div class="muted">Cargando…</div></div>
@@ -876,16 +1185,20 @@
       <li>Una pasada de <b>mejora</b> mueve e intercambia los cortes no comprometidos entre bobinas, sin abrir bobinas de más, para dejar las bobinas terminadas y el sobrante concentrado en remanentes grandes.</li>
       <li>Los cortes que ya figuran como <b>listos</b> quedan comprometidos a su bobina: al abrirse nuevas zanjas no cambian, salvo que ya no entren o uses "Replanificar".</li></ol></div></div>`;
     const setP = (k) => (e) => { S.params[k] = Math.max(0, Number(e.target.value) || 0); commit('Parámetros actualizados'); };
+    if ($('#pTS')) $('#pTS').onchange = (e) => { S.params.tolSeg = Math.max(0, Math.min(100, Number(e.target.value) || 0)); commit('Tolerancia segura: ' + S.params.tolSeg + ' % del margen'); };
     $('#pM').onchange = setP('margen'); $('#pU').onchange = setP('minUtil'); $('#pC').onchange = setP('cola');
     const setAj = (k, v) => { S.params.ajuste = Object.assign({}, S.params.ajuste || {}); S.params.ajuste[k] = Math.max(-30, Math.min(30, Number(v) || 0)); recalcularTodo(k); commit(`Corrección ${CATN[k]}: ${fmt(S.params.ajuste[k], 1)} % · plan recalculado`); };
     $$('.pAj', el).forEach((i) => { i.onchange = () => setAj(i.dataset.k, i.value); });
     $$('.useSug', el).forEach((a) => { a.onclick = (e) => { e.preventDefault(); setAj(a.dataset.k, a.dataset.v); }; });
-    $('#pN').onchange = (e) => { S.nombre = e.target.value.trim() || 'Obra'; window.api.netObra(S.nombre); commit(); };
+    if ($('#pParque')) $('#pParque').onclick = () => asistenteParque(false);
+    if ($('#pN')) $('#pN').onchange = (e) => { S.nombre = e.target.value.trim() || 'Obra'; window.api.netObra(S.nombre); commit(); };
     window.api.info().then((i) => { $('#pInfo') && ($('#pInfo').textContent = `Versión ${i.version} · datos en ${i.userData}`); $('#pOpenData') && ($('#pOpenData').onclick = () => window.api.openPath(i.userData)); });
     renderNet(); renderWeb();
     $('#pReset').onclick = async () => {
       if (await confirmar('Restaurar datos iniciales', 'Se reemplazan bobinas, circuitos y tendidos por los datos con que vino el programa. El estado actual queda en el respaldo del día.', 'Restaurar')) {
-        const keep = S.__sync; S = normalizar(JSON.parse(await window.api.seed())); S.__sync = keep; commit('Datos iniciales restaurados');
+        const keep = S.__sync, parque = S.parque, nom = S.nombre; S = JSON.parse(await window.api.seed());
+        if (ED.blank && parque) { S.parque = parque; S.nombre = nom; }
+        S = normalizar(S); S.__sync = keep; commit('Datos iniciales restaurados');
       }
     };
   }
@@ -1059,7 +1372,7 @@
       ${webUrl() ? `<div class="alert ${WEB.error ? 'error' : WEB.ultimo ? 'ok' : 'info'}">${WEB.error ? 'Error al publicar: ' + esc(WEB.error) : WEB.ultimo ? 'Última publicación: ' + new Date(WEB.ultimo).toLocaleString('es-AR') : 'Todavía no se publicó en esta sesión'}
         <br>Dirección del visor: <a href="#" id="wUrl">${esc(webUrl())}</a></div>` : ''}
       <div class="form" style="margin-top:10px"><label>Usuario u organización de GitHub<input type="text" id="wOwner" value="${esc(WEB.owner || '')}" placeholder="ej. ingalfa-obras"></label>
-        <label>Repositorio<input type="text" id="wRepo" value="${esc(WEB.repo || '')}" placeholder="ej. obera-ii"></label>
+        <label>Repositorio<input type="text" id="wRepo" value="${esc(WEB.repo || '')}" placeholder="ej. avance-obra"></label>
         <label class="full">Token de acceso de GitHub<input type="password" id="wTok" value="${esc(WEB.token || '')}" placeholder="github_pat_…"></label></div>
       <h4 style="margin:14px 0 6px">Usuarios del visor</h4>
       <div id="wUs">${us.map((u) => `<div class="phase-row wu" style="grid-template-columns:1fr 1fr auto auto auto"><input type="text" class="wn" value="${esc(u.nombre)}" readonly><input type="password" class="wp" placeholder="(sin cambios)"><label class="chkl wed" title="Puede enviar cronogramas actualizados desde el visor"><input type="checkbox" class="we" ${u.editor ? 'checked' : ''}> Editor</label><label class="chkl wed" title="Puede cargar partes de campo desde el celular (campo.html)"><input type="checkbox" class="wc" ${u.capataz ? 'checked' : ''}> Capataz</label><button class="btn sm ghost danger wx">Quitar</button></div>`).join('')}</div>
@@ -1067,7 +1380,7 @@
       <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13px"><input type="checkbox" id="wAuto" ${WEB.auto !== false ? 'checked' : ''}> Publicar automáticamente cuando haya cambios (como máximo cada 90 segundos)</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn pri" id="wSave">Guardar</button><button class="btn" id="wViz">Instalar / actualizar visor</button><button class="btn acc" id="wPub" ${webListo() ? '' : 'disabled'}>Publicar ahora</button></div>
       <details class="manual"><summary>Cómo se configura (una sola vez)</summary><ol style="line-height:1.6;padding-left:18px;font-size:12.5px">
-        <li>Crear una cuenta en github.com (gratis) y un repositorio <b>público</b> nuevo, por ejemplo "obera-ii", marcando "Add a README".</li>
+        <li>Crear una cuenta en github.com (gratis) y un repositorio <b>público</b> nuevo, por ejemplo "avance-obra", marcando "Add a README".</li>
         <li>En GitHub: <i>Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token</i>. Elegir solo ese repositorio y dar permiso <b>Contents: Read and write</b> y <b>Pages: Read and write</b>. Copiar el token.</li>
         <li>Acá: cargar usuario de GitHub, repositorio y token, agregar los usuarios del visor con su contraseña (mínimo 8 caracteres) y tocar <b>Guardar</b>.</li>
         <li><b>Capataz</b>: entra desde el celular a <b>…/campo.html</b> (mismo sitio del visor), ve el plan de corte del día y envía partes de tendido, PAT, largo real de zanja y observaciones. Llegan a <b>Partes de campo</b> para aprobarlos.</li>
@@ -1133,7 +1446,7 @@
     const res = await modal({
       title: 'Importar Excel', sub: esc(f.path.split(/[\\/]/).pop()),
       body: `<p>Encontré: ${found.map((k) => `<b>${d[k].length}</b> ${k}`).join(' y ')}.</p>
-        <div class="form"><label class="full">Tipo de cable<select name="cat"><option value="auto">Detectar por la sección (Cu desnudo → PAT, 1x50/25 → MT, resto → BT)</option>${Object.keys(CATS).map((k) => `<option value="${k}" ${ctxCat === k ? 'selected' : ''}>Todo como ${CATN[k]}</option>`).join('')}</select></label></div>
+        <div class="form"><label class="full">Tipo de cable<select name="cat"><option value="auto">Usar la columna TIPO de la planilla, o detectar por la sección (Cu desnudo → PAT, 1x50/25 → MT, resto → BT)</option>${Object.keys(CATS).map((k) => `<option value="${k}" ${ctxCat === k ? 'selected' : ''}>Todo como ${CATN[k]}</option>`).join('')}</select></label></div>
         <p class="hint">Lo que ya existe se actualiza (bobinas por N° de fabricante y tipo, circuitos por designación + desde) y lo nuevo se agrega. No se borra nada ni se tocan los tendidos.</p>`,
       buttons: [['Cancelar', 'btn', () => null], ['Importar', 'btn pri', (box) => $('[name=cat]', box).value]],
     });
@@ -1142,7 +1455,7 @@
     if (d.bobinas) {
       let a = 0, u = 0;
       d.bobinas.forEach((nb) => {
-        nb.cat = res === 'auto' ? detectCat(nb.seccion, ctxCat) : res;
+        nb.cat = res === 'auto' ? (nb.cat || detectCat(nb.seccion, ctxCat)) : res;
         const ex = S.bobinas.find((b) => String(b.nro) === String(nb.nro) && b.cat === nb.cat);
         if (ex) { Object.assign(ex, nb, { codigo: nb.codigo || ex.codigo, obs: nb.obs || ex.obs }); u++; } else { S.bobinas.push(Object.assign({ id: uid('b'), _o: Date.now() + a }, nb)); a++; }
       });
@@ -1151,7 +1464,7 @@
     if (d.circuitos) {
       let a = 0, u = 0;
       d.circuitos.forEach((nc) => {
-        nc.cat = res === 'auto' ? detectCat(nc.formacion, ctxCat) : res;
+        nc.cat = res === 'auto' ? (nc.cat || detectCat(nc.formacion, ctxCat)) : res;
         if (nc.cat === 'PAT') return;
         const ex = S.circuitos.find((c) => !c.vinculo && c.designacion === nc.designacion && c.desde === nc.desde);
         if (ex) { Object.assign(ex, nc, { lineal: nc.lineal ?? ex.lineal }); u++; }
@@ -1278,7 +1591,7 @@
       const [c2, s2] = k.split('|'); const g = cs.filter((c) => `${c.cat}|${c.seccion}` === k).map(puntasDe); const tot = g.reduce((a, x) => a + x.tot, 0), col = g.reduce((a, x) => a + x.col, 0);
       return `<div class="card tile"><div>${Charts.ring(tot ? col / tot : 0, SERIE[c2], 'colocadas')}</div><div><h3 style="margin-bottom:6px">${ctag(c2)}${c2} ${s2} mm²</h3>${kpi('Puntas', col, `/ ${fmt(tot)}`)}<div class="muted" style="margin-top:4px">${g.length} circuito${g.length > 1 ? 's' : ''} · ${g.reduce((a, x) => a + x.n, 0)} conductores</div></div></div>`;
     }).join('')}</div>`;
-    h += `<div class="tools"><div class="seg" id="fPtC"><button data-v="BT">BT 0,8 kV</button><button data-v="MT">MT 33 kV</button></div>
+    h += `<div class="tools"><div class="seg" id="fPtC"><button data-v="BT">${CATN.BT}</button><button data-v="MT">${CATN.MT}</button></div>
       <div class="seg" id="fPtF"><button data-v="all">Todas</button><button data-v="pend">Pendientes</button><button data-v="ok">Completas</button></div>
       <span class="sp"></span><input type="search" id="ptQ" placeholder="Buscar circuito, inversor, STS…" value="${esc(ui.ptQ || '')}" style="width:220px"></div>`;
     let rows = cs.filter((c) => c.cat === cat).map((c) => ({ c, p: puntasDe(c), g: tramo(c) }));
@@ -1349,7 +1662,7 @@
     document.documentElement.style.background = document.body.style.background = '';
     if (p) toast('PDF guardado', { action: ['Abrir', () => window.api.openPath(p)] });
   }
-  const prHead = (t, sub) => `<div class="pr-h"><div><h1>${t}</h1>${esc(S.nombre)}${sub ? ' · ' + sub : ''}</div><div>PSFV-OBE II · ${new Date().toLocaleString('es-AR')}</div></div>`;
+  const prHead = (t, sub) => `<div class="pr-h"><div><h1>${t}</h1>${esc(S.nombre)}${sub ? ' · ' + sub : ''}</div><div>${esc(ED.app)} · ${new Date().toLocaleString('es-AR')}</div></div>`;
   function printDia(d) {
     const { dias } = datosPorFecha();
     printHTML(prHead(`Tendido del ${fechaLarga(d).replace(/^./, (x) => x.toLowerCase())}`) + `<div class="card">${diaHTML(dias.get(d), true)}</div>`, `Tendido ${d}.pdf`);
@@ -1395,7 +1708,6 @@
     ['frag', 'Fraguado general'], ['sts', 'Colocación de STS sobre base'],
   ];
   const ETN = Object.fromEntries(ETAPAS);
-  const STSL = ['STS 1', 'STS 2', 'STS 3', 'STS 4'];
   const FCOL = { done: '#2f9e5b', curso: '#f5a524', pend: '#dfe5ec' };
   function fundInfo(sts) {
     const f = (S.fundaciones || {})[sts] || {};
@@ -1526,7 +1838,7 @@
       <div class="card mcard" data-go="cables" title="Ver detalle del tendido"><div class="mh"><div>${Charts.ring(tB ? tA / tB : 0, SERIE.BT, 'tendido')}</div><div><h3>Tendido y aprovechamiento de cables</h3><div class="muted">${fmt(tA)} / ${fmt(tB)} m</div></div></div>${tc.map(([c, a, b]) => fila(`${ctag(c)}${c}`, a, b, SERIE[c])).join('')}<div class="muted" style="margin-top:6px">Zanja BT ${fmt(R.zanjas.BT.realizada)} / ${fmt(R.zanjas.BT.total)} m · MT ${fmt(R.zanjas.MT.realizada)} / ${fmt(R.zanjas.MT.total)} m</div></div>
       <div class="card mcard" data-go="puntas" title="Ver detalle de puntas"><div class="mh"><div>${Charts.ring(pB ? pA / pB : 0, '#e0457b', 'colocadas')}</div><div><h3>Puntas de cable</h3><div class="muted">${fmt(pA)} / ${fmt(pB)} puntas</div></div></div>${pc.map(([c, a, b]) => fila(`${ctag(c)}${c}`, a, b, SERIE[c])).join('')}</div>
       <div class="card mcard" data-go="fundaciones" title="Ver detalle de fundaciones"><div class="mh" style="margin-bottom:4px"><div>${Charts.ring(fA, FCOL.done, 'bases')}</div><div><h3>Fundaciones STS</h3><div class="muted">${fi.reduce((a, [, i]) => a + i.done, 0)} / ${STSL.length * ETAPAS.length} etapas</div></div></div><div class="minists">${fi.map(([s, i]) => `<div>${stsSVG(i.p, { small: true })}<span>${s}</span></div>`).join('')}</div></div>
-      ${cronoModHTML()}</div>`;
+      ${hincModHTML()}${cronoModHTML()}</div>`;
   }
   function fundAvanceHTML() {
     const fi = STSL.map((s) => [s, fundInfo(s)]);
@@ -1824,6 +2136,279 @@
       <div class="muted" style="margin-top:6px">${enCurso} en curso · ${atr} atrasadas · fin ${fechaCorta(P.fin)}</div></div>`;
   }
 
+  // ======================= HINCADO =======================
+  // Catálogo de hincas (Trina CIV-DW-26050-2402-0B "Post details"): código, tipo, suelo, perfil, largos y color de punta.
+  // La distribución por tracker sale de la discretización (Border / Outer / Inner, suelo normal / blando) y de la
+  // matriz de hincas por configuración (qué código va en cada posición), que se carga del documento de Trina.
+  const HCOL = { Rojo: '#e53935', Azul: '#1f5fd6', Verde: '#2db34a', Violeta: '#7c3aed', Magenta: '#e03fc6', Negro: '#1f2328', Gris: '#9aa0a6', Blanco: '#ffffff', 'Sin marca': 'transparent' };
+  const HCAT_SEED = [
+    ['26050-MS7-PW614-1A', 'Drive', 'N', '152×152', 3430, 1230, 2200, 2000, 'Rojo'], ['26050-MS5-PW608-1A', 'Drive', 'N', '148×100', 3460, 1260, 2200, 2000, 'Azul'],
+    ['26050-MS5-PW608-2A', 'Drive', 'N', '148×100', 3260, 1260, 2000, 1800, 'Verde'], ['26050-MS7-PW610-1A', 'Drive', 'N', '151×100', 3730, 1230, 2500, 2300, 'Violeta'],
+    ['26050-MS5-PW609-1A', 'Drive', 'N', '150×100', 3260, 1260, 2000, 1800, 'Blanco'],
+    ['26050-PW610-1A', 'Standard/Damper', 'N', '151×100', 3515, 1315, 2200, 2000, 'Rojo'], ['26050-PW610-2A', 'Standard/Damper', 'N', '151×100', 3815, 1315, 2500, 2300, 'Azul'],
+    ['26050-PW606-1A', 'Standard/Damper', 'N', '146×95', 3515, 1315, 2200, 2000, 'Verde'], ['26050-PW608-1A', 'Standard/Damper', 'N', '148×100', 3615, 1315, 2300, 2100, 'Violeta'],
+    ['26050-PW606-2A', 'Standard/Damper', 'N', '146×95', 3315, 1315, 2000, 1800, 'Blanco'], ['26050-PW611-1A', 'Standard/Damper', 'N', '152×102', 3815, 1315, 2500, 2300, 'Negro'],
+    ['26050-PW609-1A', 'Standard/Damper', 'N', '150×100', 3615, 1315, 2300, 2100, 'Magenta'],
+    ['26050-MS7-PW614-1B', 'Drive', 'B', '152×152', 3730, 1230, 2500, 2300, 'Sin marca'], ['26050-MS5-PW608-1B', 'Drive', 'B', '148×100', 3660, 1260, 2400, 2200, 'Negro'],
+    ['26050-MS7-PW610-1B', 'Drive', 'B', '151×100', 4330, 1230, 3100, 2900, 'Magenta'], ['26050-MS5-PW609-1B', 'Drive', 'B', '150×100', 3660, 1260, 2400, 2200, 'Gris'],
+    ['26050-PW610-1B', 'Standard/Damper', 'B', '151×100', 4115, 1315, 2800, 2600, 'Gris'], ['26050-PW610-2B', 'Standard/Damper', 'B', '151×100', 4515, 1315, 3200, 3000, 'Verde'],
+    ['26050-PW606-1B', 'Standard/Damper', 'B', '146×95', 3615, 1315, 2300, 2100, 'Violeta'], ['26050-PW608-1B', 'Standard/Damper', 'B', '148×100', 4215, 1315, 2900, 2700, 'Blanco'],
+    ['26050-PW606-2B', 'Standard/Damper', 'B', '146×95', 4115, 1315, 2800, 2600, 'Negro'], ['26050-PW611-1B', 'Standard/Damper', 'B', '152×102', 4515, 1315, 3200, 3000, 'Magenta'],
+    ['26050-PW609-1B', 'Standard/Damper', 'B', '150×100', 4315, 1315, 3000, 2800, 'Gris'],
+  ].map(([codigo, tipo, suelo, perfil, largo, sobre, nrl, mrl, color]) => ({ codigo, tipo, suelo, perfil, largo, sobre, nrl, mrl, color }));
+  const HZ = { Border: 'Borde', Outer: 'Exterior', Inner: 'Interior' }, HSL = { N: 'suelo normal', B: 'suelo blando' };
+  const HCFGS = [['1P52', 'Border'], ['1P52', 'Outer'], ['1P52', 'Inner'], ['1P26', 'Border'], ['1P26', 'Outer']].flatMap(([t, z]) => ['N', 'B'].map((sl) => `${t}|${z}|${sl}`));
+  const cfgDe = (t) => `${t.t}|${t.z || 'Outer'}|${t.sl || 'N'}`;
+  const cfgTxt = (k) => { const [t, z, sl] = k.split('|'); return `${t} ${HZ[z] || z} · ${HSL[sl]}`; };
+  const CFGCOL = { '1P52|Border': '#e15759', '1P52|Outer': '#f28e2b', '1P52|Inner': '#4e79a7', '1P26|Border': '#b07aa1', '1P26|Outer': '#59a14f' };
+  function normalizarHincado(st) {
+    const H = (st.hincado = st.hincado || {});
+    H.catalogo = H.catalogo && H.catalogo.length ? H.catalogo : HCAT_SEED.map((x) => Object.assign({}, x));
+    H.matriz = H.matriz || {};
+    HCFGS.forEach((k) => { if (!H.matriz[k]) H.matriz[k] = { n: k.startsWith('1P52') ? 12 : 10, pos: [], conf: false }; });
+    H.avance = H.avance || {}; H.recep = H.recep || [];
+  }
+  const hcat = (c) => (S.hincado.catalogo || []).find((x) => x.codigo === c);
+  const chipH = (c, small) => { const k = hcat(c); const col = k ? k.color : ''; return `<span class="hchip${small ? ' sm' : ''}" title="${esc(c)}${k ? ' · ' + k.tipo + ' · ' + k.perfil + ' · ' + fmt(k.largo) + ' mm · ' + col : ''}"><i class="hc" style="--hc:${HCOL[col] || '#ccc'}" data-c="${esc(col)}"></i>${esc(String(c || '–').replace(/^26050-/, ''))}</span>`; };
+  const colorChip = (col) => `<span class="hcol"><i class="hc" style="--hc:${HCOL[col] || '#ccc'}" data-c="${esc(col)}"></i>${esc(col)}</span>`;
+  // posiciones de un tracker según la matriz de su configuración
+  const posDe = (t) => { const m = S.hincado.matriz[cfgDe(t)] || {}; return Array.from({ length: m.n || 0 }, (_, i) => (m.pos || [])[i] || ''); };
+  const matrizOk = (k) => { const m = S.hincado.matriz[k]; return m && m.n > 0 && Array.from({ length: m.n }, (_, i) => (m.pos || [])[i]).every(Boolean); };
+  function hincInfo() {
+    const P = window.PLANO; if (!P) return null;
+    const H = S.hincado, trk = P.trk;
+    const cfgN = {}; trk.forEach((t) => { const k = cfgDe(t); cfgN[k] = (cfgN[k] || 0) + 1; });
+    const usadas = Object.keys(cfgN), completa = usadas.every(matrizOk);
+    const req = {}, hecho = {}, porSec = {};
+    trk.forEach((t) => {
+      const ps = posDe(t), av = H.avance[t.id];
+      const s = (porSec[t.s] = porSec[t.s] || { n: 0, h: 0, pil: 0, pilH: 0 });
+      s.n++; if (av) s.h++;
+      ps.forEach((c) => { if (!c) return; req[c] = (req[c] || 0) + 1; s.pil++; if (av) { hecho[c] = (hecho[c] || 0) + 1; s.pilH++; } });
+    });
+    const rec = {}, recDud = {};
+    H.recep.forEach((r) => { const v = verificar(r); (v.ok ? rec : recDud)[r.codigo] = ((v.ok ? rec : recDud)[r.codigo] || 0) + (Number(r.cant) || 0); });
+    const nH = Object.keys(H.avance).filter((id) => trk.some((t) => t.id === id)).length;
+    return { P, trk, cfgN, usadas, completa, req, hecho, rec, recDud, porSec, nH, nPil: Object.values(req).reduce((a, b) => a + b, 0), nPilH: Object.values(hecho).reduce((a, b) => a + b, 0) };
+  }
+  // verificación de una recepción contra el manual: color, largo y perfil
+  function verificar(r) {
+    const k = hcat(r.codigo), out = { ok: true, msgs: [], sug: [] };
+    if (!k) { out.ok = false; out.msgs.push('Código que no está en el manual'); return out; }
+    if (r.color && r.color !== k.color) { out.ok = false; out.msgs.push(`Color ${r.color}: el manual indica ${k.color} para ${k.codigo.replace(/^26050-/, '')}`); }
+    if (r.largo && Math.abs(Number(r.largo) - k.largo) > 25) { out.ok = false; out.msgs.push(`Largo ${fmt(r.largo)} mm: el manual indica ${fmt(k.largo)} mm`); }
+    if (r.perfil && String(r.perfil).replace(/\s|x|X|×/g, '') !== k.perfil.replace(/×/g, '')) { out.ok = false; out.msgs.push(`Perfil ${esc(r.perfil)}: el manual indica ${k.perfil}`); }
+    if (!out.ok) {
+      // qué código coincide con lo que se recibió
+      out.sug = S.hincado.catalogo.filter((x) => x.codigo !== k.codigo && (!r.color || x.color === r.color) && (!r.largo || Math.abs(x.largo - Number(r.largo)) <= 25) && (!r.perfil || String(r.perfil).replace(/\s|x|X|×/g, '') === x.perfil.replace(/×/g, ''))).map((x) => x.codigo);
+    }
+    return out;
+  }
+  // ---- vistas
+  // Aviso de precarga: qué datos ya están y qué documentos faltan para determinar la distribución
+  function hincPrecargaHTML(I) {
+    if (!I || I.completa) return '';
+    const inc = HCFGS.filter((k) => I.cfgN[k] && !matrizOk(k)).length, rev = I.trk.filter((t) => t.rev).map((t) => t.id);
+    return `<div class="card hpre"><div class="hpreh"><span class="pill p-warn">PRECARGA</span><b>Hincado en condición de precarga</b><span class="muted">· la distribución de hincas por tracker todavía no está determinada</span></div>
+      <div class="hprec"><div><h4>Datos cargados</h4><ul>
+        <li>✓ Catálogo de hincas: Trina <b>CIV-DW-26050-2402-0B</b> "Post details" (rev. 0B, 25/08/2026) · ${S.hincado.catalogo.length} códigos con perfil, largos y color de punta.</li>
+        <li>✓ Discretización: Trina <b>TT-OPP-094140_5</b> "General Layout Discretization" (opción 3, rev. 02) · ${fmt(I.trk.length)} trackers en ${I.usadas.length} configuraciones (zona y suelo).</li></ul></div>
+      <div><h4>Documentos que faltan para determinar</h4><ol>
+        <li><b>Distribución de hincas por tracker</b> (Trina, probablemente CIV-DW-26050-2401 · "Post layout" / "Pile distribution" / "Ramming plan"): cantidad de hincas y código en cada posición para las ${I.usadas.length} configuraciones. <span class="muted">Faltan ${inc} de ${I.usadas.length}.</span></li>
+        <li><b>Replanteo de estructuras · hincado de perfiles</b> (OBEII-CI-PL-211-rA): posición de cada hinca en obra.</li>
+        <li><b>Confirmación de la discretización</b> contra el layout vigente (OBEII-GR-PL-001-r4)${rev.length ? `: ${rev.length} trackers no coinciden (${rev.join(', ')})` : ''}.</li>
+        <li><b>Packing list / remitos de Trina</b> por código: para controlar cantidades en la recepción.</li></ol></div></div>
+      <p class="hint" style="margin:6px 0 0">Hasta tener el punto 1 se registra el avance por tracker y las recepciones (verificadas contra el catálogo), pero no se calculan hincas requeridas, stock ni la secuencia de colores. La distribución se carga en <a href="#" data-go="hcat">Catálogo y distribución</a>.</p></div>`;
+  }
+  function vHincado(el) {
+    actions([['Exportar Excel', 'btn', exportHinc], ['Distribución por tracker', 'btn pri', () => go('htrk')]]);
+    const I = hincInfo(); if (!I) { el.innerHTML = '<div class="card empty"><b>Sin plano cargado</b></div>'; return; }
+    const pct = (a, b) => (b ? (a / b) * 100 : 0);
+    const secs = Object.keys(I.porSec).sort();
+    const H = S.hincado;
+    // avance por fecha
+    const porF = {}; Object.entries(H.avance).forEach(([, v]) => { if (v && v.f) porF[v.f] = (porF[v.f] || 0) + 1; });
+    const fs = Object.keys(porF).sort();
+    let ac = 0; const curva = fs.map((f) => [f, (ac += porF[f])]);
+    const cods = Object.keys(I.req).sort((a, b) => (hcat(a) || {}).suelo?.localeCompare((hcat(b) || {}).suelo) || a.localeCompare(b));
+    el.innerHTML = `${hincPrecargaHTML(I)}
+      <div class="grid g4 stagger" style="margin-bottom:16px">
+        <div class="card kpi"><div class="kl">Trackers hincados</div><div class="kv">${fmt(I.nH)}<small> / ${fmt(I.trk.length)}</small></div><div class="sbt"><div style="width:${pct(I.nH, I.trk.length).toFixed(1)}%;background:#00939a"></div></div><div class="muted">${fmt(pct(I.nH, I.trk.length), 1)} %</div></div>
+        <div class="card kpi"><div class="kl">Hincas hincadas</div><div class="kv">${I.completa ? `${fmt(I.nPilH)}<small> / ${fmt(I.nPil)}</small>` : '–'}</div><div class="sbt"><div style="width:${pct(I.nPilH, I.nPil).toFixed(1)}%;background:#00939a"></div></div><div class="muted">${I.completa ? fmt(pct(I.nPilH, I.nPil), 1) + ' %' : 'falta la distribución'}</div></div>
+        <div class="card kpi"><div class="kl">Hincas recibidas (verificadas)</div><div class="kv">${fmt(Object.values(I.rec).reduce((a, b) => a + b, 0))}</div><div class="muted">${Object.values(I.recDud).reduce((a, b) => a + b, 0) ? `<b class="tneg">${fmt(Object.values(I.recDud).reduce((a, b) => a + b, 0))} a revisar</b> (no coinciden con el manual)` : 'todo coincide con el manual'}</div></div>
+        <div class="card kpi"><div class="kl">Discretización</div><div class="kv">${I.usadas.length}<small> configuraciones</small></div><div class="muted">${fmt(I.trk.filter((t) => t.sl === 'B').length)} trackers en suelo blando</div></div>
+      </div>
+      <div class="grid g2" style="margin-bottom:16px">
+        <div class="card"><h3>Avance por sector</h3>${secs.map((s) => { const x = I.porSec[s]; return `<div class="mrow"><span><i class="cdot" style="background:${SECT_COL[s]}"></i>Sector ${s}</span><div class="sbt"><div style="width:${pct(x.h, x.n).toFixed(1)}%;background:${SECT_COL[s]}"></div></div><b>${x.h}/${x.n}</b></div>`; }).join('')}
+          <p class="hint">Trackers con hincado completo sobre el total del sector${I.completa ? '' : ''}.</p></div>
+        <div class="card"><h3>Hincado por fecha</h3>${curva.length ? Charts.line([{ name: 'Hincado', color: '#7c5cbf', pts: curva.map(([f, v]) => ({ x: new Date(f + 'T12:00:00'), y: v / I.trk.length, tip: `${fechaCorta(f)}: ${v} trackers (${fmt(v / I.trk.length * 100, 1)} %)` })) }]) : '<p class="muted">Todavía no hay trackers hincados.</p>'}
+          ${fs.length ? `<div class="muted">Último día: ${fechaCorta(fs[fs.length - 1])} · ${porF[fs[fs.length - 1]]} trackers</div>` : ''}</div></div>
+      <div class="card" style="margin-bottom:16px"><h3>Trackers por configuración y sector</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Configuración</th>${secs.map((s) => `<th class="n">Sector ${s}</th>`).join('')}<th class="n">Total</th><th class="n">Hincados</th><th>Distribución</th></tr></thead><tbody>
+        ${HCFGS.filter((k) => I.cfgN[k]).map((k) => `<tr><td><i class="cdot" style="background:${CFGCOL[k.split('|').slice(0, 2).join('|')]}"></i>${cfgTxt(k)}</td>${secs.map((s) => `<td class="n">${I.trk.filter((t) => t.s === s && cfgDe(t) === k).length || ''}</td>`).join('')}<td class="n"><b>${I.cfgN[k]}</b></td><td class="n">${I.trk.filter((t) => cfgDe(t) === k && H.avance[t.id]).length}</td><td>${matrizOk(k) ? `<span class="pill p-done">${H.matriz[k].n} hincas</span>` : '<span class="pill p-warn">a cargar</span>'}</td></tr>`).join('')}
+        </tbody></table></div></div>
+      <div class="card"><h3>Hincas por código</h3>${cods.length ? `<div class="tblwrap"><table class="tbl"><thead><tr><th>Código</th><th>Tipo</th><th>Perfil · largo</th><th class="n">Requeridas</th><th class="n">Recibidas OK</th><th class="n">A revisar</th><th class="n">Hincadas</th><th class="n">Stock en obra</th><th class="n">Faltan recibir</th></tr></thead><tbody>
+        ${cods.map((c) => { const k = hcat(c) || {}, rq = I.req[c] || 0, rc = I.rec[c] || 0, hh = I.hecho[c] || 0; return `<tr><td>${chipH(c)}</td><td>${esc(k.tipo || '')}</td><td>${esc(k.perfil || '')} · ${fmt(k.largo)} mm</td><td class="n">${fmt(rq)}</td><td class="n">${fmt(rc)}</td><td class="n ${I.recDud[c] ? 'neg' : ''}">${I.recDud[c] ? fmt(I.recDud[c]) : ''}</td><td class="n">${fmt(hh)}</td><td class="n">${fmt(rc - hh)}</td><td class="n ${rq - rc > 0 ? 'neg' : ''}">${rq - rc > 0 ? fmt(rq - rc) : '✓'}</td></tr>`; }).join('')}</tbody></table></div>`
+        : '<p class="muted">Se calcula cuando esté cargada la distribución de hincas por configuración.</p>'}</div>`;
+    $$('[data-go]', el).forEach((b) => { b.onclick = (e) => { e.preventDefault(); go(b.dataset.go); }; });
+  }
+  function vHTrk(el) {
+    const I = hincInfo(); if (!I) { el.innerHTML = '<div class="card empty"><b>Sin plano cargado</b></div>'; return; }
+    const H = S.hincado;
+    ui.hf = ui.hf || { s: 'all', c: 'all', e: 'all', q: '' };
+    const f = ui.hf;
+    const n = ui.sel.size ? ` (${ui.sel.size})` : '', dis = ui.sel.size ? '' : ' dis';
+    actions([['Exportar Excel', 'btn', exportHinc], ['PDF para campo', 'btn', printHinc], [`Desmarcar${n}`, 'btn' + dis, () => marcarHincado([...ui.sel], false)], [`Marcar hincados${n}`, 'btn acc' + dis, () => marcarHincado([...ui.sel], true)]]);
+    let list = I.trk.slice();
+    if (f.s !== 'all') list = list.filter((t) => t.s === f.s);
+    if (f.c !== 'all') list = list.filter((t) => cfgDe(t) === f.c);
+    if (f.e !== 'all') list = list.filter((t) => (f.e === 'h' ? !!H.avance[t.id] : !H.avance[t.id]));
+    if (f.q) { const q = f.q.toUpperCase(); list = list.filter((t) => t.id.includes(q)); }
+    const secs = Object.keys(I.porSec).sort();
+    el.innerHTML = `${hincPrecargaHTML(I)}<div class="tools"><div class="seg" id="hS"><button data-v="all">Todos los sectores</button>${secs.map((s) => `<button data-v="${s}">S${s}</button>`).join('')}</div>
+        <select id="hC" class="sel"><option value="all">Todas las configuraciones</option>${HCFGS.filter((k) => I.cfgN[k]).map((k) => `<option value="${k}" ${f.c === k ? 'selected' : ''}>${cfgTxt(k)} (${I.cfgN[k]})</option>`).join('')}</select>
+        <div class="seg" id="hE"><button data-v="all">Todos</button><button data-v="p">Pendientes</button><button data-v="h">Hincados</button></div>
+        <span class="sp"></span><span class="muted">${list.length} trackers</span><input type="search" id="hQ" placeholder="Buscar TRK-123…" value="${esc(f.q)}" style="width:170px"></div>
+      <div class="tblwrap" style="max-height:calc(100vh - 250px)"><table class="tbl htbl"><thead><tr><th><input type="checkbox" id="selAll"></th><th>Tracker</th><th>Sector</th><th>Configuración</th><th>Hincas en orden (norte → sur)</th><th>Hincado</th></tr></thead><tbody>
+      ${list.map((t) => { const ps = posDe(t), av = H.avance[t.id], k = cfgDe(t);
+        return `<tr data-id="${t.id}" class="${ui.sel.has(t.id) ? 'sel' : ''}"><td><input type="checkbox" class="sel" ${ui.sel.has(t.id) ? 'checked' : ''}></td><td><b>${t.id}</b>${t.rev ? ' <span class="pill p-warn" title="La discretización no coincide con el layout en este tracker: verificar">verificar</span>' : ''}</td><td>${t.s}</td>
+          <td><i class="cdot" style="background:${CFGCOL[k.split('|').slice(0, 2).join('|')]}"></i>${cfgTxt(k)}</td>
+          <td class="hseq">${ps.some(Boolean) ? ps.map((c, i) => `<span class="hp" title="Posición ${i + 1}: ${esc(c || 'sin definir')}${c && hcat(c) ? ' · ' + hcat(c).color : ''}"><i class="hc" style="--hc:${HCOL[(hcat(c) || {}).color] || '#ddd'}" data-c="${esc((hcat(c) || {}).color || '')}"></i></span>`).join('') : '<span class="muted">distribución a cargar</span>'}</td>
+          <td>${av ? `<span class="pill p-done">✓ ${fechaCorta(av.f)}</span>` : '<span class="muted">pendiente</span>'}</td></tr>`; }).join('')}
+      </tbody></table></div>
+      <p class="hint">Tildá los trackers terminados y tocá <b>Marcar hincados</b> (pide la fecha). El orden de las hincas sigue la matriz de su configuración (posición 1 al norte). <b>PDF para campo</b> saca la lista del sector filtrado con los colores, para distribuir las hincas.</p>`;
+    $$('[data-go]', el).forEach((b) => { b.onclick = (e) => { e.preventDefault(); go(b.dataset.go); }; });
+    segBind('#hS', f.s, (v) => { f.s = v; render(false); });
+    segBind('#hE', f.e, (v) => { f.e = v; render(false); });
+    $('#hC', el).onchange = (e) => { f.c = e.target.value; render(false); };
+    const q = $('#hQ', el); q.oninput = () => { f.q = q.value.trim(); clearTimeout(q._t); q._t = setTimeout(() => render(false), 300); };
+    bindSel(el, list);
+    $$('tbody tr', el).forEach((tr) => { tr.ondblclick = () => { ui.pl = ui.pl || { capas: new Set(PL_CAPAS.map((c) => c[0])), color: 'disc', zcol: 'estado', vb: null, sel: null }; ui.pl.color = 'disc'; ui.pl.sel = 't|' + tr.dataset.id; const t = I.trk.find((x) => x.id === tr.dataset.id); ui.pl.vb = [t.x - 60, t.y - 45, 120, 90]; go('plano'); }; });
+  }
+  async function marcarHincado(ids, si) {
+    if (window.READONLY || !ids.length) return;
+    const H = S.hincado;
+    if (!si) { if (!(await confirmar('Desmarcar hincado', `Se quita el registro de hincado de ${ids.length} tracker${ids.length > 1 ? 's' : ''}.`))) return; ids.forEach((id) => delete H.avance[id]); ui.sel.clear(); commit(`${ids.length} tracker${ids.length > 1 ? 's' : ''} sin registro de hincado`); return; }
+    const r = await modal({ title: `Hincado completo · ${ids.length} tracker${ids.length > 1 ? 's' : ''}`, sub: ids.slice(0, 12).join(', ') + (ids.length > 12 ? '…' : ''),
+      body: `<div class="form"><label>Fecha<input type="date" id="hF" value="${today()}"></label><label>Observación (opcional)<input type="text" id="hO" placeholder="Ej.: rechazo en hinca 4, se usó MRL"></label></div>`,
+      buttons: [['Cancelar', 'btn', () => null], ['Registrar', 'btn pri', (b) => ({ f: $('#hF', b).value || today(), o: $('#hO', b).value.trim() })]] });
+    if (!r) return;
+    ids.forEach((id) => { H.avance[id] = Object.assign({ f: r.f }, r.o ? { o: r.o } : {}); });
+    ui.flash = ids.slice(); ui.sel.clear();
+    commit(`${ids.length} tracker${ids.length > 1 ? 's' : ''} hincado${ids.length > 1 ? 's' : ''} · ${fechaCorta(r.f)}`);
+  }
+  function vHRec(el) {
+    const H = S.hincado;
+    actions([['Exportar Excel', 'btn', exportHinc], ['+ Recepción', 'btn pri', () => editRecep(null)]]);
+    const rs = H.recep.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || (b._o || 0) - (a._o || 0));
+    const malos = rs.filter((r) => !verificar(r).ok);
+    el.innerHTML = `${hincPrecargaHTML(hincInfo())}${malos.length ? `<div class="alert error" style="margin-bottom:14px"><b>${malos.length} recepción${malos.length > 1 ? 'es' : ''} no coincide${malos.length > 1 ? 'n' : ''} con el manual de Trina.</b>&nbsp;Revisá el color, el largo y el perfil antes de distribuir esas hincas.</div>` : ''}
+      <div class="tblwrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Remito</th><th>Código (etiqueta)</th><th>Color en punta</th><th class="n">Largo medido</th><th>Perfil</th><th class="n">Cantidad</th><th>Verificación</th><th></th></tr></thead><tbody>
+      ${rs.map((r) => { const v = verificar(r), k = hcat(r.codigo) || {};
+        return `<tr data-id="${r.id}"><td>${fechaCorta(r.fecha)}</td><td>${esc(r.remito || '')}</td><td>${chipH(r.codigo)}</td><td>${r.color ? colorChip(r.color) : '<span class="muted">–</span>'}${r.color && r.color !== k.color ? ` <small class="muted">(manual: ${esc(k.color || '?')})</small>` : ''}</td>
+          <td class="n">${r.largo ? fmt(r.largo) + ' mm' : '–'}</td><td>${esc(r.perfil || '–')}</td><td class="n">${fmt(r.cant)}</td>
+          <td>${v.ok ? '<span class="pill p-done">✓ coincide</span>' : `<span class="pill p-bad">no coincide</span><div class="hmsg">${v.msgs.join('<br>')}${v.sug.length ? `<br>Coincide con: ${v.sug.map((c) => chipH(c, true)).join(' ')}` : ''}</div>`}</td>
+          <td style="white-space:nowrap">${window.READONLY ? '' : '<button class="btn sm ghost" data-a="e">✎</button>'}</td></tr>`; }).join('') || '<tr><td colspan="9" class="muted" style="padding:20px">Todavía no se registraron recepciones de hincas.</td></tr>'}
+      </tbody></table></div>
+      <div class="card" style="margin-top:16px"><h3>Cómo verificar una entrega</h3><ol class="hlist"><li>Leé el código de la etiqueta del paquete (por ejemplo 26050-PW610-1A).</li><li>Mirá el color pintado en la punta de las hincas y, en una muestra, medí el largo total y el perfil.</li><li>Cargalo con <b>+ Recepción</b>: el programa lo compara con el manual de Trina (CIV-DW-26050-2402) y avisa si no coincide y con qué código sí coincide.</li></ol>
+        <p class="hint">Ojo: en el manual hay colores repetidos entre códigos (por ejemplo Gris en MS5-PW609-1B, PW610-1B y PW609-1B). En esos casos el largo y el perfil son los que confirman el código.</p></div>`;
+    $$('[data-a=e]', el).forEach((b) => { b.onclick = () => editRecep(b.closest('tr').dataset.id); });
+    $$('[data-go]', el).forEach((b) => { b.onclick = (e) => { e.preventDefault(); go(b.dataset.go); }; });
+  }
+  async function editRecep(id) {
+    if (window.READONLY) return;
+    const H = S.hincado, r0 = id ? H.recep.find((x) => x.id === id) : null;
+    const cols = Object.keys(HCOL);
+    const box0 = { codigo: r0 ? r0.codigo : '', color: r0 ? r0.color : '' };
+    const res = await modal({ title: r0 ? 'Editar recepción de hincas' : 'Recepción de hincas', wide: true,
+      body: `<div class="form"><label>Fecha<input type="date" id="rF" value="${r0 ? r0.fecha : today()}"></label><label>Remito<input type="text" id="rR" value="${esc(r0 ? r0.remito || '' : '')}"></label>
+        <label class="full">Código de la etiqueta<select id="rC"><option value="">Elegí el código…</option>${['N', 'B'].map((sl) => `<optgroup label="${sl === 'N' ? 'Suelo normal (…A)' : 'Suelo blando (…B)'}">${H.catalogo.filter((k) => k.suelo === sl).map((k) => `<option value="${esc(k.codigo)}" ${box0.codigo === k.codigo ? 'selected' : ''}>${esc(k.codigo)} · ${k.tipo === 'Drive' ? 'Drive' : 'Estándar'} · ${k.perfil} · ${fmt(k.largo)} mm</option>`).join('')}</optgroup>`).join('')}</select></label>
+        <div class="full"><div class="lbl">Color pintado en la punta (lo que se ve)</div><div class="hcolsel" id="rCol">${cols.map((c) => `<button type="button" data-col="${c}" class="${box0.color === c ? 'on' : ''}"><i class="hc" style="--hc:${HCOL[c]}" data-c="${c}"></i>${c}</button>`).join('')}</div></div>
+        <label>Largo total medido (mm, opcional)<input type="number" id="rL" step="1" min="0" value="${r0 && r0.largo ? r0.largo : ''}"></label><label>Perfil medido (opcional, ej. 151x100)<input type="text" id="rP" value="${esc(r0 ? r0.perfil || '' : '')}"></label>
+        <label>Cantidad de hincas<input type="number" id="rN" step="1" min="0" value="${r0 ? r0.cant : ''}"></label><label>Observación<input type="text" id="rO" value="${esc(r0 ? r0.obs || '' : '')}"></label></div>
+        <div id="rVer" class="hver"></div>`,
+      buttons: (r0 ? [['Eliminar', 'btn danger', () => 'del']] : []).concat([['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (b) => {
+        const o = { fecha: $('#rF', b).value || today(), remito: $('#rR', b).value.trim(), codigo: $('#rC', b).value, color: ($('#rCol .on', b) || {}).dataset ? $('#rCol .on', b).dataset.col : '', largo: Number($('#rL', b).value) || null, perfil: $('#rP', b).value.trim(), cant: Number($('#rN', b).value) || 0, obs: $('#rO', b).value.trim() };
+        if (!o.codigo) { $('#rC', b).focus(); return false; } if (!o.cant) { $('#rN', b).focus(); return false; }
+        return o;
+      }]]) });
+    if (res === 'del') { if (await confirmar('Eliminar recepción', 'Se borra este registro de recepción.')) { H.recep = H.recep.filter((x) => x.id !== id); commit('Recepción de hincas eliminada'); } return; }
+    if (!res) return;
+    const v = verificar(res);
+    if (r0) Object.assign(r0, res); else H.recep.push(Object.assign({ id: uid('hr'), _o: Date.now() }, res));
+    commit(`Recepción ${res.codigo.replace(/^26050-/, '')} × ${res.cant}${v.ok ? ' · coincide con el manual' : ' · NO coincide con el manual'}`);
+    if (!v.ok) toast('⚠ La recepción no coincide con el manual de Trina: ' + v.msgs.join(' · '), { err: true, ms: 10000 });
+  }
+  // verificación en vivo dentro del formulario de recepción
+  document.addEventListener('click', (e) => { const b = e.target.closest('#rCol button'); if (!b) return; $$('#rCol button').forEach((x) => x.classList.toggle('on', x === b)); verRecepVivo(); });
+  document.addEventListener('input', (e) => { if (e.target.closest('#rL, #rP, #rC')) verRecepVivo(); });
+  document.addEventListener('change', (e) => { if (e.target.id === 'rC') verRecepVivo(); });
+  function verRecepVivo() {
+    const box = $('#rVer'); if (!box) return;
+    const r = { codigo: $('#rC').value, color: ($('#rCol .on') || { dataset: {} }).dataset.col || '', largo: Number($('#rL').value) || null, perfil: $('#rP').value.trim() };
+    if (!r.codigo) { box.innerHTML = ''; return; }
+    const k = hcat(r.codigo), v = verificar(r);
+    box.innerHTML = `<div class="hverk">Según el manual: ${chipH(r.codigo)} · ${esc(k.tipo)} · perfil ${k.perfil} · largo ${fmt(k.largo)} mm (sobre terreno ${fmt(k.sobre)} · NRL ${fmt(k.nrl)} · MRL ${fmt(k.mrl)}) · color ${colorChip(k.color)}</div>
+      ${!r.color && !r.largo && !r.perfil ? '<div class="muted">Elegí el color que se ve en la punta para verificar.</div>' : v.ok ? '<div class="alert ok">✓ Coincide con el manual de Trina</div>' : `<div class="alert error"><div><b>No coincide con el manual.</b><br>${v.msgs.join('<br>')}${v.sug.length ? `<br>Lo recibido coincide con: ${v.sug.map((c) => chipH(c, true)).join(' ')}` : '<br>No hay ningún código del manual con esas características.'}</div></div>`}`;
+  }
+  function vHCat(el) {
+    const H = S.hincado, I = hincInfo();
+    actions([['Exportar Excel', 'btn', exportHinc]]);
+    const opts = (sl, sel) => `<option value="">—</option>${H.catalogo.filter((k) => k.suelo === sl).map((k) => `<option value="${esc(k.codigo)}" ${sel === k.codigo ? 'selected' : ''}>${esc(k.codigo.replace(/^26050-/, ''))} · ${k.color}</option>`).join('')}`;
+    el.innerHTML = `${hincPrecargaHTML(I)}<div class="card" style="margin-bottom:16px"><h3>Distribución de hincas por configuración</h3>
+        <p class="hint" style="margin-top:0">Para cada configuración de la discretización de Trina, la cantidad de hincas del tracker y el código en cada posición (1 = extremo norte). Se completa con el documento de distribución de hincas de Trina. Los conteos, la lista por tracker y el plano salen de acá.</p>
+        <div class="tblwrap"><table class="tbl hmat"><thead><tr><th>Configuración</th><th class="n">Trackers</th><th class="n">Hincas</th><th>Código por posición (norte → sur)</th><th></th></tr></thead><tbody>
+        ${HCFGS.filter((k) => I && I.cfgN[k]).map((k) => { const m = H.matriz[k], sl = k.split('|')[2];
+          return `<tr data-k="${k}"><td><i class="cdot" style="background:${CFGCOL[k.split('|').slice(0, 2).join('|')]}"></i><b>${cfgTxt(k)}</b>${matrizOk(k) ? '' : ' <span class="pill p-warn">incompleta</span>'}</td><td class="n">${I.cfgN[k]}</td>
+            <td class="n"><input type="number" class="mN" min="0" max="30" value="${m.n}" ${window.READONLY ? 'disabled' : ''}></td>
+            <td><div class="mpos">${Array.from({ length: m.n }, (_, i) => { const c = (m.pos || [])[i] || ''; return `<label class="mp"><span>${i + 1}</span><i class="hc" style="--hc:${HCOL[(hcat(c) || {}).color] || '#eee'}" data-c="${esc((hcat(c) || {}).color || '')}"></i><select data-i="${i}" ${window.READONLY ? 'disabled' : ''}>${opts(sl, c)}</select></label>`; }).join('')}</div></td>
+            <td style="white-space:nowrap">${window.READONLY ? '' : `<button class="btn sm ghost" data-a="all" title="Poner el mismo código en todas las posiciones vacías">Rellenar</button> <button class="btn sm ghost" data-a="copy" title="Copiar desde otra configuración">Copiar…</button>`}</td></tr>`; }).join('')}
+        </tbody></table></div></div>
+      <div class="card"><h3>Catálogo de hincas · Trina CIV-DW-26050-2402-0B</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Código</th><th>Tipo</th><th>Suelo</th><th>Perfil</th><th class="n">Largo total</th><th class="n">Sobre terreno</th><th class="n">NRL</th><th class="n">MRL</th><th>Color de punta</th><th class="n">Requeridas</th></tr></thead><tbody>
+        ${H.catalogo.map((k) => `<tr data-c="${esc(k.codigo)}"><td><b>${esc(k.codigo)}</b></td><td>${esc(k.tipo)}</td><td>${k.suelo === 'B' ? 'Blando' : 'Normal'}</td><td>${esc(k.perfil)}</td><td class="n">${fmt(k.largo)}</td><td class="n">${fmt(k.sobre)}</td><td class="n">${fmt(k.nrl)}</td><td class="n">${fmt(k.mrl)}</td>
+          <td>${window.READONLY ? colorChip(k.color) : `<select class="kc">${Object.keys(HCOL).map((c) => `<option ${c === k.color ? 'selected' : ''}>${c}</option>`).join('')}</select>`}</td><td class="n">${I && I.req[k.codigo] ? fmt(I.req[k.codigo]) : ''}</td></tr>`).join('')}
+        </tbody></table></div>
+        <p class="hint">Medidas en mm. NRL: largo nominal de hincado · MRL: mínimo. Regulación en obra ±200 mm según Trina. Colores leídos del plano de Trina; si el fabricante cambia un color, corregilo acá y la verificación de recepciones se actualiza.</p></div>`;
+    $$('tr[data-k]', el).forEach((tr) => {
+      const k = tr.dataset.k, m = H.matriz[k];
+      const n = $('.mN', tr); if (n) n.onchange = () => { m.n = Math.max(0, Math.min(30, Number(n.value) || 0)); m.pos = (m.pos || []).slice(0, m.n); commit(`${cfgTxt(k)}: ${m.n} hincas por tracker`); };
+      $$('select[data-i]', tr).forEach((s) => { s.onchange = () => { m.pos = m.pos || []; m.pos[Number(s.dataset.i)] = s.value; m.conf = matrizOk(k); commit(`${cfgTxt(k)} · posición ${Number(s.dataset.i) + 1}: ${s.value.replace(/^26050-/, '') || 'sin definir'}`); }; });
+      const ba = $('[data-a=all]', tr); if (ba) ba.onclick = async () => {
+        const sl = k.split('|')[2];
+        const r = await modal({ title: `Rellenar · ${cfgTxt(k)}`, body: `<div class="form"><label class="full">Código para las posiciones vacías<select id="fa">${opts(sl, '')}</select></label></div>`, buttons: [['Cancelar', 'btn', () => null], ['Rellenar', 'btn pri', (b) => $('#fa', b).value || false]] });
+        if (!r) return; m.pos = Array.from({ length: m.n }, (_, i) => (m.pos || [])[i] || r); commit(`${cfgTxt(k)}: posiciones vacías con ${r.replace(/^26050-/, '')}`);
+      };
+      const bc = $('[data-a=copy]', tr); if (bc) bc.onclick = async () => {
+        const r = await modal({ title: `Copiar a ${cfgTxt(k)}`, body: `<div class="form"><label class="full">Desde<select id="fc">${HCFGS.filter((x) => x !== k).map((x) => `<option value="${x}">${cfgTxt(x)}</option>`).join('')}</select></label></div><p class="hint">Si los suelos son distintos, se cambia el sufijo del código (…A ↔ …B) cuando existe en el catálogo.</p>`, buttons: [['Cancelar', 'btn', () => null], ['Copiar', 'btn pri', (b) => $('#fc', b).value]] });
+        if (!r) return; const src = H.matriz[r], sl = k.split('|')[2];
+        m.n = src.n; m.pos = (src.pos || []).map((c) => { if (!c) return ''; const alt = c.replace(/-(\d)[AB]$/, (x, d) => `-${d}${sl === 'B' ? 'B' : 'A'}`); return hcat(alt) ? alt : c; });
+        commit(`${cfgTxt(k)}: copiada de ${cfgTxt(r)}`);
+      };
+    });
+    $$('tr[data-c] .kc', el).forEach((s) => { s.onchange = () => { const k = hcat(s.closest('tr').dataset.c); k.color = s.value; commit(`Color de ${k.codigo.replace(/^26050-/, '')}: ${s.value}`); }; });
+  }
+  async function exportHinc() {
+    const I = hincInfo(); if (!I) return;
+    const p = await window.api.saveBinary(IO.exportHincado(S, I, { posDe, cfgDe, cfgTxt, hcat, verificar }), `Hincado ${today()}.xlsx`, 'xlsx', 'Excel');
+    if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
+  }
+  function printHinc() {
+    const I = hincInfo(); if (!I) return;
+    const f = ui.hf || { s: 'all', c: 'all' };
+    let list = I.trk.slice(); if (f.s !== 'all') list = list.filter((t) => t.s === f.s); if (f.c !== 'all') list = list.filter((t) => cfgDe(t) === f.c);
+    list.sort((a, b) => a.s.localeCompare(b.s) || a.id.localeCompare(b.id));
+    const cods = {}; list.forEach((t) => posDe(t).forEach((c) => { if (c) cods[c] = (cods[c] || 0) + 1; }));
+    const ley = Object.keys(cods).sort().map((c) => `<span style="margin-right:12px;white-space:nowrap">${chipH(c)} × ${cods[c]}</span>`).join('');
+    const rows = list.map((t) => `<tr><td><b>${t.id}</b></td><td>${t.s}</td><td>${cfgTxt(cfgDe(t))}</td><td>${posDe(t).map((c, i) => `<span class="hpp"><small>${i + 1}</small><i class="hc" style="--hc:${HCOL[(hcat(c) || {}).color] || '#ddd'}" data-c="${esc((hcat(c) || {}).color || '')}"></i><small>${esc(String(c).replace(/^26050-/, ''))}</small></span>`).join('')}</td><td>${S.hincado.avance[t.id] ? '✓' : ''}</td></tr>`).join('');
+    printHTML(prHead(`Distribución de hincas${f.s !== 'all' ? ' · Sector ' + f.s : ''}`) + `<div class="card prday"><div style="margin-bottom:8px">${ley}</div><table class="tbl dtbl hprint"><thead><tr><th>Tracker</th><th>Sector</th><th>Configuración</th><th>Hincas (posición 1 = norte)</th><th>Hincado</th></tr></thead><tbody>${rows}</tbody></table></div>`, `Distribucion de hincas ${f.s !== 'all' ? 'S' + f.s + ' ' : ''}${today()}.pdf`, true);
+  }
+  function hincModHTML() {
+    const I = hincInfo(); if (!I) return '';
+    const p = I.trk.length ? I.nH / I.trk.length : 0;
+    return `<div class="card mcard" data-go="hincado" title="Ver hincado"><div class="mh"><div>${Charts.ring(p, '#7c5cbf', 'trackers')}</div><div><h3>Hincado${I.completa ? '' : ' <span class="pill p-warn" style="font-size:10.5px">precarga</span>'}</h3><div class="muted">${fmt(I.nH)} de ${fmt(I.trk.length)} trackers${I.completa ? ` · ${fmt(I.nPilH)} de ${fmt(I.nPil)} hincas` : ''}</div></div></div>
+      ${Object.keys(I.porSec).sort().map((s) => { const x = I.porSec[s]; return `<div class="mrow"><span>Sector ${s}</span><div class="sbt"><div style="width:${(x.n ? (x.h / x.n) * 100 : 0).toFixed(1)}%;background:${SECT_COL[s]}"></div></div><b>${x.h}/${x.n}</b></div>`; }).join('')}
+      ${Object.values(I.recDud).reduce((a, b) => a + b, 0) ? `<div class="muted" style="margin-top:6px"><b class="tneg">⚠ hay recepciones que no coinciden con el manual</b></div>` : ''}</div>`;
+  }
+
   // ======================= PLANO DE OBRA =======================
   const PL_CAPAS = [['sect', 'Sectores'], ['trk', 'Trackers'], ['bt', 'Zanjas BT'], ['mt', 'Zanjas MT'], ['inv', 'Inversores'], ['sts', 'STS'], ['ctx', 'Caminos y cerco']];
   const SECT_COL = { 1: '#4e79a7', 2: '#59a14f', 3: '#b07aa1', 4: '#f28e2b', 5: '#00939a', 6: '#e15759' };
@@ -1851,8 +2436,9 @@
     }
     if (cap('sect')) P.sect.forEach((s) => { g += `<polygon points="${pts(s.p)}" class="pl-sect" style="fill:${SECT_COL[s.n]};stroke:${SECT_COL[s.n]}" data-pk="s|${s.n}"/>`; });
     if (cap('trk')) {
-      const tcol = (t) => (pl.color === 'tipo' ? (t.t === '1P52' ? '#00939a' : '#f5a524') : SECT_COL[t.s]);
-      P.trk.forEach((t) => { g += `<rect x="${(t.x - t.w / 2).toFixed(1)}" y="${(t.y - t.h / 2).toFixed(1)}" width="${t.w}" height="${t.h}" rx="0.6" fill="${tcol(t)}" class="pl-trk${pl.sel === 't|' + t.id ? ' pl-on' : ''}" data-pk="t|${t.id}"><title>${t.id} · ${t.t} · Sector ${t.s}</title></rect>`; });
+      const HA = (S.hincado || {}).avance || {};
+      const tcol = (t) => (pl.color === 'tipo' ? (t.t === '1P52' ? '#00939a' : '#f5a524') : pl.color === 'disc' ? CFGCOL[t.t + '|' + (t.z || 'Outer')] : pl.color === 'hinc' ? (HA[t.id] ? '#7c5cbf' : '#c9d0da') : SECT_COL[t.s]);
+      P.trk.forEach((t) => { g += `<rect x="${(t.x - t.w / 2).toFixed(1)}" y="${(t.y - t.h / 2).toFixed(1)}" width="${t.w}" height="${t.h}" rx="0.6" fill="${tcol(t)}" class="pl-trk${pl.sel === 't|' + t.id ? ' pl-on' : ''}${pl.color === 'disc' && t.sl === 'B' ? ' pl-soft' : ''}" data-pk="t|${t.id}"><title>${t.id} · ${t.t} · Sector ${t.s}${t.z ? ' · ' + cfgTxt(cfgDe(t)) : ''}</title></rect>`; });
     }
     if (cap('bt')) P.bt.forEach((z) => {
       const c = circ.get(z.inv), e = zest(c);
@@ -1871,13 +2457,13 @@
     const vb = pl.vb || [0, 0, P.W, P.H];
     // panel lateral
     const panel = planoPanel(I);
-    el.innerHTML = `<div class="tools"><div class="seg" id="plC"><button data-v="sector">Trackers por sector</button><button data-v="tipo">por tipo</button></div>
+    el.innerHTML = `<div class="tools"><div class="seg" id="plC"><button data-v="sector">Trackers por sector</button><button data-v="tipo">por tipo</button><button data-v="disc">discretización</button><button data-v="hinc">hincado</button></div>
         <div class="seg" id="plZ"><button data-v="estado">Zanjas por estado</button><button data-v="tipo">BT rojo / MT azul</button></div>
         <span class="sp"></span><input type="search" id="plQ" placeholder="Buscar TRK-123, TX2-INV5, STS 3…" style="width:240px"></div>
       <div class="plwrap"><div class="card plcard"><svg id="plSvg" viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet">${g}</svg>
         <div class="plctl"><button data-z="1.4" title="Acercar">+</button><button data-z="0.7" title="Alejar">−</button><button data-z="0" title="Ver todo">⤢</button></div>
         <div class="plcapas">${PL_CAPAS.map(([k, n]) => `<label><input type="checkbox" data-cap="${k}" ${cap(k) ? 'checked' : ''}> ${n}</label>`).join('')}</div>
-        <div class="pllegend">${pl.zcol === 'estado' ? `<span><i style="background:${ZEST['no abierta']}"></i>Zanja no abierta</span><span><i style="background:${ZEST.abierta}"></i>abierta</span><span><i style="background:${ZEST.cerrada}"></i>cerrada</span><span><i class="lw"></i>trazo grueso: cable tendido</span>` : '<span><i style="background:#d64545"></i>Zanja BT</span><span><i style="background:#2f6fd6"></i>Zanja MT</span>'}${pl.color === 'tipo' ? '<span><i style="background:#00939a"></i>1P52</span><span><i style="background:#f5a524"></i>1P26</span>' : ''}</div></div>
+        <div class="pllegend">${pl.zcol === 'estado' ? `<span><i style="background:${ZEST['no abierta']}"></i>Zanja no abierta</span><span><i style="background:${ZEST.abierta}"></i>abierta</span><span><i style="background:${ZEST.cerrada}"></i>cerrada</span><span><i class="lw"></i>trazo grueso: cable tendido</span>` : '<span><i style="background:#d64545"></i>Zanja BT</span><span><i style="background:#2f6fd6"></i>Zanja MT</span>'}${pl.color === 'tipo' ? '<span><i style="background:#00939a"></i>1P52</span><span><i style="background:#f5a524"></i>1P26</span>' : ''}${pl.color === 'disc' ? Object.entries(CFGCOL).map(([k, c]) => `<span><i style="background:${c}"></i>${k.replace('|', ' ').replace('Border', 'Borde').replace('Outer', 'Exterior').replace('Inner', 'Interior')}</span>`).join('') + '<span><i class="lsoft"></i>rayado: suelo blando</span>' : ''}${pl.color === 'hinc' ? '<span><i style="background:#7c5cbf"></i>Hincado</span><span><i style="background:#c9d0da"></i>Pendiente</span>' : ''}</div></div>
         <div class="card plpanel">${panel}</div></div>`;
     segBind('#plC', pl.color, (v) => { pl.color = v; render(false); });
     segBind('#plZ', pl.zcol, (v) => { pl.zcol = v; render(false); });
@@ -1896,6 +2482,7 @@
     q.onkeydown = (e) => { if (e.key !== 'Enter') return; const k = planoBuscar(q.value.trim()); if (!k) { toast('No encontrado'); return; } pl.sel = k.pk; pl.vb = [k.x - 60, k.y - 45, 120, 90]; render(false); };
     $$('[data-goc]', el).forEach((b) => { b.onclick = () => { const [v, f] = b.dataset.goc.split('|'); if (f) { ui.q['c' + v.split('-')[0]] = f; ui.sts[v.split('-')[0]] = 'all'; } go(v); }; });
     $$('[data-tend]', el).forEach((b) => { b.onclick = () => tender(b.dataset.tend); });
+    $$('[data-hinc]', el).forEach((b) => { b.onclick = () => marcarHincado([b.dataset.hinc], !S.hincado.avance[b.dataset.hinc]); });
     $$('[data-pk2]', el).forEach((b) => { b.onclick = () => { pl.sel = b.dataset.pk2; const S2 = P.sect.find((x) => 's|' + x.n === b.dataset.pk2); if (S2) { const xs = S2.p.map((q) => q[0]), ys = S2.p.map((q) => q[1]); const m = 20; pl.vb = [Math.min(...xs) - m, Math.min(...ys) - m, Math.max(...xs) - Math.min(...xs) + 2 * m, Math.max(...ys) - Math.min(...ys) + 2 * m]; } render(false); }; });
   }
   function planoBuscar(s) {
@@ -1925,7 +2512,9 @@
     if (k === 't') {
       const t = P.trk.find((x) => x.id === id), n = t.t === '1P52' ? 52 : 26;
       return `<h3>${t.id}</h3>${fila('Tipo', `Trina ${t.t}${t.v ? ' ' + t.v : ''} · 60°`)}${fila('Módulos', `${n} · ${t.t === '1P52' ? '≈ 60 m' : '≈ 30 m'}`)}${fila('Potencia', KWP(n))}${fila('Sector', t.s)}
-        ${fila('Hincado', '<span class="muted">módulo en preparación</span>')}<p class="hint">Potencia según el panel instalado (625, 630 o 635 W).</p>`;
+        ${t.z ? fila('Discretización', `${cfgTxt(cfgDe(t))}${t.rev ? ' <span class="pill p-warn">verificar</span>' : ''}`) : ''}
+        ${(() => { const av = S.hincado.avance[t.id], ps = posDe(t); return fila('Hincado', av ? `<span class="pill p-done">✓ ${fechaCorta(av.f)}</span>` : 'pendiente') + (ps.some(Boolean) ? `<h4 class="dh">Hincas (1 = norte)</h4><div class="hpanel">${ps.map((c, i) => `<div class="hpr"><span>${i + 1}</span>${c ? chipH(c, true) : '<span class="muted">sin definir</span>'}</div>`).join('')}</div>` : '<p class="muted" style="margin:6px 0">Distribución de hincas a cargar (Hincado → Catálogo y distribución).</p>') + (window.READONLY ? '' : `<div class="plact"><button class="btn sm ${av ? '' : 'acc'}" data-hinc="${t.id}">${av ? 'Quitar hincado' : 'Marcar hincado'}</button></div>`); })()}
+        <p class="hint">Potencia según el panel instalado (625, 630 o 635 W).</p>`;
     }
     if (k === 'i') {
       const c = circ.get(id); if (!c) return `<h3>${esc(id)}</h3><p class="muted">Sin circuito en la lista de cables.</p>`;
@@ -1938,7 +2527,7 @@
     if (k === 'm') {
       const c = R.circuitos.find((x) => x.cat === 'MT' && x.designacion === id); if (!c) return `<h3>${esc(id)}</h3>`;
       const e = zest(c);
-      return `<h3>${esc(id)} · MT 33 kV</h3>${fila('Recorrido', `${esc(c.desde)} → ${esc(c.hasta)}`)}${fila('Cable', esc(c.formacion || c.seccion + ' mm²'))}${fila('Largo por conductor', fmt(c.lenFase, 1) + ' m')}${fila('Zanja', e)}${fila('Tendido', c.completo ? '✓ completo' : `${c.nReal}/${c.fz.length}`)}
+      return `<h3>${esc(id)} · ${CATN.MT}</h3>${fila('Recorrido', `${esc(c.desde)} → ${esc(c.hasta)}`)}${fila('Cable', esc(c.formacion || c.seccion + ' mm²'))}${fila('Largo por conductor', fmt(c.lenFase, 1) + ' m')}${fila('Zanja', e)}${fila('Tendido', c.completo ? '✓ completo' : `${c.nReal}/${c.fz.length}`)}
         <div class="plact"><button class="btn sm" data-goc="MT-circ">Ver circuitos MT</button>${window.READONLY ? '' : `<button class="btn sm acc" data-tend="${c.id}">Tender</button>`}</div>`;
     }
     if (k === 'e') {
@@ -2062,19 +2651,146 @@
     const bobs = R.bobinas.filter((b) => b.cat === cat && (modo === 'listos' ? b.cortes.some((p) => p.estado === 'listo') : b.cortes.length));
     if (!bobs.length) { toast(modo === 'listos' ? 'No hay cortes listos: falta abrir zanjas o cargar bobinas' : 'No hay cortes en el plan'); return; }
     const est = { ejecutado: 'Ejecutado', listo: 'Cortar', provisorio: 'Provisorio' };
+    const tolOn = cat !== 'PAT' && MG.R === R && MG.datos;
     let h = `<div class="pr-h"><div><h1>${modo === 'listos' ? 'Hoja de corte' : 'Plan de corte'} · ${CATN[cat]}</h1>${esc(S.nombre)}</div><div>${new Date().toLocaleString('es-AR')}</div></div>`;
     bobs.forEach((b) => {
       const cortes = modo === 'listos' ? b.cortes.filter((p) => p.estado !== 'provisorio') : b.cortes;
       h += `<div class="pr-bob"><h2><span>Bobina ${esc(b.codigo)} · N° ${esc(b.nro)} · ${b.seccion} mm²</span><span>Entrada ${fmt(b.entrada)} m · saldo actual ${fmt(b.saldoActual, 1)} m</span></h2>
-        <table><tr><th>#</th><th>Estado</th><th>Circuito</th><th>Desde → Hasta</th><th>Fase</th><th class="n">Metros</th><th class="n">Saldo</th><th>OK</th></tr>
-        ${cortes.map((p) => { const c = cMap.get(p.cid); return `<tr class="${p.estado}"><td>${p.corte}</td><td>${est[p.estado]}</td><td>${esc(c.designacion)}</td><td>${esc(c.desde)} → ${esc(c.hasta)}</td><td>${p.fase === 'C' ? '' : p.fase}</td><td class="n">${fmt(p.len, 2)}</td><td class="n">${fmt(p.saldo, 1)}</td><td>${p.estado === 'ejecutado' ? '✓' : '<span class="chk"></span>'}</td></tr>`; }).join('')}
+        <table><tr><th>#</th><th>Estado</th><th>Circuito</th><th>Desde → Hasta</th><th>Fase</th><th class="n">Metros</th>${tolOn ? '<th class="n">Seguro ≤</th><th class="n">Riesgo ≤</th>' : ''}<th class="n">Saldo</th><th>OK</th></tr>
+        ${cortes.map((p) => { const c = cMap.get(p.cid); const t = tolOn && p.estado === 'listo' ? Margen.tolerancia(mgDe(c.key), c.lenFase, tolF()) : null; return `<tr class="${p.estado}"><td>${p.corte}</td><td>${est[p.estado]}</td><td>${esc(c.designacion)}</td><td>${esc(c.desde)} → ${esc(c.hasta)}</td><td>${p.fase === 'C' ? '' : p.fase}</td><td class="n">${fmt(p.len, 2)}</td>${tolOn ? `<td class="n">${t ? (t.sinMargen ? '—' : fmt(t.seg, 1)) : ''}</td><td class="n">${t ? (t.sinMargen ? 'sin margen' : fmt(t.max, 1)) : ''}</td>` : ''}<td class="n">${fmt(p.saldo, 1)}</td><td>${p.estado === 'ejecutado' ? '✓' : '<span class="chk"></span>'}</td></tr>`; }).join('')}
         </table></div>`;
     });
+    if (tolOn) h += `<p style="font-size:9pt;color:#555;margin-top:8px">Seguro / Riesgo: metros por conductor que se pueden tirar sin comprometer el cable que falta tender (seguro = ${fmt(tolF() * 100)} % del margen; riesgo = todo el margen; más que eso, falta de cable). Tirar de menos siempre es favorable.</p>`;
     $('#printArea').innerHTML = h;
     document.documentElement.style.background = document.body.style.background = '#fff';
     const p = await window.api.printPDF(`${modo === 'listos' ? 'Hoja de corte' : 'Plan de corte'} ${cat} ${today()}.pdf`);
     document.documentElement.style.background = document.body.style.background = '';
     if (p) toast('PDF guardado', { action: ['Abrir', () => window.api.openPath(p)] });
+  }
+
+
+  // ======================= DATOS DEL PARQUE (versión en blanco) =======================
+  function parqueResumen() {
+    const P = S.parque || {};
+    const f = (l, v) => (v ? `<div class="kv"><span>${l}</span><b>${esc(v)}</b></div>` : '');
+    return `<div class="pq">${f('Proyecto', P.nombre)}${f('Ubicación', P.ubicacion)}${f('Comitente', P.comitente)}${f('Contratista', P.contratista)}
+      ${f('Potencia', [P.mwp ? fmt(P.mwp, 2) + ' MWp' : '', P.mwac ? fmt(P.mwac, 2) + ' MWac' : ''].filter(Boolean).join(' · '))}${f('Inicio de obra', P.inicio ? fechaCorta(P.inicio) : '')}
+      ${f('Tensiones', `BT ${kvTxt(P.kvBT || 0.8)} kV · MT ${kvTxt(P.kvMT || 33)} kV`)}${f('PAT', `${P.patBT || 25} mm² en BT · ${P.patMT || 95} mm² en MT`)}
+      ${f('Estaciones (STS)', (P.sts || []).length ? P.sts.map((x) => `${x.id}${x.mva ? ' (' + fmt(x.mva, 1) + ' MVA)' : ''}`).join(' · ') : 'sin cargar')}</div>
+      ${window.READONLY ? '' : '<div style="margin-top:10px"><button class="btn" id="pParque">Editar datos del parque</button></div>'}`;
+  }
+  async function asistenteParque(primera) {
+    const P = Object.assign({ kvBT: 0.8, kvMT: 33, patBT: 25, patMT: 95, sts: [] }, S.parque || {});
+    const filasSts = (n, prev) => Array.from({ length: n }, (_, i) => { const o = prev[i] || {}; return `<div class="stsr"><input type="text" class="sId" value="${esc(o.id || 'STS ' + (i + 1))}"><input type="number" class="sMva" step="0.1" min="0" placeholder="MVA" value="${o.mva || ''}"><span class="muted">MVA</span></div>`; }).join('');
+    const res = await modal({
+      title: primera ? 'Bienvenido · datos del parque' : 'Datos del parque', wide: true,
+      sub: primera ? 'Cargá los datos básicos de la obra. Después vas a poder cargar las bobinas y los circuitos del plan de cables. Todo se puede cambiar más adelante en Ajustes.' : '',
+      body: `<div class="form pqf">
+        <label class="full">Nombre del proyecto *<input type="text" name="nombre" placeholder="Ej.: PSFV Los Algarrobos" value="${esc(P.nombre || '')}"></label>
+        <label>Ubicación<input type="text" name="ubicacion" placeholder="Localidad, provincia" value="${esc(P.ubicacion || '')}"></label>
+        <label>Inicio de obra<input type="date" name="inicio" value="${esc(P.inicio || '')}"></label>
+        <label>Comitente / cliente<input type="text" name="comitente" value="${esc(P.comitente || '')}"></label>
+        <label>Empresa contratista<input type="text" name="contratista" value="${esc(P.contratista || '')}"></label>
+        <label>Potencia DC (MWp)<input type="number" step="0.01" min="0" name="mwp" value="${P.mwp || ''}"></label>
+        <label>Potencia AC (MW)<input type="number" step="0.01" min="0" name="mwac" value="${P.mwac || ''}"></label>
+        <label>Tensión BT (kV)<input type="number" step="0.01" min="0" name="kvBT" value="${P.kvBT}"></label>
+        <label>Tensión MT (kV)<input type="number" step="0.1" min="0" name="kvMT" value="${P.kvMT}"></label>
+        <label>PAT en zanjas BT (mm² Cu desnudo)<input type="number" step="1" min="0" name="patBT" value="${P.patBT}"></label>
+        <label>PAT en zanjas MT (mm² Cu desnudo)<input type="number" step="1" min="0" name="patMT" value="${P.patMT}"></label>
+        <label class="full">Estaciones transformadoras (STS / centros de transformación)<span class="stsn"><input type="number" min="0" max="60" name="nSts" value="${P.sts.length}"> <span class="muted">cantidad · nombre y potencia de cada una:</span></span></label>
+        <div class="full" id="stsL">${filasSts(P.sts.length, P.sts)}</div></div>
+        <p class="hint">Las STS se usan en Fundaciones (avance de bases por etapa). Las tensiones y secciones de PAT aparecen en los títulos, planes de corte y exportaciones.</p>`,
+      buttons: (primera ? [] : [['Cancelar', 'btn', () => null]]).concat([[primera ? 'Empezar' : 'Guardar', 'btn pri', (box) => {
+        const v = (n) => $(`[name=${n}]`, box).value.trim(), nn = (n) => { const x = parseFloat(v(n).replace(',', '.')); return isFinite(x) && x > 0 ? x : null; };
+        if (!v('nombre')) { $('[name=nombre]', box).focus(); $('[name=nombre]', box).classList.add('bad'); return false; }
+        const sts = $$('.stsr', box).map((r) => ({ id: $('.sId', r).value.trim(), mva: parseFloat($('.sMva', r).value) || null })).filter((x) => x.id);
+        return { nombre: v('nombre'), ubicacion: v('ubicacion'), inicio: v('inicio'), comitente: v('comitente'), contratista: v('contratista'), mwp: nn('mwp'), mwac: nn('mwac'),
+          kvBT: nn('kvBT') || 0.8, kvMT: nn('kvMT') || 33, patBT: nn('patBT') || 25, patMT: nn('patMT') || 95, sts };
+      }]]),
+      onOpen: null,
+    });
+    if (!res) { if (primera && !S.parque) setTimeout(() => asistenteParque(true), 50); return; }
+    S.parque = res; S.nombre = res.nombre; aplicarParque(S);
+    window.api.netObra(S.nombre); marca();
+    commit(primera ? `Parque "${res.nombre}" creado` : 'Datos del parque actualizados');
+    if (primera) setTimeout(() => toast('Siguiente paso: cargá las bobinas (Tendido → Bobinas) y los circuitos (Circuitos → Importar PDF o Excel)', { ms: 9000 }), 600);
+  }
+  // el modal no tiene gancho de apertura: se engancha la lista de STS por delegación
+  document.addEventListener('input', (e) => {
+    if (!e.target.matches('.pqf [name=nSts]')) return;
+    const box = e.target.closest('.mbody'), L = $('#stsL', box), n = Math.max(0, Math.min(60, parseInt(e.target.value, 10) || 0));
+    const prev = $$('.stsr', L).map((r) => ({ id: $('.sId', r).value, mva: $('.sMva', r).value }));
+    const mva = (prev[prev.length - 1] || {}).mva || '';
+    L.innerHTML = Array.from({ length: n }, (_, i) => { const o = prev[i] || { id: 'STS ' + (i + 1), mva }; return `<div class="stsr"><input type="text" class="sId" value="${esc(o.id)}"><input type="number" class="sMva" step="0.1" min="0" placeholder="MVA" value="${esc(o.mva)}"><span class="muted">MVA</span></div>`; }).join('');
+  });
+  document.addEventListener('change', (e) => { if (e.target.id === 'pAll') $$('.pdfimp .pS').forEach((c) => (c.checked = e.target.checked)); });
+  function marca() {
+    const P = S.parque;
+    if ($('#brandN')) { $('#brandN').textContent = ED.app; if (ED.app.length > 18) $('#brandN').style.fontSize = '14px'; }
+    $('#brandS') && ($('#brandS').textContent = ED.blank ? (P && P.nombre) || 'Gestión de obra' : 'Gestión de obra');
+    document.title = ED.blank && P && P.nombre ? `${P.nombre} · ${ED.app}` : document.title.replace(/^PSFV-OBE II/, ED.app);
+    // tensiones en el menú
+    $$('#nav .g-BT .ghn').forEach((x) => (x.textContent = CATL.BT)); $$('#nav .g-MT .ghn').forEach((x) => (x.textContent = CATL.MT));
+    // sin plano cargado no se muestra "Plano de obra"
+    $$('[data-view="plano"]').forEach((b) => (b.style.display = window.PLANO ? '' : 'none'));
+  }
+
+  // ======================= IMPORTAR CIRCUITOS DESDE PDF =======================
+  async function importarPdf(ctxCat, archivo) {
+    if (window.READONLY) return;
+    const f = await window.api.pickPdfPlan(archivo); if (!f) return;
+    if (f.error) { toast('No se pudo leer el PDF: ' + f.error, { err: true, ms: 7000 }); return; }
+    const { filas, avisos } = window.PdfPlan.leer(f.paginas);
+    if (!filas.length) {
+      await modal({ title: 'Importar PDF', sub: esc(f.path.split(/[\\/]/).pop()), body: `<p>${esc(avisos[0] || 'No encontré circuitos.')}</p><p class="hint">Si el PDF es una imagen escaneada no tiene texto para leer. En ese caso pasá los circuitos a la planilla modelo (botón "Plantilla Excel") e importala con "Importar Excel".</p>` });
+      return;
+    }
+    const ex = (r) => S.circuitos.find((c) => !c.vinculo && c.designacion === r.designacion && c.desde === r.desde);
+    const fila = (r, i) => `<tr data-i="${i}"><td><input type="checkbox" class="pS" ${ctxCat && ctxCat !== r.cat ? '' : 'checked'}></td>
+      <td><select class="pC"><option ${r.cat === 'BT' ? 'selected' : ''}>BT</option><option ${r.cat === 'MT' ? 'selected' : ''}>MT</option></select></td>
+      <td><input class="pD" value="${esc(r.designacion)}"></td><td><input class="pDe" value="${esc(r.desde)}"></td><td><input class="pT" value="${esc(r.tablero)}"></td><td><input class="pH" value="${esc(r.hasta)}"></td>
+      <td><input class="pL n" value="${r.lineal ?? ''}"></td><td><input class="pE n" value="${r.efectiva ?? ''}"></td><td><input class="pF" value="${esc(r.formacion)}"></td>
+      <td><input class="pFa n" value="${r.fases}"></td><td><input class="pQ n" value="${r.cantidad ?? ''}"></td><td class="muted">${r.pag}</td><td>${ex(r) ? '<span class="tag">actualiza</span>' : '<span class="tag ok">nuevo</span>'}</td></tr>`;
+    const nBT = filas.filter((r) => r.cat === 'BT').length, nMT = filas.length - nBT;
+    const res = await modal({
+      title: 'Importar circuitos desde PDF', wide: true, sub: `${esc(f.path.split(/[\\/]/).pop())} · ${filas.length} circuitos encontrados (${nBT} BT · ${nMT} MT)`,
+      body: `<p class="hint">Revisá la tabla antes de importar: podés corregir cualquier celda, cambiar el tipo o destildar filas. Largo efectivo y cantidad (m totales = largo × conductores) son los que usa el plan de corte.</p>
+        <div class="pdfimp"><table class="tbl"><thead><tr><th><input type="checkbox" id="pAll" checked></th><th>Tipo</th><th>Designación</th><th>Desde</th><th>Tablero</th><th>Hasta</th><th>Lineal (m)</th><th>Efectiva (m)</th><th>Formación</th><th>Cond.</th><th>Cantidad (m)</th><th>Pág.</th><th></th></tr></thead>
+        <tbody>${filas.map(fila).join('')}</tbody></table></div>`,
+      buttons: [['Cancelar', 'btn', () => null], ['Importar seleccionados', 'btn pri', (box) => $$('tbody tr', box).filter((tr) => $('.pS', tr).checked).map((tr) => {
+        const g = (c) => $(c, tr).value.trim(), n = (c) => { const v = parseFloat(g(c).replace(',', '.')); return isFinite(v) ? v : null; };
+        const o = { cat: g('.pC'), designacion: g('.pD'), desde: g('.pDe'), hasta: g('.pH'), formacion: g('.pF'), fases: n('.pFa') || 3, lineal: n('.pL'), cantidad: n('.pQ') };
+        if (g('.pT')) o.tablero = g('.pT'); if (n('.pE')) o.efectiva = n('.pE');
+        if (!o.cantidad && (o.efectiva || o.lineal)) o.cantidad = Math.round((o.efectiva || o.lineal) * o.fases * 100) / 100;
+        return o;
+      }).filter((o) => o.designacion && o.formacion && o.cantidad)]],
+    });
+    if (!res || !res.length) return;
+    let a = 0, u = 0;
+    res.forEach((nc, k) => {
+      const e = S.circuitos.find((c) => !c.vinculo && c.designacion === nc.designacion && c.desde === nc.desde);
+      if (e) { Object.assign(e, nc); u++; }
+      else { S.circuitos.push(Object.assign({ id: uid('c'), real: {}, zanja: 'no abierta', zanjaLargo: nc.lineal || null, _o: Date.now() + k }, nc)); a++; }
+    });
+    if (!S.fuente) S.fuente = 'Circuitos: ' + f.path.split(/[\\/]/).pop();
+    commit(`Importado del PDF · ${a} circuitos nuevos, ${u} actualizados`);
+  }
+  async function menuImportar(cat, soloBobinas) {
+    const op = [];
+    if (!soloBobinas && window.api.pickPdfPlan) op.push(['pdf', 'Desde el plan de cables en PDF', 'Lee la tabla de circuitos del PDF (lista de cables) y te deja revisarla antes de importar.']);
+    op.push(['xls', 'Desde una planilla Excel', soloBobinas ? 'Planilla de ingreso de bobinas (la plantilla o una propia con títulos N° de bobina, sección, entrada…).' : 'Planilla con circuitos y/o bobinas (la plantilla o una propia con títulos Designación, Desde, Hasta, Formación…).']);
+    if (window.api.plantilla) op.push(['tpl', 'Descargar plantilla Excel vacía', 'Para pasar a mano los circuitos y las bobinas e importarlos después.']);
+    const r = await modal({ title: 'Importar', body: `<div class="impop">${op.map(([k, t, d]) => `<button class="impo" data-k="${k}"><b>${t}</b><span>${d}</span></button>`).join('')}</div>`, buttons: [['Cancelar', 'btn', () => null]] });
+    void r;
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('.impo'); if (!b) return;
+    const k = b.dataset.k, cat = ['BT', 'MT'].includes((view || '').split('-')[0]) ? view.split('-')[0] : null;
+    $('#modal').classList.add('hidden');
+    if (k === 'pdf') importarPdf(cat); else if (k === 'xls') importExcel(cat); else guardarPlantilla();
+  });
+  async function guardarPlantilla() {
+    const p = await window.api.plantilla(); if (p) toast('Plantilla guardada', { action: ['Abrir', () => window.api.openPath(p)] });
   }
 
   // ======================= inicio =======================
@@ -2118,9 +2834,11 @@
       if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); guardarComo(); }
       if (e.ctrlKey && e.key.toLowerCase() === 'o') { e.preventDefault(); abrir(); }
     });
+    marca();
     go('resumen');
+    if (ED.blank && !S.parque && !window.READONLY) setTimeout(() => asistenteParque(true), 400);
   }
   function recargar(text) { const st = JSON.parse(text); S = normalizar(st); Sync.ordenar(S); R = Engine.calcular(S); render(false); toast('Datos actualizados'); }
-  window.__app = { recibirParte, aprobarParte, revisarBuzon, aplicarCrono, tareasDeProject, fechaEtapa, cronoCalc, editTarea, leerMSPDI, setEtapa, printFund, exportFund, printDia, printMes, printAvance, printPuntas, exportTendidos, exportPuntas, registrarPuntas, recargar, get S() { return S; }, get R() { return R; }, go, commit, setZanja, tender, cerrarZanjas, sacarDeZanja, Engine, conectar, syncNow, get NET() { return NET; }, get netStatus() { return netStatus; } };
+  window.__app = { verMargenes, MG, cierreParcial, cerrarZanjas, simularTendido, margenStock, importarPdf, asistenteParque, recibirParte, aprobarParte, revisarBuzon, aplicarCrono, tareasDeProject, fechaEtapa, cronoCalc, editTarea, leerMSPDI, setEtapa, printFund, exportFund, printDia, printMes, printAvance, printPuntas, exportTendidos, exportPuntas, registrarPuntas, recargar, get S() { return S; }, get R() { return R; }, go, commit, setZanja, tender, cerrarZanjas, sacarDeZanja, Engine, conectar, syncNow, get NET() { return NET; }, get netStatus() { return netStatus; } };
   init();
 })();

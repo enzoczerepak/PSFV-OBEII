@@ -35,11 +35,12 @@
     return null;
   }
 
+  const tipo = (v) => { const t = String(v || '').toUpperCase(); return /PAT|DESN/.test(t) ? 'PAT' : /MT|MEDIA/.test(t) ? 'MT' : /BT|BAJA/.test(t) ? 'BT' : null; };
   function parseBobinas(rows) {
     const h = findHeader(rows, ['BOBINA', 'SECCION'], [
       ['fecha', ['FECHA']], ['remito', ['REMITO']], ['codigo', ['CODIGO', 'INTERNO']],
       ['nro', ['N DE BOBINA', 'N° DE BOBINA', 'NRO', 'NUMERO', 'BOBINA'], ['CODIGO', 'INTERNO']],
-      ['seccion', ['SECCION']], ['entrada', ['ENTRADA', 'CANTIDAD', 'METROS'], ['SALIDA']], ['obs', ['OBSERV']],
+      ['seccion', ['SECCION']], ['entrada', ['ENTRADA', 'CANTIDAD', 'METROS'], ['SALIDA']], ['obs', ['OBSERV']], ['tipo', ['TIPO']],
     ]);
     if (!h) return null;
     const out = [];
@@ -49,6 +50,7 @@
       if (!g('nro') || !entrada) continue;
       out.push({ fecha: fecha(g('fecha')), remito: g('remito') != null ? String(g('remito')) : '', nro: String(g('nro')).trim(),
         seccion: String(g('seccion') || '').trim(), entrada, codigo: g('codigo') ? String(g('codigo')).trim() : '', obs: g('obs') ? String(g('obs')) : '' });
+      const t = tipo(g('tipo')); if (t) out[out.length - 1].cat = t;
     }
     return out;
   }
@@ -56,16 +58,21 @@
   function parseCircuitos(rows) {
     const h = findHeader(rows, ['DESIGNACI', 'DESDE'], [
       ['designacion', ['DESIGNACI']], ['desde', ['DESDE']], ['hasta', ['HASTA']], ['formacion', ['FORMACI']],
-      ['fases', ['FASES']], ['cantidad', ['CANTIDAD', 'CAMTIDAD']], ['lineal', ['LINEAL']],
+      ['fases', ['FASES']], ['cantidad', ['CANTIDAD', 'CAMTIDAD']], ['lineal', ['LINEAL']], ['efectiva', ['EFECTIVA']], ['tablero', ['TABLERO']], ['tipo', ['TIPO']],
     ]);
     if (!h) return null;
     const out = [];
     for (let i = h.row + 1; i < rows.length; i++) {
       const r = rows[i], g = (k) => (h.cols[k] != null ? r[h.cols[k]] : null);
-      const cant = num(g('cantidad'));
+      const fases = num(g('fases')) || 3, lin = num(g('lineal')), ef = num(g('efectiva'));
+      const cant = num(g('cantidad')) || ((ef || lin) ? Math.round((ef || lin) * fases * 100) / 100 : null);
       if (!g('designacion') || !cant || !g('formacion')) continue;
-      out.push({ designacion: String(g('designacion')).trim(), desde: String(g('desde') || '').trim(), hasta: String(g('hasta') || '').trim(),
-        formacion: String(g('formacion')).trim(), fases: num(g('fases')) || 3, cantidad: cant, lineal: num(g('lineal')) });
+      const c = { designacion: String(g('designacion')).trim(), desde: String(g('desde') || '').trim(), hasta: String(g('hasta') || '').trim(),
+        formacion: String(g('formacion')).trim(), fases, cantidad: cant, lineal: lin };
+      if (ef) c.efectiva = ef;
+      if (g('tablero')) c.tablero = String(g('tablero')).trim();
+      const t = tipo(g('tipo')); if (t) c.cat = t;
+      out.push(c);
     }
     return out;
   }
@@ -125,7 +132,7 @@
     const wb = XLSX.utils.book_new();
     const cMap = new Map(R.circuitos.map((c) => [c.id, c]));
     const est = { ejecutado: 'Ejecutado', listo: 'Listo para cortar', provisorio: 'Provisorio (espera zanja)', falta: 'SIN BOBINA' };
-    const CN = { BT: 'BT 0,8 kV', MT: 'MT 33 kV', PAT: 'PAT Cu desnudo' };
+    const CN = (typeof window !== 'undefined' && window.CATN) || { BT: 'BT 0,8 kV', MT: 'MT 33 kV', PAT: 'PAT Cu desnudo' };
 
     const res = [['Resumen – ' + (state.nombre || '')], ['Ver la hoja "Explicación" para el significado de cada columna.'], [],
       ['Tipo', 'Sección mm²', 'Bobinas (total)', 'Sin abrir (real)', 'En uso (real)', 'Terminadas (real)', 'Stock ingresado (m)', 'Requerido (m)', 'Tendido (m)', 'Saldo actual en bobinas (m)',
@@ -245,6 +252,24 @@
     return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   }
 
+  function exportHincado(state, I, F) {
+    const wb = XLSX.utils.book_new(), H = state.hincado;
+    const cods = Object.keys(I.req).sort();
+    const r1 = [['Código', 'Tipo', 'Suelo', 'Perfil', 'Largo (mm)', 'Color', 'Requeridas', 'Recibidas OK', 'A revisar', 'Hincadas', 'Stock en obra', 'Faltan recibir']];
+    cods.forEach((c) => { const k = F.hcat(c) || {}, rq = I.req[c] || 0, rc = I.rec[c] || 0, hh = I.hecho[c] || 0; r1.push([c, k.tipo, k.suelo === 'B' ? 'Blando' : 'Normal', k.perfil, k.largo, k.color, rq, rc, I.recDud[c] || 0, hh, rc - hh, Math.max(0, rq - rc)]); });
+    XLSX.utils.book_append_sheet(wb, sheet(r1, [22, 16, 8, 10, 10, 10, 11, 12, 10, 10, 12, 12]), 'Resumen por código');
+    const maxN = Math.max(0, ...I.trk.map((t) => F.posDe(t).length));
+    const r2 = [['Tracker', 'Sector', 'Tipo', 'Zona', 'Suelo', 'Configuración', 'Hincado', 'Fecha', ...Array.from({ length: maxN }, (_, i) => `Pos ${i + 1}`), ...Array.from({ length: maxN }, (_, i) => `Color ${i + 1}`)]];
+    I.trk.forEach((t) => { const ps = F.posDe(t), av = H.avance[t.id]; r2.push([t.id, t.s, t.t, t.z, t.sl === 'B' ? 'Blando' : 'Normal', F.cfgTxt(F.cfgDe(t)), av ? 'sí' : '', av ? av.f : '', ...Array.from({ length: maxN }, (_, i) => ps[i] || ''), ...Array.from({ length: maxN }, (_, i) => (F.hcat(ps[i]) || {}).color || '')]); });
+    XLSX.utils.book_append_sheet(wb, sheet(r2, [10, 7, 7, 8, 8, 26, 8, 11, ...Array.from({ length: maxN * 2 }, () => 18)]), 'Por tracker');
+    const r3 = [['Fecha', 'Remito', 'Código', 'Color observado', 'Color según manual', 'Largo medido', 'Perfil medido', 'Cantidad', 'Verificación', 'Detalle', 'Observación']];
+    H.recep.forEach((r) => { const v = F.verificar(r), k = F.hcat(r.codigo) || {}; r3.push([r.fecha, r.remito, r.codigo, r.color, k.color, r.largo || '', r.perfil || '', r.cant, v.ok ? 'coincide' : 'NO coincide', v.msgs.join(' · ') + (v.sug.length ? ' · coincide con ' + v.sug.join(', ') : ''), r.obs || '']); });
+    XLSX.utils.book_append_sheet(wb, sheet(r3, [11, 12, 22, 14, 14, 12, 12, 9, 13, 60, 30]), 'Recepciones');
+    const r4 = [['Código', 'Tipo', 'Suelo', 'Perfil', 'Largo total', 'Sobre terreno', 'NRL', 'MRL', 'Color de punta']];
+    H.catalogo.forEach((k) => r4.push([k.codigo, k.tipo, k.suelo === 'B' ? 'Blando' : 'Normal', k.perfil, k.largo, k.sobre, k.nrl, k.mrl, k.color]));
+    XLSX.utils.book_append_sheet(wb, sheet(r4, [22, 16, 8, 10, 10, 12, 8, 8, 14]), 'Catálogo Trina');
+    return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  }
   function exportFund(state, ETAPAS, STSL, fundInfo) {
     const wb = XLSX.utils.book_new();
     const F = state.fundaciones || {};
@@ -272,5 +297,5 @@
     XLSX.utils.book_append_sheet(wb, sheet(rows, [9, 6, 60, 10, 11, 11, 10, 12, 12, 12, 12, 12, 8, 10, 11, 8, 11, 30]), 'Actividades');
     return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   }
-  window.IO = { readWorkbook, exportPlan, exportTendidos, exportPuntas, exportFund, exportCrono, num };
+  window.IO = { readWorkbook, exportPlan, exportTendidos, exportPuntas, exportFund, exportHincado, exportCrono, num };
 })();

@@ -76,7 +76,7 @@ window.READONLY = true;
     const n = String(nombre || '').trim().split(/[\s._-]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     const fecha = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     const g = document.createElement('div'); g.id = 'greet';
-    g.innerHTML = `<div class="gb"><div class="gi">👋</div><div><b>${sal}${n ? ', ' + n.replace(/[<>&"]/g, '') : ''}</b><span>${fecha.charAt(0).toUpperCase() + fecha.slice(1)}</span><small>Bienvenido/a al visor de avance de obra · PSFV-OBEII</small></div></div>`;
+    g.innerHTML = `<div class="gb"><div class="gi">👋</div><div><b>${sal}${n ? ', ' + n.replace(/[<>&"]/g, '') : ''}</b><span>${fecha.charAt(0).toUpperCase() + fecha.slice(1)}</span><small>Bienvenido/a al visor de avance de obra · ${(window.EDICION || {}).corto || 'PSFV-OBEII'}</small></div></div>`;
     document.body.appendChild(g);
     requestAnimationFrame(() => g.classList.add('show'));
     const fuera = () => { g.classList.remove('show'); setTimeout(() => g.remove(), 500); };

@@ -13,9 +13,16 @@
   const lbl = (f) => (f === 'C' ? 'Cu' : f);
 
   // ---------- sesión ----------
+  let MGc = null, MGt = null;
+  const tolF = () => Math.max(0, Math.min(100, Number(S.params && S.params.tolSeg != null ? S.params.tolSeg : 50))) / 100;
+  const tolDe = (c) => { if (!MGc || !c || c.cat === 'PAT') return null; const g = MGc.find((x) => x.key === c.key); return g ? window.Margen.tolerancia(g, c.lenFase, tolF()) : null; };
+  const tolTxt = (t) => (!t ? '' : t.sinMargen ? `<span class="tol bad">sin margen: no pasarse de ${fmt(t.L, 1)} m</span>` : `<span class="tol"><i class="ok">seguro ≤ ${fmt(t.seg, 1)}</i><i class="warn">riesgo ≤ ${fmt(t.max, 1)}</i></span>`);
   async function cargar(d, id, k, nombre, u) {
     const txt = await W.abrir(d, id, k);
     S = JSON.parse(txt); R = window.Engine.calcular(S); D = d;
+    // margen de tendido (tolerancia por conductor), en segundo plano
+    MGc = null; if (MGt) MGt.cancelar();
+    if (window.Margen) MGt = window.Margen.enSegundoPlano(S, R, { metros: false, it: 9, cats: ['BT', 'MT'], demora: 400 }, (dd) => { MGc = dd; MGt = null; if (tab === 'plan' || tab === 'cargar') { const y = window.scrollY; render(); window.scrollTo(0, y); } });
     if (!enviar) enviar = await W.enviador(d, id, k).catch(() => null);
     ses = { id, k, nombre, cap: !!(u && (u.cap || u.ed)) };
     KQ = 'campo-cola-' + id.slice(0, 16); KH = 'campo-hist-' + id.slice(0, 16);
@@ -103,7 +110,7 @@
       h += `<div class="card"><h3><span><span class="tag t-${cat}">${cat}</span> Bobina ${esc(cod)}</span><span class="muted">${b.seccion || ''} mm²</span></h3>
         <div class="muted">Saldo actual ${fmt(b.saldoActual, 0)} m · a cortar hoy ${fmt(tot, 0)} m</div>
         ${arr.map((p) => { const c = circ(p.cid); const ya = p.estado === 'ejecutado', env = enviadosHoy.has(p.cid + '|' + p.fase);
-          return `<div class="corte ${ya ? 'ok' : env ? 'pend' : ''}"><b>${esc(c.cat === 'PAT' ? 'PAT ' + c.seccion : c.designacion)} · ${lbl(p.fase)}</b><span class="m">${fmt(p.len, 1)} m</span><span class="r">${esc(c.desde)} → ${esc(c.hasta)}${env && !ya ? ' · enviado, falta aprobar' : ''}</span>${!ya && c.cat !== 'PAT' && !yaBoton.has(c.id) && yaBoton.add(c.id) ? `<button class="b" data-cg="${c.id}">Cargar tendido de ${esc(c.designacion)}</button>` : ''}</div>`; }).join('')}</div>`;
+          return `<div class="corte ${ya ? 'ok' : env ? 'pend' : ''}"><b>${esc(c.cat === 'PAT' ? 'PAT ' + c.seccion : c.designacion)} · ${lbl(p.fase)}</b><span class="m">${fmt(p.len, 1)} m</span>${!ya ? tolTxt(tolDe(c)) : ''}<span class="r">${esc(c.desde)} → ${esc(c.hasta)}${env && !ya ? ' · enviado, falta aprobar' : ''}</span>${!ya && c.cat !== 'PAT' && !yaBoton.has(c.id) && yaBoton.add(c.id) ? `<button class="b" data-cg="${c.id}">Cargar tendido de ${esc(c.designacion)}</button>` : ''}</div>`; }).join('')}</div>`;
     });
     h += `<p class="hint">Cortes listos para hoy (zanjas abiertas), en el orden de corte de cada bobina. Los tachados ya están registrados.</p>`;
     v.innerHTML = h;
@@ -121,7 +128,7 @@
       h += `<label>Circuito<select id="fC"><option value="">Elegí el circuito…</option>${cs.map((x) => `<option value="${x.id}" ${c && x.id === c.id ? 'selected' : ''}>${x.listo ? '● ' : ''}${esc(x.designacion)} · ${esc(x.desde)} → ${esc(x.hasta)}</option>`).join('')}</select></label>`;
       if (c) {
         const bobs = R.bobinas.filter((b) => b.key === c.key);
-        h += `<div class="muted">${c.cat} ${c.seccion} mm² · lista ${fmt(c.lenFase, 1)} m por conductor</div>`;
+        h += `<div class="muted">${c.cat} ${c.seccion} mm² · lista ${fmt(c.lenFase, 1)} m por conductor</div>${tolTxt(tolDe(c)) ? `<div class="tolc">${tolTxt(tolDe(c))}<span class="muted"> · más: falta de cable</span></div>` : ''}`;
         c.fz.forEach((f) => {
           const pl = c.fasesInfo[f] || {}, real = pl.estado === 'ejecutado';
           h += `<div class="fase ${real ? 'off' : ''}" data-f="${f}"><label class="chk"><input type="checkbox" class="fon" ${real ? 'disabled' : 'checked'}><span class="fl">${lbl(f)}</span></label>
@@ -153,6 +160,8 @@
     const fc = $('#fC', v); if (fc) fc.onchange = () => { ui.circ = fc.value; render(); };
     const fz = $('#fZ', v); if (fz && t !== 'obs') fz.onchange = () => { ui.zanja = fz.value; render(); };
     $$('.fon', v).forEach((c) => { c.onchange = () => c.closest('.fase').classList.toggle('off', !c.checked); });
+    const cc = circ(ui.circ), tt = tolDe(cc);
+    $$('.fm', v).forEach((i) => { const up = () => { const m = Number(String(i.value).replace(',', '.')); const nv = tt && m > 0 ? window.Margen.nivel(tt, m) : null; i.classList.remove('lv-ok', 'lv-riesgo', 'lv-falta'); if (nv) i.classList.add('lv-' + nv); }; i.oninput = up; up(); });
     $('#fEnv', v).onclick = () => enviarForm(t, v);
   }
   async function enviarForm(t, v) {
