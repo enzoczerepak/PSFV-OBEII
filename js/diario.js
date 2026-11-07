@@ -180,9 +180,12 @@ async function printHTML(html, name, landscape) {
   $$('.rfg', pa).forEach((c) => { c.style.strokeDashoffset = c.dataset.off; });
   $$('[data-w]', pa).forEach((x) => { x.style.width = x.dataset.w; });
   $$('[data-count]', pa).forEach((x) => { x.firstChild.nodeValue = fmt(Number(x.dataset.count), Number(x.dataset.dec || 0)); });
+  $$('.hero, .updbar', pa).forEach((x) => x.remove());
   document.body.classList.toggle('pr-land', !!landscape);
+  document.body.classList.add('imprimiendo'); await new Promise((r) => requestAnimationFrame(() => r())); aplanarTransparencias(pa);
   document.documentElement.style.background = document.body.style.background = '#fff';
   const p = await window.api.printPDF(name, { landscape });
+  document.body.classList.remove('imprimiendo');
   document.documentElement.style.background = document.body.style.background = '';
   if (p) toast('PDF guardado', { action: ['Abrir', () => window.api.openPath(p)] });
 }

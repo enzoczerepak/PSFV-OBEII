@@ -1,3 +1,24 @@
+/* Antes de imprimir: todo color semitransparente pasa a su equivalente sólido sobre blanco (sin máscaras ni alfa en el PDF) */
+function aplanarTransparencias(root) {
+  const cv = document.createElement('canvas').getContext('2d');
+  const rgba = (c) => { if (!c || c === 'none' || c.startsWith('url')) return null; cv.fillStyle = '#000'; cv.fillStyle = c; const v = cv.fillStyle; if (v.startsWith('#')) return [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16), 1]; const m = v.match(/[\d.]+/g); return m ? m.map(Number) : null; };
+  const solido = (c, a) => { const x = rgba(c); if (!x) return null; const al = (x[3] ?? 1) * a; if (al >= 0.999) return a < 1 || x[3] < 1 ? `rgb(${x[0]},${x[1]},${x[2]})` : null; const m = (v) => Math.round(255 - (255 - v) * al); return `rgb(${m(x[0])},${m(x[1])},${m(x[2])})`; };
+  $$('*', root).forEach((e) => {
+    const c = getComputedStyle(e), svg = e instanceof SVGElement && e.tagName !== 'svg';
+    let op = 1; if (svg) for (let n = e; n && n !== root && n instanceof SVGElement; n = n.parentNode) op *= Number(getComputedStyle(n).opacity || 1);
+    if (svg) {
+      const fo = Number(c.fillOpacity || 1) * op, so = Number(c.strokeOpacity || 1) * op;
+      const f = solido(c.fill, fo), st = solido(c.stroke, so);
+      if (f) e.style.setProperty('fill', f, 'important'); if (e.tagName === 'text') e.style.setProperty('stroke', 'none', 'important'); else if (st) e.style.setProperty('stroke', st, 'important');
+      e.style.setProperty('fill-opacity', '1', 'important'); e.style.setProperty('stroke-opacity', '1', 'important'); e.style.setProperty('opacity', '1', 'important');
+      if (e.tagName === 'g' || e.tagName === 'svg') e.style.setProperty('opacity', '1', 'important');
+    } else {
+      [['background-color', c.backgroundColor], ['color', c.color], ['border-top-color', c.borderTopColor], ['border-right-color', c.borderRightColor], ['border-bottom-color', c.borderBottomColor], ['border-left-color', c.borderLeftColor]].forEach(([k, v]) => { const x = rgba(v); if (x && x[3] < 1) { if (x[3] === 0) return; e.style.setProperty(k, solido(v, 1), 'important'); } });
+      if (c.backgroundImage && c.backgroundImage !== 'none' && /gradient/.test(c.backgroundImage)) e.style.setProperty('background-image', 'none', 'important');
+    }
+  });
+  $$('g, svg', root).forEach((g) => g.style.setProperty('opacity', '1', 'important'));
+}
 /* PSFV-OBE II · Impresión a PDF, datos del parque e importación de circuitos desde PDF. */
 // ======================= impresión =======================
 async function printPlan(cat, modo) {
@@ -15,7 +36,7 @@ async function printPlan(cat, modo) {
       </table></div>`;
   });
   if (tolOn) h += `<p style="font-size:9pt;color:#555;margin-top:8px">Seguro / Riesgo: metros por conductor que se pueden tirar sin comprometer el cable que falta tender (seguro = ${fmt(tolF() * 100)} % del margen; riesgo = todo el margen; más que eso, falta de cable). Tirar de menos siempre es favorable.</p>`;
-  $('#printArea').innerHTML = h;
+  $('#printArea').innerHTML = h; aplanarTransparencias($('#printArea'));
   document.documentElement.style.background = document.body.style.background = '#fff';
   const p = await window.api.printPDF(`${modo === 'listos' ? 'Hoja de corte' : 'Plan de corte'} ${cat} ${today()}.pdf`);
   document.documentElement.style.background = document.body.style.background = '';
