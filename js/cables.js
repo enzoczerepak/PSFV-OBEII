@@ -313,7 +313,7 @@ function printStock() {
   printHTML(h, `Stock de bobinas ${today()}.pdf`, true);
 }
 function vBobinas(el) {
-  actions([['Importar…', 'btn', () => menuImportar(null, true)], ['Exportar stock Excel', 'btn', exportStock], ['PDF: stock consolidado', 'btn', printStock], ['+ Bobina', 'btn pri', () => editBobina(null)]]);
+  actions([['Importar…', 'btn', () => menuImportar(null, true)], ['Stock consolidado · Excel', 'btn', exportStock], ['Stock consolidado · PDF', 'btn', printStock], ['+ Bobina', 'btn pri', () => editBobina(null)]]);
   const q = (ui.q.bob || '').toLowerCase();
   const list = R.bobinas.filter((b) => (ui.bobCat === 'all' || b.cat === ui.bobCat) && (!q || `${b.codigo} ${b.nro} ${b.remito}`.toLowerCase().includes(q)));
   let h = `<div class="tools"><div class="seg" id="fBC"><button data-v="all">Todas</button><button data-v="BT">${CATN.BT}</button><button data-v="MT">${CATN.MT}</button><button data-v="PAT">PAT Cu desnudo</button></div>

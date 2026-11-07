@@ -159,7 +159,7 @@ function searchBind(sel, set) {
 }
 function actions(btns) {
   const a = $('#vActions'); a.innerHTML = '';
-  if (window.READONLY) btns = btns.filter(([t]) => /Exportar|PDF|Simular/.test(t) || (window.__editor && /Actualizar cronograma/.test(t)));
+  if (window.READONLY) btns = btns.filter(([t]) => /Exportar|PDF|Simular|Stock consolidado/.test(t) || (window.__editor && /Actualizar cronograma/.test(t)));
   // las exportaciones (Excel / PDF) van juntas en un solo botón "Exportar"
   const esExp = ([t]) => /^(Exportar|PDF)/.test(t);
   const exp = btns.filter(esExp), resto = btns.filter((b) => !esExp(b));
