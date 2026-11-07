@@ -258,8 +258,40 @@ async function editPat(id) {
 }
 
 // ======================= BOBINAS =======================
+// Stock consolidado por tipo y sección (para exportar)
+function stockConsolidado() {
+  const g = new Map();
+  R.bobinas.forEach((b) => {
+    const k = `${b.cat}|${b.seccion}`;
+    if (!g.has(k)) g.set(k, { cat: b.cat, seccion: b.seccion, n: 0, sinAbrir: 0, enUso: 0, term: 0, entrada: 0, tendido: 0, saldo: 0, saldoSA: 0, saldoUso: 0, plan: 0, remUtil: 0, descarte: 0, falta: 0 });
+    const f = g.get(k);
+    f.n++; f.entrada += b.entrada; f.tendido += b.consumoReal; f.saldo += b.saldoActual; f.plan += b.asigListo + b.asigProv;
+    if (b.estadoReal === 'sin abrir') { f.sinAbrir++; f.saldoSA += b.saldoActual; } else if (b.estadoReal === 'en uso') { f.enUso++; f.saldoUso += b.saldoActual; } else f.term++;
+    if (b.estado === 'remanente útil') f.remUtil += b.remanente; else if (b.estado === 'descarte') f.descarte += b.remanente;
+  });
+  const orden = { BT: 0, MT: 1, PAT: 2 };
+  const out = [...g.values()].sort((a, b) => (orden[a.cat] ?? 9) - (orden[b.cat] ?? 9) || a.seccion - b.seccion);
+  out.forEach((f) => { const r = R.resumen.find((x) => x.cat === f.cat && x.seccion === f.seccion); f.falta = r ? r.faltante || 0 : 0; });
+  return out;
+}
+async function exportStock() {
+  const p = await window.api.saveBinary(IO.exportStock(S, R, { stockConsolidado }), `Stock de bobinas ${today()}.xlsx`, 'xlsx', 'Excel');
+  if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
+}
+function printStock() {
+  const F = stockConsolidado(), m = (x) => fmt(x, 0);
+  let h = prHead('Stock de bobinas · consolidado') + `<div class="card"><table class="tbl stk"><thead><tr><th>Tipo</th><th>Sección</th><th class="n">Bobinas</th><th class="n">Sin abrir</th><th class="n">En uso</th><th class="n">Term.</th><th class="n">Entrada</th><th class="n">Tendido</th><th class="n">Saldo actual</th><th class="n">Plan pendiente</th><th class="n">Saldo libre</th><th class="n">Rem. útil prev.</th><th class="n">Descarte prev.</th><th class="n">Falta</th></tr></thead><tbody>`;
+  F.forEach((f) => { h += `<tr><td><b>${f.cat}</b></td><td>${f.seccion} mm²</td><td class="n">${f.n}</td><td class="n">${f.sinAbrir}</td><td class="n">${f.enUso}</td><td class="n">${f.term}</td><td class="n">${m(f.entrada)}</td><td class="n">${m(f.tendido)}</td><td class="n"><b>${m(f.saldo)}</b></td><td class="n">${m(f.plan)}</td><td class="n">${m(f.saldo - f.plan)}</td><td class="n">${m(f.remUtil)}</td><td class="n">${m(f.descarte)}</td><td class="n" style="${f.falta > 0 ? 'color:#c0392b;font-weight:700' : ''}">${f.falta > 0 ? m(f.falta) : '–'}</td></tr>`; });
+  h += `</tbody></table><p class="muted" style="font-size:9pt;margin:8px 0 0">Metros por conductor. Saldo libre = saldo actual − plan pendiente (listo + provisorio). Falta = cable que no alcanza para completar la sección según el plan actual.</p></div>`;
+  ['BT', 'MT', 'PAT'].forEach((cat) => {
+    const bs = R.bobinas.filter((b) => b.cat === cat).sort((a, b) => a.seccion - b.seccion || String(a.codigo).localeCompare(String(b.codigo), 'es', { numeric: true }));
+    if (!bs.length) return;
+    h += `<div class="card" style="break-inside:auto"><h3>${CATN[cat]} · detalle por bobina</h3><table class="tbl"><thead><tr><th>Código</th><th>N° fabricante</th><th>Sección</th><th class="n">Entrada</th><th class="n">Tendido</th><th class="n">Saldo</th><th>Estado</th><th class="n">Plan pend.</th><th class="n">Rem. prev.</th><th>Al final</th></tr></thead><tbody>${bs.map((b) => `<tr><td><b>${esc(b.codigo)}</b></td><td>${esc(b.nro)}</td><td>${b.seccion}</td><td class="n">${m(b.entrada)}</td><td class="n">${fmt(b.consumoReal, 1)}</td><td class="n"><b>${fmt(b.saldoActual, 1)}</b></td><td>${b.estadoReal}</td><td class="n">${fmt(b.asigListo + b.asigProv, 1)}</td><td class="n">${fmt(b.remanente, 1)}</td><td>${b.estado}</td></tr>`).join('')}</tbody></table></div>`;
+  });
+  printHTML(h, `Stock de bobinas ${today()}.pdf`, true);
+}
 function vBobinas(el) {
-  actions([['Importar…', 'btn', () => menuImportar(null, true)], ['+ Bobina', 'btn pri', () => editBobina(null)]]);
+  actions([['Importar…', 'btn', () => menuImportar(null, true)], ['Exportar stock Excel', 'btn', exportStock], ['PDF: stock consolidado', 'btn', printStock], ['+ Bobina', 'btn pri', () => editBobina(null)]]);
   const q = (ui.q.bob || '').toLowerCase();
   const list = R.bobinas.filter((b) => (ui.bobCat === 'all' || b.cat === ui.bobCat) && (!q || `${b.codigo} ${b.nro} ${b.remito}`.toLowerCase().includes(q)));
   let h = `<div class="tools"><div class="seg" id="fBC"><button data-v="all">Todas</button><button data-v="BT">${CATN.BT}</button><button data-v="MT">${CATN.MT}</button><button data-v="PAT">PAT Cu desnudo</button></div>

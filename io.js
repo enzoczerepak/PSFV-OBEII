@@ -252,6 +252,24 @@
     return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   }
 
+  // Stock de bobinas consolidado: por tipo y sección + detalle por bobina
+  function exportStock(state, R, F) {
+    const wb = XLSX.utils.book_new(), r1 = (x) => Math.round(x * 10) / 10;
+    const filas = F.stockConsolidado();
+    const h1 = [['Tipo', 'Sección (mm²)', 'Bobinas', 'Sin abrir', 'En uso', 'Terminadas', 'Entrada (m)', 'Tendido (m)', 'Saldo actual (m)', 'Saldo sin abrir (m)', 'Saldo en uso (m)', 'Plan pendiente (m)', 'Saldo libre (m)', 'Remanente útil previsto (m)', 'Descarte previsto (m)', 'Falta cable (m)', 'Uso %']];
+    filas.forEach((f) => h1.push([f.cat, f.seccion, f.n, f.sinAbrir, f.enUso, f.term, r1(f.entrada), r1(f.tendido), r1(f.saldo), r1(f.saldoSA), r1(f.saldoUso), r1(f.plan), r1(f.saldo - f.plan), r1(f.remUtil), r1(f.descarte), r1(f.falta), f.entrada ? r1((f.tendido / f.entrada) * 100) : 0]));
+    const T = (k) => filas.reduce((a, f) => a + f[k], 0);
+    h1.push(['TOTAL', '', T('n'), T('sinAbrir'), T('enUso'), T('term'), '', '', '', '', '', '', '', '', '', '', '']);
+    XLSX.utils.book_append_sheet(wb, sheet(h1, [7, 12, 9, 10, 9, 11, 12, 12, 15, 17, 15, 16, 14, 22, 18, 14, 8]), 'Consolidado');
+    const h2 = [['Tipo', 'Código', 'N° fabricante', 'Sección (mm²)', 'Remito', 'Fecha ingreso', 'Entrada (m)', 'Tendido (m)', 'Saldo actual (m)', 'Uso %', 'Estado', 'Plan pendiente (m)', 'Remanente previsto (m)', 'Al final', 'Observaciones']];
+    R.bobinas.slice().sort((a, b) => a.cat.localeCompare(b.cat) || (a.seccion - b.seccion) || String(a.codigo).localeCompare(String(b.codigo), 'es', { numeric: true })).forEach((b) => {
+      const o = state.bobinas.find((x) => x.id === b.id) || {};
+      h2.push([b.cat, b.codigo, b.nro, b.seccion, o.remito || '', o.fecha || '', b.entrada, r1(b.consumoReal), r1(b.saldoActual), r1(b.usoReal * 100), b.estadoReal, r1(b.asigListo + b.asigProv), r1(b.remanente), b.estado, o.obs || '']);
+    });
+    XLSX.utils.book_append_sheet(wb, sheet(h2, [6, 10, 16, 12, 12, 12, 11, 11, 14, 8, 11, 16, 20, 16, 30]), 'Detalle por bobina');
+    return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  }
+
   function exportHincado(state, I, F) {
     const wb = XLSX.utils.book_new(), H = state.hincado;
     const cods = Object.keys(I.req).sort();
@@ -297,5 +315,5 @@
     XLSX.utils.book_append_sheet(wb, sheet(rows, [9, 6, 60, 10, 11, 11, 10, 12, 12, 12, 12, 12, 8, 10, 11, 8, 11, 30]), 'Actividades');
     return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   }
-  window.IO = { readWorkbook, exportPlan, exportTendidos, exportPuntas, exportFund, exportHincado, exportCrono, num };
+  window.IO = { readWorkbook, exportPlan, exportTendidos, exportPuntas, exportStock, exportFund, exportHincado, exportCrono, num };
 })();
