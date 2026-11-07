@@ -274,19 +274,41 @@ function stockConsolidado() {
   out.forEach((f) => { const r = R.resumen.find((x) => x.cat === f.cat && x.seccion === f.seccion); f.falta = r ? r.faltante || 0 : 0; });
   return out;
 }
+// Cada corte del plan con su bobina, circuito y zanja (ejecutado / listo / provisorio)
+const EST_CORTE = { ejecutado: 'Tendido', listo: 'Listo p/ cortar', provisorio: 'Provisorio' };
+function cortesDetalle() {
+  const cM = new Map(R.circuitos.map((c) => [c.id, c])), zM = new Map(R.zlist.map((z) => [z.id, z])), out = [];
+  R.bobinas.forEach((b) => b.cortes.forEach((p) => { const c = cM.get(p.cid) || {}; const z = zM.get(c.zid) || null; out.push({ b, p, c, z, zt: z ? z.titulo : (c.zTitulo || '–'), zcat: z ? z.cat : (c.cat === 'PAT' ? '' : c.cat), ze: z ? z.estado : (c.zanja || '') }); }));
+  const ordZ = (r) => (r.z && r.z.miembros.length ? Math.min(...r.z.miembros.map((x) => x.idx)) : 1e9);
+  return out.sort((a, b) => (a.zcat || 'Z').localeCompare(b.zcat || 'Z') || ordZ(a) - ordZ(b) || a.zt.localeCompare(b.zt) || (a.c.idx ?? 0) - (b.c.idx ?? 0) || a.p.cat.localeCompare(b.p.cat));
+}
+// Resumen por zanja: circuitos, bobinas y metros por estado
+function stockPorZanja() {
+  const g = new Map();
+  cortesDetalle().forEach((r) => {
+    const k = r.z ? r.z.id : 'sin:' + r.zt;
+    if (!g.has(k)) g.set(k, { zt: r.zt, zcat: r.zcat, ze: r.ze, largo: r.z ? r.z.largo : 0, circ: new Set(), bob: new Set(), m: { ejecutado: 0, listo: 0, provisorio: 0 }, porCab: {} });
+    const f = g.get(k); f.circ.add(r.c.designacion); f.bob.add(`${r.p.cat} ${r.b.codigo}`); f.m[r.p.estado] += r.p.len;
+    const kc = `${r.p.cat} ${r.p.seccion}`; f.porCab[kc] = (f.porCab[kc] || 0) + r.p.len;
+  });
+  return [...g.values()];
+}
 async function exportStock() {
-  const p = await window.api.saveBinary(IO.exportStock(S, R, { stockConsolidado }), `Stock de bobinas ${today()}.xlsx`, 'xlsx', 'Excel');
+  const p = await window.api.saveBinary(IO.exportStock(S, R, { stockConsolidado, cortesDetalle, stockPorZanja, EST_CORTE }), `Stock de bobinas ${today()}.xlsx`, 'xlsx', 'Excel');
   if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
 }
 function printStock() {
-  const F = stockConsolidado(), m = (x) => fmt(x, 0);
+  const F = stockConsolidado(), m = (x) => fmt(x, 0), cM = new Map(R.circuitos.map((c) => [c.id, c])), zM = new Map(R.zlist.map((z) => [z.id, z]));
+  const circBob = (b) => { const g = new Map(); b.cortes.forEach((p) => { const c = cM.get(p.cid) || {}; const z = zM.get(c.zid); const k = `${c.designacion}${z ? ' (' + z.titulo + ')' : ''}`; g.set(k, (g.get(k) || 0) + p.len); }); return [...g].map(([k, v]) => `${esc(k)} ${fmt(v, 0)} m`).join(' · '); };
   let h = prHead('Stock de bobinas · consolidado') + `<div class="card"><table class="tbl stk"><thead><tr><th>Tipo</th><th>Sección</th><th class="n">Bobinas</th><th class="n">Sin abrir</th><th class="n">En uso</th><th class="n">Term.</th><th class="n">Entrada</th><th class="n">Tendido</th><th class="n">Saldo actual</th><th class="n">Plan pendiente</th><th class="n">Saldo libre</th><th class="n">Rem. útil prev.</th><th class="n">Descarte prev.</th><th class="n">Falta</th></tr></thead><tbody>`;
   F.forEach((f) => { h += `<tr><td><b>${f.cat}</b></td><td>${f.seccion} mm²</td><td class="n">${f.n}</td><td class="n">${f.sinAbrir}</td><td class="n">${f.enUso}</td><td class="n">${f.term}</td><td class="n">${m(f.entrada)}</td><td class="n">${m(f.tendido)}</td><td class="n"><b>${m(f.saldo)}</b></td><td class="n">${m(f.plan)}</td><td class="n">${m(f.saldo - f.plan)}</td><td class="n">${m(f.remUtil)}</td><td class="n">${m(f.descarte)}</td><td class="n" style="${f.falta > 0 ? 'color:#c0392b;font-weight:700' : ''}">${f.falta > 0 ? m(f.falta) : '–'}</td></tr>`; });
   h += `</tbody></table><p class="muted" style="font-size:9pt;margin:8px 0 0">Metros por conductor. Saldo libre = saldo actual − plan pendiente (listo + provisorio). Falta = cable que no alcanza para completar la sección según el plan actual.</p></div>`;
+  const Z = stockPorZanja();
+  h += `<div class="card" style="break-inside:auto"><h3>Discriminado por zanja</h3><table class="tbl stk"><thead><tr><th>Zanja</th><th>Tipo</th><th>Estado</th><th>Circuitos</th><th>Bobinas</th><th>Cable por sección (m)</th><th class="n">Tendido</th><th class="n">Listo</th><th class="n">Provisorio</th></tr></thead><tbody>${Z.map((z) => `<tr><td style="white-space:normal;max-width:170px"><b>${esc(z.zt)}</b></td><td>${z.zcat || '–'}</td><td>${esc(z.ze || '')}</td><td style="white-space:normal;max-width:190px">${[...z.circ].map(esc).join(', ')}</td><td style="white-space:normal;max-width:120px">${[...z.bob].map(esc).join(', ')}</td><td style="white-space:normal">${Object.entries(z.porCab).map(([k, v]) => `${k}: ${m(v)}`).join(' · ')}</td><td class="n">${m(z.m.ejecutado)}</td><td class="n">${m(z.m.listo)}</td><td class="n">${m(z.m.provisorio)}</td></tr>`).join('')}</tbody></table></div>`;
   ['BT', 'MT', 'PAT'].forEach((cat) => {
     const bs = R.bobinas.filter((b) => b.cat === cat).sort((a, b) => a.seccion - b.seccion || String(a.codigo).localeCompare(String(b.codigo), 'es', { numeric: true }));
     if (!bs.length) return;
-    h += `<div class="card" style="break-inside:auto"><h3>${CATN[cat]} · detalle por bobina</h3><table class="tbl"><thead><tr><th>Código</th><th>N° fabricante</th><th>Sección</th><th class="n">Entrada</th><th class="n">Tendido</th><th class="n">Saldo</th><th>Estado</th><th class="n">Plan pend.</th><th class="n">Rem. prev.</th><th>Al final</th></tr></thead><tbody>${bs.map((b) => `<tr><td><b>${esc(b.codigo)}</b></td><td>${esc(b.nro)}</td><td>${b.seccion}</td><td class="n">${m(b.entrada)}</td><td class="n">${fmt(b.consumoReal, 1)}</td><td class="n"><b>${fmt(b.saldoActual, 1)}</b></td><td>${b.estadoReal}</td><td class="n">${fmt(b.asigListo + b.asigProv, 1)}</td><td class="n">${fmt(b.remanente, 1)}</td><td>${b.estado}</td></tr>`).join('')}</tbody></table></div>`;
+    h += `<div class="card" style="break-inside:auto"><h3>${CATN[cat]} · detalle por bobina</h3><table class="tbl"><thead><tr><th>Código</th><th>N° fabricante</th><th>Sección</th><th class="n">Entrada</th><th class="n">Tendido</th><th class="n">Saldo</th><th>Estado</th><th class="n">Plan pend.</th><th class="n">Rem. prev.</th><th>Al final</th><th>Circuitos (zanja)</th></tr></thead><tbody>${bs.map((b) => `<tr><td><b>${esc(b.codigo)}</b></td><td>${esc(b.nro)}</td><td>${b.seccion}</td><td class="n">${m(b.entrada)}</td><td class="n">${fmt(b.consumoReal, 1)}</td><td class="n"><b>${fmt(b.saldoActual, 1)}</b></td><td>${b.estadoReal}</td><td class="n">${fmt(b.asigListo + b.asigProv, 1)}</td><td class="n">${fmt(b.remanente, 1)}</td><td>${b.estado}</td><td style="white-space:normal;font-size:7pt">${circBob(b)}</td></tr>`).join('')}</tbody></table></div>`;
   });
   printHTML(h, `Stock de bobinas ${today()}.pdf`, true);
 }

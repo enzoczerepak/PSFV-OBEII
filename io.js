@@ -267,6 +267,20 @@
       h2.push([b.cat, b.codigo, b.nro, b.seccion, o.remito || '', o.fecha || '', b.entrada, r1(b.consumoReal), r1(b.saldoActual), r1(b.usoReal * 100), b.estadoReal, r1(b.asigListo + b.asigProv), r1(b.remanente), b.estado, o.obs || '']);
     });
     XLSX.utils.book_append_sheet(wb, sheet(h2, [6, 10, 16, 12, 12, 12, 11, 11, 14, 8, 11, 16, 20, 16, 30]), 'Detalle por bobina');
+    // discriminado por zanja y por circuito
+    const Z = F.stockPorZanja();
+    const h3 = [['Zanja', 'Tipo zanja', 'Estado zanja', 'Largo zanja (m)', 'Circuitos', 'Bobinas', 'Cable por sección (m)', 'Tendido (m)', 'Listo p/ cortar (m)', 'Provisorio (m)', 'Total (m)']];
+    Z.forEach((z) => h3.push([z.zt, z.zcat, z.ze, r1(z.largo || 0), [...z.circ].join(', '), [...z.bob].join(', '), Object.entries(z.porCab).map(([k, v]) => `${k}: ${r1(v)}`).join(' · '), r1(z.m.ejecutado), r1(z.m.listo), r1(z.m.provisorio), r1(z.m.ejecutado + z.m.listo + z.m.provisorio)]));
+    XLSX.utils.book_append_sheet(wb, sheet(h3, [26, 10, 12, 13, 40, 30, 40, 12, 16, 13, 11]), 'Por zanja');
+    const D = F.cortesDetalle();
+    const h4 = [['Zanja', 'Tipo zanja', 'Estado zanja', 'Circuito', 'Desde', 'Hasta', 'Tipo cable', 'Sección (mm²)', 'Fase', 'Bobina', 'N° fabricante', 'Corte #', 'Metros', 'Estado', 'Fecha tendido', 'Saldo bobina luego (m)']];
+    D.forEach((r) => h4.push([r.zt, r.zcat, r.ze, r.c.designacion, r.c.desde, r.c.hasta, r.p.cat, r.p.seccion, r.p.fase === 'C' ? '' : r.p.fase, r.b.codigo, r.b.nro, r.p.corte, r1(r.p.len), F.EST_CORTE[r.p.estado] || r.p.estado, r.p.fecha || '', r1(r.p.saldo)]));
+    XLSX.utils.book_append_sheet(wb, sheet(h4, [26, 10, 12, 18, 22, 22, 9, 12, 6, 9, 14, 8, 10, 15, 12, 18]), 'Por circuito y bobina');
+    const gc = new Map();
+    D.forEach((r) => { const k = r.c.id + '|' + r.p.cat; if (!gc.has(k)) gc.set(k, { r, bob: new Set(), m: { ejecutado: 0, listo: 0, provisorio: 0 } }); const g = gc.get(k); g.bob.add(r.b.codigo); g.m[r.p.estado] += r.p.len; });
+    const h5 = [['Circuito', 'Desde', 'Hasta', 'Zanja', 'Estado zanja', 'Tipo cable', 'Sección (mm²)', 'Bobinas', 'Tendido (m)', 'Listo p/ cortar (m)', 'Provisorio (m)', 'Total (m)']];
+    gc.forEach(({ r, bob, m }) => h5.push([r.c.designacion, r.c.desde, r.c.hasta, r.zt, r.ze, r.p.cat, r.p.seccion, [...bob].join(', '), r1(m.ejecutado), r1(m.listo), r1(m.provisorio), r1(m.ejecutado + m.listo + m.provisorio)]));
+    XLSX.utils.book_append_sheet(wb, sheet(h5, [26, 22, 22, 26, 12, 9, 12, 20, 12, 16, 13, 11]), 'Resumen por circuito');
     return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   }
 
