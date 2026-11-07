@@ -904,3 +904,23 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 #nav { padding-bottom: 70px; }
 .hero::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,20,40,.38), transparent 45%, transparent 60%, rgba(8,20,40,.25)); z-index: 0; pointer-events: none; }
+/* Impresión: fuente TrueType fija (Arial). Las fuentes variables (Segoe UI Variable de Windows 11) se
+   incrustan como "Type 3" y muchas impresoras/lectores no las dibujan: salían los recuadros sin texto. */
+@media print {
+  body, #printArea, #printArea * { font-family: Arial, "Liberation Sans", Helvetica, sans-serif !important; }
+  #printArea .mono, #printArea .chip, #printArea .ph span { font-family: "Courier New", "Liberation Mono", monospace !important; }
+  .pr-bob { overflow: visible !important; border-radius: 0 !important; }
+  #printArea .card { border-radius: 0 !important; overflow: visible !important; }
+  .updbar, #updBar { display: none !important; }
+}
+@media print { .pr-bob .chk { position: relative; vertical-align: middle; } .pr-bob .chk.ok::after { content: ''; position: absolute; left: 4px; top: 0; width: 4px; height: 8px; border: solid #555; border-width: 0 2px 2px 0; transform: rotate(45deg); } }
+/* transformaciones y filtros también hacen que el texto salga como "Type 3": fuera en la impresión (salvo el arco de los anillos) */
+@media print { #printArea *:not(.rfg):not(.rfg *) { filter: none !important; backdrop-filter: none !important; } #printArea *:not(svg *) { transform: none !important; } #printArea text { transform: none !important; } }
+/* texto con contorno (paint-order: stroke) y símbolos que Arial no tiene (✓ ▶) también salían como Type 3 */
+@media print {
+  #printArea svg text { stroke: none !important; stroke-width: 0 !important; }
+  #printArea .fic { font-size: 0 !important; display: inline-block; width: 9px; height: 9px; position: relative; vertical-align: middle; margin-right: 3px; }
+  #printArea .fic.ok::before { content: ''; position: absolute; left: 2px; top: -1px; width: 3px; height: 7px; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg) !important; }
+  #printArea .fic.cur::before { content: ''; position: absolute; left: 1px; top: 0; border-style: solid; border-width: 4.5px 0 4.5px 7px; border-color: transparent transparent transparent currentColor; }
+}
+@media print { #printArea .fini, #printArea .ffin { display: none !important; } }
