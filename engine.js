@@ -6,7 +6,14 @@
     BT: { nombre: 'Baja tensión 0,8 kV', corto: 'BT', zanja: true },
     MT: { nombre: 'Media tensión 33 kV', corto: 'MT', zanja: true },
     PAT: { nombre: 'Puesta a tierra (Cu desnudo)', corto: 'PAT', zanja: false },
+    LA: { nombre: 'Línea aérea 33 kV (conductor desnudo Prysalac Al/Ac)', corto: 'LA', zanja: false, aerea: true },
   };
+  // Conductor desnudo Prysalac (aluminio con alma de acero, IRAM 2187): sección Al/Ac, Ø, masa, carga de rotura y largo habitual de bobina (catálogo Prysmian 2021)
+  const PRYSALAC = [['16/2,5', 5.4, 63, 5.8, 5000], ['25/4', 6.8, 98, 8.9, 3500], ['35/6', 8.1, 140, 12.4, 3000], ['50/8', 9.6, 196, 16.8, 2000],
+    ['70/12', 11.7, 285, 26.3, 6000], ['95/15', 13.6, 385, 34.9, 4000], ['120/20', 15.5, 496, 44.5, 3000], ['150/25', 17.1, 607, 53.7, 2500],
+    ['185/30', 19.0, 748, 65.3, 2500], ['210/35', 20.3, 852, 73.4, 2500], ['240/40', 21.8, 990, 85.1, 2500], ['300/50', 24.4, 1239, 105, 2500],
+    ['340/30', 25.0, 1178, 91.7, 1500], ['380/50', 27.0, 1454, 121, 1000], ['435/55', 28.8, 1654, 134, 1000], ['550/70', 32.4, 2093, 166, 700], ['680/85', 36.0, 2565, 207, 700]]
+    .map(([sec, d, kg, kn, largo]) => ({ sec, d, kg, kn, largo }));
   const ZANJA = ['no abierta', 'abierta', 'cerrada'];
 
   function parseSeccion(txt) {
@@ -124,7 +131,8 @@
       const nReal = fz.filter((f) => real[f] && (real[f].bobina || real[f].sinBobina)).length;
       const z = zMap.get(c.vinculo || c.zanjaId);
       const zanja = z ? z.estado : 'no abierta';
-      const listo = zanja !== 'no abierta' || nReal > 0;
+      // línea aérea: sin zanja; se habilita el corte cuando el tramo está listo para tender (postes y crucetas montados)
+      const listo = cat === 'LA' && !c.vinculo ? (!!c.habilitado || nReal > 0) : zanja !== 'no abierta' || nReal > 0;
       return Object.assign({}, c, { idx: i, cat, seccion, key: clave(cat, seccion), fz, nReal, zanja, listo, zid: z ? z.id : null,
         zanjaLargo: z ? z.largo : 0, lenFase: largoFase(c, p), fasesInfo: {} });
     });
@@ -239,7 +247,7 @@
       const ej = c.fz.map((f) => c.fasesInfo[f]).filter((x) => x && x.estado === 'ejecutado');
       c.realTot = r2(ej.reduce((a, x) => a + x.len, 0)); c.teoTot = r2(ej.reduce((a, x) => a + x.teorico, 0)); c.desvio = r2(c.realTot - c.teoTot);
       c.estado = c.completo ? 'tendido' : es.some((e) => e === 'falta') ? 'falta bobina'
-        : es.some((e) => e === 'ejecutado') ? 'tendido parcial' : c.listo ? 'listo para tender' : 'en espera de zanja';
+        : es.some((e) => e === 'ejecutado') ? 'tendido parcial' : c.listo ? 'listo para tender' : c.cat === 'LA' ? 'en espera de postes' : 'en espera de zanja';
     });
     // PAT y cierre por zanja
     circuitos.forEach((c) => { if (c.vinculo && zMap.has(c.vinculo)) zMap.get(c.vinculo).pat = c; });
@@ -253,7 +261,7 @@
 
     // ---- resumen por tipo de cable
     const keys = [...new Set([...bobinas.map((b) => b.key), ...circuitos.map((c) => c.key)])].filter((k) => !k.endsWith('|null'));
-    const ordenCat = { BT: 0, MT: 1, PAT: 2 };
+    const ordenCat = { BT: 0, MT: 1, PAT: 2, LA: 3 };
     keys.sort((a, b) => ordenCat[a.split('|')[0]] - ordenCat[b.split('|')[0]] || Number(b.split('|')[1]) - Number(a.split('|')[1]));
     const sum = (arr, k) => r2(arr.reduce((a, x) => a + (Number(x[k]) || 0), 0));
     const resumen = keys.map((key) => {
@@ -428,6 +436,6 @@
     return lotes;
   }
 
-  const Engine = { calcular, propuesta, sincronizarPAT, unirZanjas, separarCircuito, tituloZanja, PAT_SEC, parseSeccion, fasesDe, CATS, ZANJA };
+  const Engine = { calcular, propuesta, sincronizarPAT, unirZanjas, separarCircuito, tituloZanja, PAT_SEC, parseSeccion, fasesDe, CATS, ZANJA, PRYSALAC };
   if (typeof module !== 'undefined' && module.exports) module.exports = Engine; else root.Engine = Engine;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -7,8 +7,11 @@ const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOff
 const uid = (p) => p + Math.random().toString(36).slice(2, 9);
 const CATS = Engine.CATS;
 const ED = window.EDICION || { blank: false, app: 'PSFV-OBE II', corto: 'PSFV-OBEII' };
-const CATN = { BT: 'BT 0,8 kV', MT: 'MT 33 kV', PAT: 'PAT Cu desnudo' };
-const CATL = { BT: 'BT · 0,8 kV', MT: 'MT · 33 kV', PAT: 'PAT · Cu desnudo' };
+const CATN = { BT: 'BT 0,8 kV', MT: 'MT 33 kV', PAT: 'PAT Cu desnudo', LA: 'LA 33 kV Prysalac' };
+const CATL = { BT: 'BT · 0,8 kV', MT: 'MT · 33 kV', PAT: 'PAT · Cu desnudo', LA: 'LA · Línea aérea' };
+const CATK = Object.keys(CATS); // BT, MT, PAT, LA
+// categorías a mostrar: la línea aérea aparece cuando se cargó algún tramo o bobina
+const catsUso = () => CATK.filter((c) => c !== 'LA' || (S.circuitos || []).some((x) => x.cat === 'LA') || (S.bobinas || []).some((b) => b.cat === 'LA'));
 window.CATN = CATN;
 let STSL = ['STS 1', 'STS 2', 'STS 3', 'STS 4'];
 const kvTxt = (v) => String(v).replace('.', ',');
@@ -146,7 +149,7 @@ function growBars(root) { requestAnimationFrame(() => requestAnimationFrame(() =
 const pct = (a, b) => (b > 0 ? Math.max(0, Math.min(100, (a / b) * 100)) : 0).toFixed(2) + '%';
 const kpi = (label, val, unit = 'm', dec = 0) => `<div class="kpi"><span>${label}</span><b data-count="${val}" data-dec="${dec}">${fmt(val, dec)}<small>${unit}</small></b></div>`;
 const estPill = {
-  'tendido': 'p-done', 'tendido parcial': 'p-done', 'listo para tender': 'p-ready', 'en espera de zanja': 'p-prov', 'falta bobina': 'p-bad',
+  'tendido': 'p-done', 'tendido parcial': 'p-done', 'listo para tender': 'p-ready', 'en espera de zanja': 'p-prov', 'en espera de postes': 'p-prov', 'falta bobina': 'p-bad',
   'sin abrir': 'p-prov', 'no se usa': 'p-prov', 'se usa completa': 'p-done', 'en uso': 'p-ready', 'terminada': 'p-done', 'descarte': 'p-bad', 'remanente útil': 'p-ok', 'no abierta': 'p-prov', 'abierta': 'p-warn', 'cerrada': 'p-done',
 };
 const pill = (t) => `<span class="pill ${estPill[t] || 'p-prov'}">${esc(t)}</span>`;
@@ -200,7 +203,9 @@ const VIEWS = {
   'MT-circ': ['Circuitos', () => (ED.blank ? 'Circuitos de media tensión: zanja y registro de lo ejecutado' : 'STS 4 → 3 → sala de celdas · STS 1 → 2 → sala de celdas · sala de celdas → LMT · fin LMT → ET')],
   'PAT-plan': ['Plan de corte', () => `Cobre desnudo: ${(S.parque && S.parque.patBT) || 25} mm² en zanjas de BT, ${(S.parque && S.parque.patMT) || 95} mm² en zanjas de MT · los cortes listos quedan fijos en su bobina`],
   'PAT-circ': ['Tendidos', () => 'Un conductor de Cu desnudo por zanja (compartida o no), con el largo de la zanja'],
-  bobinas: ['Bobinas', () => 'Ingreso de bobinas de BT, MT y PAT, saldo actual y remanente previsto'],
+  'LA-plan': ['Plan de corte', () => 'Línea aérea de 33 kV parque → ET · conductor desnudo Prysalac (Al/Ac) · los cortes de los tramos listos quedan fijos en su bobina'],
+  'LA-circ': ['Tramos', () => 'Tramos de la línea aérea (entre retenciones): sin zanja; se habilitan para cortar cuando los postes están listos'],
+  bobinas: ['Bobinas', () => 'Ingreso de bobinas de BT, MT, PAT y línea aérea, saldo actual y remanente previsto'],
   ajustes: ['Ajustes', () => 'Parámetros del cálculo y datos del proyecto'],
 };
 function pillUpd(scroll) {
@@ -232,7 +237,7 @@ const HINC_V = ['hincado', 'hplano', 'htrk', 'hrec', 'hcat'];
 function go(v) {
   // al entrar al menú Hincado desde otra sección, cartel de precarga
   if (HINC_V.includes(v) && !HINC_V.includes(navKey)) setTimeout(hincAvisoEntrada, 450);
-  const gc = /^(BT|MT|PAT)-/.exec(v); if (gc) { const g = $(`#nav .grp[data-cat="${gc[1]}"]`); if (g && !g.classList.contains('open')) grpToggle(gc[1], true); }
+  const gc = /^(BT|MT|PAT|LA)-/.exec(v); if (gc) { const g = $(`#nav .grp[data-cat="${gc[1]}"]`); if (g && !g.classList.contains('open')) grpToggle(gc[1], true); }
   if (v === 'hplano') { ui.pl = ui.pl || { capas: new Set(PL_CAPAS.map((c) => c[0])), color: 'disc', zcol: 'estado', vb: null, sel: null }; ui.pl.color = ui.pl.color === 'hinc' ? 'hinc' : 'disc'; view = 'plano'; navKey = 'hplano'; ui.sel.clear();
     $$('#nav button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === 'hplano')); $$('.sfBtn').forEach((b) => b.classList.remove('on'));
     const sec = $('#nav [data-sect="hinc"]'); if (sec && !sec.classList.contains('open')) abrirSect(sec, true); $$('#nav .sect').forEach((x) => x.classList.toggle('act', x === sec)); pillUpd(true); render(true); return; }

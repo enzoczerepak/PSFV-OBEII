@@ -15,7 +15,7 @@ function vPlan(el, cat) {
   let h = `<div class="tools"><div class="seg" id="fSec"><button data-v="all">Todas</button>${secs.map((s) => `<button data-v="${s}">${s} mm²</button>`).join('')}</div>
     <div class="seg" id="fEst"><button data-v="all">Todas las bobinas</button><button data-v="abiertas">Con cortes</button><button data-v="listos">Con cortes listos</button></div>
     <span class="sp"></span><input type="search" id="fQ" placeholder="Buscar bobina o circuito…" value="${esc(ui.q[cat] || '')}" style="width:240px"></div>
-    <div class="legend" style="margin:-4px 0 12px"><span><i class="c-done"></i>Ejecutado</span><span><i class="c-ready"></i>Listo para cortar (zanja abierta)</span><span><i class="c-prov"></i>Provisorio</span><span><i class="c-rem"></i>Remanente</span>${cat !== 'PAT' ? '<span class="lperm">Permitido: <b class="tl-ok">seguro</b> / <b class="tl-riesgo">máximo</b> por conductor (m)</span>' : ''}</div>
+    <div class="legend" style="margin:-4px 0 12px"><span><i class="c-done"></i>Ejecutado</span><span><i class="c-ready"></i>Listo para cortar (${cat === 'LA' ? 'postes listos' : 'zanja abierta'})</span><span><i class="c-prov"></i>Provisorio</span><span><i class="c-rem"></i>Remanente</span>${cat !== 'PAT' ? '<span class="lperm">Permitido: <b class="tl-ok">seguro</b> / <b class="tl-riesgo">máximo</b> por conductor (m)</span>' : ''}</div>
     <div id="mgStrip">${MG.R === R && MG.datos ? margenStrip(cat) : '<div class="mgs"><div class="mg muted">Calculando el margen disponible…</div></div>'}</div>`;
   if (falta.length) {
     const sinB = secs.filter((s) => !R.bobinas.some((b) => b.cat === cat && b.seccion === s));
@@ -64,25 +64,26 @@ async function replanificar(cat) {
 // ======================= CIRCUITOS =======================
 function vCircuitos(el, cat) {
   const n = ui.sel.size ? ` (${ui.sel.size})` : '', dis = ui.sel.size ? '' : ' dis';
-  const isPat = cat === 'PAT';
-  actions(isPat ? [] : [['Importar…', 'btn', () => menuImportar(cat)], ['+ Circuito', 'btn', () => editCircuito(null, cat)],
+  const isPat = cat === 'PAT', isLA = cat === 'LA';
+  if (isLA) actions([['+ Tramo', 'btn pri', () => editCircuito(null, cat)], [`Listo para tender${n}`, 'btn acc' + dis, () => habilitarLA(true)], [`Quitar habilitación${n}`, 'btn' + dis, () => habilitarLA(false)]]);
+  else actions(isPat ? [] : [['Importar…', 'btn', () => menuImportar(cat)], ['+ Circuito', 'btn', () => editCircuito(null, cat)],
     [`Misma zanja${n}`, 'btn' + (ui.sel.size > 1 ? '' : ' dis'), () => unir(zidsSel())], [`Cerrar zanja${n}`, 'btn' + dis, () => bulkZanja('cerrada')], [`Abrir zanja${n}`, 'btn acc' + dis, () => bulkZanja('abierta')]]);
   const all = R.circuitos.filter((c) => c.cat === cat);
   const stss = [...new Set(all.map((c) => c.hasta))].sort();
-  const ests = ['listo para tender', 'en espera de zanja', 'tendido parcial', 'tendido', 'falta bobina'];
+  const ests = ['listo para tender', isLA ? 'en espera de postes' : 'en espera de zanja', 'tendido parcial', 'tendido', 'falta bobina'];
   const fsts = ui.sts[cat] || 'all', fce = ui.cest[cat] || 'all', zf = ui.zf[cat] || 'all', q = (ui.q['c' + cat] || '').toLowerCase();
   const list = all.filter((c) => (fsts === 'all' || c.hasta === fsts) && (fce === 'all' || c.estado === fce) && (zf === 'all' || c.zanja === zf)
     && (!q || `${c.designacion} ${c.desde} ${c.hasta}`.toLowerCase().includes(q)));
   let h = `<div class="tools"><select id="fSts"><option value="all">${cat === 'BT' ? 'Todos los STS' : 'Todos los destinos'}</option>${stss.map((s) => `<option>${esc(s)}</option>`).join('')}</select>
     <select id="fCE"><option value="all">Todos los estados</option>${ests.map((s) => `<option>${s}</option>`).join('')}</select>
-    <div class="seg" id="fZ"><button data-v="all">Toda zanja</button><button data-v="no abierta">No abierta</button><button data-v="abierta">Abierta</button><button data-v="cerrada">Cerrada</button></div>
-    <span class="muted">${list.length} ${isPat ? 'tendidos' : 'circuitos'}</span><span class="sp"></span><input type="search" id="fCQ" placeholder="Buscar…" value="${esc(ui.q['c' + cat] || '')}" style="width:220px"></div>
-    <div class="tblwrap"><table class="tbl"><thead><tr>${isPat ? '' : '<th><input type="checkbox" id="selAll"></th>'}<th>Designación</th><th>Desde</th><th>Hasta</th><th>Sección</th><th class="n">${isPat ? 'Largo' : cat === 'MT' ? 'm / conductor' : 'm / fase'}</th>
-    <th>Zanja</th><th>${isPat ? 'Bobina' : 'Conductores · bobina'}</th><th class="n">Real vs lista</th><th>Estado</th><th></th></tr></thead><tbody>`;
+    ${isLA ? '' : `<div class="seg" id="fZ"><button data-v="all">Toda zanja</button><button data-v="no abierta">No abierta</button><button data-v="abierta">Abierta</button><button data-v="cerrada">Cerrada</button></div>`}
+    <span class="muted">${list.length} ${isPat ? 'tendidos' : isLA ? 'tramos' : 'circuitos'}</span><span class="sp"></span><input type="search" id="fCQ" placeholder="Buscar…" value="${esc(ui.q['c' + cat] || '')}" style="width:220px"></div>
+    <div class="tblwrap"><table class="tbl"><thead><tr>${isPat ? '' : '<th><input type="checkbox" id="selAll"></th>'}<th>Designación</th><th>Desde</th><th>Hasta</th><th>Sección</th><th class="n">${isPat ? 'Largo' : cat === 'MT' || isLA ? 'm / conductor' : 'm / fase'}</th>
+    <th>${isLA ? 'Postes' : 'Zanja'}</th><th>${isPat ? 'Bobina' : 'Conductores · bobina'}</th><th class="n">Real vs lista</th><th>Estado</th><th></th></tr></thead><tbody>`;
   list.forEach((c) => {
     h += `<tr data-id="${c.id}" class="${ui.sel.has(c.id) ? 'sel' : ''}">${isPat ? '' : `<td><input type="checkbox" class="sel" ${ui.sel.has(c.id) ? 'checked' : ''}></td>`}
       <td class="mono">${esc(c.designacion)}${c.obs ? ` <span title="${esc(c.obs)}">ⓘ</span>` : ''}</td><td>${esc(c.desde)}</td><td>${esc(c.hasta)}</td><td>${c.seccion ?? '?'}</td>
-      <td class="n">${fmt(c.lenFase, 2)}</td><td>${isPat ? pill(c.zanja) : zSeg(c.zid, c.zanja, c.listoCerrar) + (c.compartida ? ` <span class="shr" title="Zanja compartida: ${esc(c.zTitulo)}">⫘</span>` : '')}</td><td>${phases(c)}</td><td class="n">${desv(c)}</td><td>${pill(c.estado)}</td>
+      <td class="n">${fmt(c.lenFase, 2)}</td><td>${isLA ? `<button class="pill ${c.habilitado ? 'p-ready' : 'p-prov'} pbtn" data-a="hab" title="Tocá para cambiar">${c.habilitado ? 'Listos' : 'Pendientes'}</button>` : isPat ? pill(c.zanja) : zSeg(c.zid, c.zanja, c.listoCerrar) + (c.compartida ? ` <span class="shr" title="Zanja compartida: ${esc(c.zTitulo)}">⫘</span>` : '')}</td><td>${phases(c)}</td><td class="n">${desv(c)}</td><td>${pill(c.estado)}</td>
       <td style="white-space:nowrap"><button class="btn sm acc" data-a="tender">Tender</button> <button class="btn sm" data-a="bob" title="Elegir bobina y corregir largo">Bobina / largo</button><button class="btn sm ghost" data-a="edit" title="Editar">✎</button></td></tr>`;
   });
   h += `</tbody></table>${list.length ? '' : '<div class="empty"><b>Sin resultados</b></div>'}</div>`;
@@ -91,9 +92,10 @@ function vCircuitos(el, cat) {
   $('#fSts').value = fsts; $('#fCE').value = fce;
   $('#fSts').onchange = (e) => { ui.sts[cat] = e.target.value; render(false); };
   $('#fCE').onchange = (e) => { ui.cest[cat] = e.target.value; render(false); };
-  segBind('#fZ', zf, (v) => { ui.zf[cat] = v; render(false); });
+  if (!isLA) segBind('#fZ', zf, (v) => { ui.zf[cat] = v; render(false); });
   searchBind('#fCQ', (v) => { ui.q['c' + cat] = v; });
-  if (!isPat) { bindSel(el, list); bindZSeg(el); }
+  if (!isPat) { bindSel(el, list); if (!isLA) bindZSeg(el); }
+  if (isLA) $$('[data-a=hab]', el).forEach((b) => { b.onclick = (e) => { e.stopPropagation(); const c = S.circuitos.find((x) => x.id === b.closest('tr').dataset.id); c.habilitado = !c.habilitado; commit(`${c.designacion}: ${c.habilitado ? 'listo para tender' : 'en espera de postes'}`); }; });
   $$('tbody tr', el).forEach((tr) => {
     const id = tr.dataset.id;
     tr.querySelector('[data-a=tender]').onclick = () => tender(id);
@@ -182,7 +184,7 @@ async function tender(id) {
   }, 30);
   const nAll = rc.fz.length;
   const res = await modal({
-    title: `Registrar tendido · ${c.designacion}`, wide: true, sub: `${esc(c.desde)} → ${esc(c.hasta)} · ${esc(c.formacion)} · ${fmt(rc.lenFase, 2)} m por conductor · zanja ${rc.zanja}`,
+    title: `Registrar tendido · ${c.designacion}`, wide: true, sub: `${esc(c.desde)} → ${esc(c.hasta)} · ${esc(c.formacion)} · ${fmt(rc.lenFase, 2)} m por conductor · ${rc.cat === 'LA' ? (rc.listo ? 'postes listos' : 'postes pendientes') : 'zanja ' + rc.zanja}`,
     body: `<div class="muted pr6 prh"><span>${nAll === 1 ? 'Cond.' : 'Fase'}</span><span>Bobina usada</span><span>Lista</span><span>Tirado real</span><span>Dif.</span><span>Fecha</span></div>${rows}
       <div class="tot" id="tTot"></div>
       ${rc.cat !== 'PAT' ? `<div class="tolb" id="tolBox" data-key="${rc.key}" data-l="${rc.lenFase}">${tolHTML(mgDe(rc.key), rc.lenFase)}</div>` : ''}
@@ -217,30 +219,37 @@ async function tender(id) {
 async function editCircuito(id, cat) {
   if (window.READONLY) return;
   const nuevo = !id;
-  const c = nuevo ? { id: uid('c'), cat, designacion: '', desde: '', hasta: '', formacion: cat === 'MT' ? '1x50/25 mm² Al/Cu' : '1x240 mm² Al', fases: 3, cantidad: 0, lineal: 0, real: {} } : S.circuitos.find((x) => x.id === id);
+  const isLA = cat === 'LA' || (!nuevo && (S.circuitos.find((x) => x.id === id) || {}).cat === 'LA');
+  const c = nuevo ? { id: uid('c'), cat, designacion: isLA ? 'LMT-' : '', desde: '', hasta: '', formacion: isLA ? 'Prysalac 120/20 mm² Al/Ac' : cat === 'MT' ? '1x50/25 mm² Al/Cu' : '1x240 mm² Al', fases: 3, cantidad: 0, lineal: 0, real: {} } : S.circuitos.find((x) => x.id === id);
   const rc = nuevo ? null : R.circuitos.find((x) => x.id === id);
   const res = await modal({
     title: nuevo ? `Nuevo circuito ${CATN[cat]}` : `Editar ${c.designacion}`, wide: true,
     body: `<div class="form"><label>Designación<input type="text" name="designacion" value="${esc(c.designacion)}"></label>
-      <label>Formación<input type="text" name="formacion" value="${esc(c.formacion)}"></label>
+      <label>Formación<input type="text" name="formacion" ${isLA ? 'list="secOpcC"' : ''} value="${esc(c.formacion)}">${isLA ? `<datalist id="secOpcC">${Engine.PRYSALAC.map((p) => `<option value="Prysalac ${p.sec} mm² Al/Ac">`).join('')}</datalist>` : ''}</label>
       <label>Desde<input type="text" name="desde" value="${esc(c.desde)}"></label><label>Hasta<input type="text" name="hasta" value="${esc(c.hasta)}"></label>
       <label>Cantidad final (m, todos los conductores)<input type="number" step="0.01" name="cantidad" value="${c.cantidad}"></label>
       <label>Conductores (fases)<input type="number" name="fases" value="${c.fases || 3}" min="1" max="12"></label>
       <label>Longitud lineal (m)<input type="number" step="0.1" name="lineal" value="${c.lineal || 0}"></label>
-      <label>Zanja<input type="text" disabled value="${rc ? esc(rc.zTitulo) + ' · ' + fmt(rc.zanjaLargo, 1) + ' m · ' + rc.zanja : 'propia (se crea al guardar)'}"></label>
+      ${isLA ? `<label class="chk"><input type="checkbox" name="habilitado" ${c.habilitado ? 'checked' : ''}> Postes listos: habilitar el corte</label>` : `<label>Zanja<input type="text" disabled value="${rc ? esc(rc.zTitulo) + ' · ' + fmt(rc.zanjaLargo, 1) + ' m · ' + rc.zanja : 'propia (se crea al guardar)'}"></label>`}
       <label class="full">Observaciones<input type="text" name="obs" value="${esc(c.obs || '')}"></label></div>
-      <p class="hint">El estado, el largo y la PAT se manejan por zanja (sección Zanjas). Para que varios circuitos compartan zanja, tildalos y tocá "Misma zanja".</p>`,
+      <p class="hint">${isLA ? 'Tramo de línea aérea (ej. entre retenciones). Cantidad final = largo de un conductor × conductores, con flecha y puentes incluidos; el ajuste % del tipo LA se suma en Ajustes. Sin zanja: se corta cuando el tramo tiene los postes listos.' : 'El estado, el largo y la PAT se manejan por zanja (sección Zanjas). Para que varios circuitos compartan zanja, tildalos y tocá "Misma zanja".'}</p>`,
     buttons: [...(nuevo ? [] : [['Eliminar', 'btn danger', () => 'del']]), ['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (box) => {
       const g = (n) => $(`[name=${n}]`, box).value;
       if (!g('designacion').trim() || !(Number(g('cantidad')) > 0)) { toast('Completá designación y cantidad', { err: true }); return false; }
       Object.assign(c, { designacion: g('designacion').trim(), formacion: g('formacion').trim(), desde: g('desde').trim(), hasta: g('hasta').trim(),
         cantidad: Number(g('cantidad')), fases: Number(g('fases')) || 3, lineal: Number(g('lineal')) || 0, obs: g('obs').trim() });
-      if (nuevo) c.zanjaLargo = c.lineal;
+      if (isLA) c.habilitado = $('[name=habilitado]', box).checked; else if (nuevo) c.zanjaLargo = c.lineal;
       return 'ok';
     }]],
   });
   if (res === 'del') { if (await confirmar('Eliminar circuito', `¿Eliminar ${esc(c.designacion)} y su tendido de PAT?`, 'Eliminar')) { S.circuitos = S.circuitos.filter((x) => x !== c); commit('Circuito eliminado'); } }
   else if (res === 'ok') { if (nuevo) { c._o = Date.now(); S.circuitos.push(c); } commit('Circuito guardado'); }
+}
+// línea aérea: habilitar / quitar habilitación de corte de los tramos tildados
+function habilitarLA(v) {
+  const ids = [...ui.sel]; if (!ids.length) return;
+  S.circuitos.forEach((c) => { if (ids.includes(c.id) && c.cat === 'LA') c.habilitado = v; });
+  ui.sel.clear(); commit(`${ids.length} tramo${ids.length > 1 ? 's' : ''} ${v ? 'listo' + (ids.length > 1 ? 's' : '') + ' para tender' : 'en espera de postes'}`);
 }
 async function editPat(id) {
   if (window.READONLY) return;
@@ -269,7 +278,7 @@ function stockConsolidado() {
     if (b.estadoReal === 'sin abrir') { f.sinAbrir++; f.saldoSA += b.saldoActual; } else if (b.estadoReal === 'en uso') { f.enUso++; f.saldoUso += b.saldoActual; } else f.term++;
     if (b.estado === 'remanente útil') f.remUtil += b.remanente; else if (b.estado === 'descarte') f.descarte += b.remanente;
   });
-  const orden = { BT: 0, MT: 1, PAT: 2 };
+  const orden = { BT: 0, MT: 1, PAT: 2, LA: 3 };
   const out = [...g.values()].sort((a, b) => (orden[a.cat] ?? 9) - (orden[b.cat] ?? 9) || a.seccion - b.seccion);
   out.forEach((f) => { const r = R.resumen.find((x) => x.cat === f.cat && x.seccion === f.seccion); f.falta = r ? r.faltante || 0 : 0; });
   return out;
@@ -305,7 +314,7 @@ function printStock() {
   h += `</tbody></table><p class="muted" style="font-size:9pt;margin:8px 0 0">Metros por conductor. Saldo libre = saldo actual − plan pendiente (listo + provisorio). Falta = cable que no alcanza para completar la sección según el plan actual.</p></div>`;
   const Z = stockPorZanja();
   h += `<div class="card" style="break-inside:auto"><h3>Discriminado por zanja</h3><table class="tbl stk"><thead><tr><th>Zanja</th><th>Tipo</th><th>Estado</th><th>Circuitos</th><th>Bobinas</th><th>Cable por sección (m)</th><th class="n">Tendido</th><th class="n">Listo</th><th class="n">Provisorio</th></tr></thead><tbody>${Z.map((z) => `<tr><td style="white-space:normal;max-width:170px"><b>${esc(z.zt)}</b></td><td>${z.zcat || '–'}</td><td>${esc(z.ze || '')}</td><td style="white-space:normal;max-width:190px">${[...z.circ].map(esc).join(', ')}</td><td style="white-space:normal;max-width:120px">${[...z.bob].map(esc).join(', ')}</td><td style="white-space:normal">${Object.entries(z.porCab).map(([k, v]) => `${k}: ${m(v)}`).join(' · ')}</td><td class="n">${m(z.m.ejecutado)}</td><td class="n">${m(z.m.listo)}</td><td class="n">${m(z.m.provisorio)}</td></tr>`).join('')}</tbody></table></div>`;
-  ['BT', 'MT', 'PAT'].forEach((cat) => {
+  CATK.forEach((cat) => {
     const bs = R.bobinas.filter((b) => b.cat === cat).sort((a, b) => a.seccion - b.seccion || String(a.codigo).localeCompare(String(b.codigo), 'es', { numeric: true }));
     if (!bs.length) return;
     h += `<div class="card" style="break-inside:auto"><h3>${CATN[cat]} · detalle por bobina</h3><table class="tbl"><thead><tr><th>Código</th><th>N° fabricante</th><th>Sección</th><th class="n">Entrada</th><th class="n">Tendido</th><th class="n">Saldo</th><th>Estado</th><th class="n">Plan pend.</th><th class="n">Rem. prev.</th><th>Al final</th><th>Circuitos (zanja)</th></tr></thead><tbody>${bs.map((b) => `<tr><td><b>${esc(b.codigo)}</b></td><td>${esc(b.nro)}</td><td>${b.seccion}</td><td class="n">${m(b.entrada)}</td><td class="n">${fmt(b.consumoReal, 1)}</td><td class="n"><b>${fmt(b.saldoActual, 1)}</b></td><td>${b.estadoReal}</td><td class="n">${fmt(b.asigListo + b.asigProv, 1)}</td><td class="n">${fmt(b.remanente, 1)}</td><td>${b.estado}</td><td style="white-space:normal;font-size:7pt">${circBob(b)}</td></tr>`).join('')}</tbody></table></div>`;
@@ -316,7 +325,7 @@ function vBobinas(el) {
   actions([['Importar…', 'btn', () => menuImportar(null, true)], ['Stock consolidado · Excel', 'btn', exportStock], ['Stock consolidado · PDF', 'btn', printStock], ['+ Bobina', 'btn pri', () => editBobina(null)]]);
   const q = (ui.q.bob || '').toLowerCase();
   const list = R.bobinas.filter((b) => (ui.bobCat === 'all' || b.cat === ui.bobCat) && (!q || `${b.codigo} ${b.nro} ${b.remito}`.toLowerCase().includes(q)));
-  let h = `<div class="tools"><div class="seg" id="fBC"><button data-v="all">Todas</button><button data-v="BT">${CATN.BT}</button><button data-v="MT">${CATN.MT}</button><button data-v="PAT">PAT Cu desnudo</button></div>
+  let h = `<div class="tools"><div class="seg" id="fBC"><button data-v="all">Todas</button><button data-v="BT">${CATN.BT}</button><button data-v="MT">${CATN.MT}</button><button data-v="PAT">PAT Cu desnudo</button><button data-v="LA">${CATN.LA}</button></div>
     <span class="muted">${list.length} bobinas · ${list.filter((b) => b.estadoReal === 'sin abrir').length} sin abrir · ${list.filter((b) => b.estadoReal === 'en uso').length} en uso · ${list.filter((b) => b.estadoReal === 'terminada').length} terminadas</span><span class="sp"></span><input type="search" id="fBQ" placeholder="Buscar código, N°, remito…" value="${esc(ui.q.bob || '')}" style="width:240px"></div>
     <div class="tblwrap"><table class="tbl"><thead><tr><th>Tipo</th><th>Código</th><th>N° fabricante</th><th>Sección</th><th class="n">Entrada</th><th class="n">Ya tendido</th>
     <th class="n">Saldo actual</th><th>Uso real</th><th>Estado real</th><th class="n">Plan pendiente</th><th class="n">Remanente previsto</th><th>Al final</th><th></th></tr></thead><tbody>`;
@@ -332,30 +341,49 @@ function vBobinas(el) {
   searchBind('#fBQ', (v) => { ui.q.bob = v; });
   $$('tbody tr', el).forEach((tr) => { $('button', tr).onclick = () => editBobina(tr.dataset.id); tr.ondblclick = () => editBobina(tr.dataset.id); });
 }
-const SEC_DEF = { BT: '1x240', MT: '1x50/25', PAT: '1x25 Cu desnudo' };
+const SEC_DEF = { BT: '1x240', MT: '1x50/25', PAT: '1x25 Cu desnudo', LA: 'Prysalac 120/20' };
+// opciones de sección por tipo para la carga (la línea aérea usa el catálogo Prysalac Al/Ac)
+const SEC_OPC = { BT: ['1x240', '1x185', '1x150', '1x120', '1x95'], MT: ['1x50/25', '1x120/25', '1x150/25', '1x185/25', '1x240/25'], PAT: ['1x25 Cu desnudo', '1x35 Cu desnudo', '1x50 Cu desnudo', '1x95 Cu desnudo'],
+  LA: Engine.PRYSALAC.map((p) => `Prysalac ${p.sec}`) };
+const prysDe = (txt) => { const m = String(txt || '').match(/(\d+)\s*\/\s*(\d+(?:[.,]\d+)?)/); return m ? Engine.PRYSALAC.find((p) => p.sec.replace(',', '.') === `${m[1]}/${m[2].replace(',', '.')}`) || null : null; };
 async function editBobina(id) {
   if (window.READONLY) return;
   const nuevo = !id, defCat = ui.bobCat !== 'all' ? ui.bobCat : 'BT';
   const b = nuevo ? { id: uid('b'), cat: defCat, fecha: today(), remito: '', nro: '', seccion: SEC_DEF[defCat], entrada: 0, codigo: '', obs: '' } : S.bobinas.find((x) => x.id === id);
   const rb = R.bobinas.find((x) => x.id === id);
   const usada = !nuevo && S.circuitos.some((c) => c.cat === b.cat && Object.values(c.real || {}).some((r) => r.bobina === rb.codigo));
-  const res = await modal({
+  const pm = modal({
     title: nuevo ? 'Nueva bobina' : `Editar bobina ${rb.codigo} (${b.cat})`,
     body: `<div class="form"><label>Tipo<select name="cat" ${usada ? 'disabled' : ''}>${Object.keys(CATS).map((k) => `<option value="${k}" ${b.cat === k ? 'selected' : ''}>${CATN[k]}</option>`).join('')}</select></label>
-      <label>Sección<input type="text" name="seccion" value="${esc(b.seccion)}" placeholder="1x240 · 1x50/25 · 1x25"></label>
+      <label>Sección<input type="text" name="seccion" list="secOpc" value="${esc(b.seccion)}" placeholder="1x240 · 1x50/25 · 1x25 · Prysalac 120/20"><datalist id="secOpc"></datalist></label>
+      <div class="full" id="prysInfo" style="display:none"></div>
       <label>Fecha de ingreso<input type="date" name="fecha" value="${esc(b.fecha || '')}"></label><label>Remito<input type="text" name="remito" value="${esc(b.remito || '')}"></label>
       <label>N° de bobina (fabricante)<input type="text" name="nro" value="${esc(b.nro)}"></label><label>Cantidad de entrada (m)<input type="number" name="entrada" value="${b.entrada}"></label>
       <label>Código interno<input type="text" name="codigo" value="${esc(b.codigo || '')}" placeholder="automático: n/sección"></label><label>Observaciones<input type="text" name="obs" value="${esc(b.obs || '')}"></label></div>
-      <p class="hint">El código interno se numera por tipo y sección (ej. 1/25 para la primera bobina de Cu desnudo de 25 mm²).${usada ? ' Tiene tendidos registrados: si cambiás el código se actualizan solos.' : ''}</p>`,
+      <p class="hint">El código interno lo asignan ustedes (si lo dejás vacío se numera por tipo y sección, ej. 1/25). Línea aérea: conductor desnudo Prysalac (aluminio con alma de acero); la sección Al/Ac sale de la lista.${usada ? ' Tiene tendidos registrados: si cambiás el código se actualizan solos.' : ''}</p>`,
     buttons: [...(nuevo ? [] : [['Eliminar', 'btn danger', () => 'del']]), ['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (box) => {
       const g = (n) => $(`[name=${n}]`, box).value.trim();
       if (!g('nro') || !(Number(g('entrada')) > 0) || Engine.parseSeccion(g('seccion')) == null) { toast('Completá N° de bobina, sección y metros', { err: true }); return false; }
+      if (g('cat') === 'LA' && !prysDe(g('seccion'))) { toast('Línea aérea: elegí una sección Prysalac de la lista (ej. Prysalac 120/20)', { err: true }); return false; }
       const old = rb && rb.codigo;
       Object.assign(b, { cat: usada ? b.cat : g('cat'), fecha: g('fecha'), remito: g('remito'), nro: g('nro'), seccion: g('seccion'), entrada: Number(g('entrada')), codigo: g('codigo'), obs: g('obs') });
       if (old && b.codigo && old !== b.codigo) S.circuitos.forEach((c) => { if (c.cat === b.cat) Object.values(c.real || {}).forEach((r) => { if (r.bobina === old) r.bobina = b.codigo; }); });
       return 'ok';
     }]],
   });
+  { // opciones según el tipo: datalist de secciones y ficha Prysalac para línea aérea
+    const box = $('#modal .mbox'), sc = $('[name=cat]', box), si = $('[name=seccion]', box), en = $('[name=entrada]', box), inf = $('#prysInfo', box);
+    const upd = (cambioTipo) => {
+      const k = sc.value; $('#secOpc', box).innerHTML = (SEC_OPC[k] || []).map((o) => `<option value="${o}">`).join('');
+      if (cambioTipo && nuevo) si.value = SEC_DEF[k] || '';
+      const p = k === 'LA' ? prysDe(si.value) : null;
+      inf.style.display = k === 'LA' ? '' : 'none';
+      inf.innerHTML = k === 'LA' ? (p ? `<div class="alert info" style="margin:0">Prysalac ${p.sec} mm² Al/Ac · Ø ${String(p.d).replace('.', ',')} mm · ${p.kg} kg/km · carga de rotura ${String(p.kn).replace('.', ',')} kN · bobina habitual ${fmt(p.largo)} m</div>` : '<div class="alert aviso" style="margin:0">Elegí la sección Al/Ac de la lista (ej. Prysalac 120/20)</div>') : '';
+      if (k === 'LA' && p && nuevo && !(Number(en.value) > 0)) en.placeholder = `habitual ${p.largo} m`;
+    };
+    sc.onchange = () => upd(true); si.oninput = () => upd(false); upd(false);
+  }
+  const res = await pm;
   if (res === 'del') {
     if (usada) { toast('No se puede eliminar: tiene tendidos registrados', { err: true }); return; }
     if (await confirmar('Eliminar bobina', `¿Eliminar la bobina ${esc(b.nro)}?`, 'Eliminar')) { S.bobinas = S.bobinas.filter((x) => x !== b); commit('Bobina eliminada'); }

@@ -126,9 +126,9 @@ function printFund() {
 // Tarjetas de módulos (Resumen general)
 function modulosHTML() {
   const tot = (cat, k) => R.resumen.filter((r) => r.cat === cat).reduce((a, r) => a + r[k], 0);
-  const tc = ['BT', 'MT', 'PAT'].map((c) => [c, tot(c, 'tendido'), tot(c, 'requerido')]);
+  const tc = catsUso().map((c) => [c, tot(c, 'tendido'), tot(c, 'requerido')]);
   const tA = tc.reduce((a, x) => a + x[1], 0), tB = tc.reduce((a, x) => a + x[2], 0);
-  const cs = R.circuitos.filter((c) => c.cat !== 'PAT').map((c) => [c.cat, puntasDe(c)]);
+  const cs = R.circuitos.filter((c) => c.cat !== 'PAT' && c.cat !== 'LA').map((c) => [c.cat, puntasDe(c)]);
   const pc = ['BT', 'MT'].map((c) => { const g = cs.filter((x) => x[0] === c).map((x) => x[1]); return [c, g.reduce((a, x) => a + x.col, 0), g.reduce((a, x) => a + x.tot, 0)]; });
   const pA = pc.reduce((a, x) => a + x[1], 0), pB = pc.reduce((a, x) => a + x[2], 0);
   const fi = STSL.map((s) => [s, fundInfo(s)]); const fA = fi.reduce((a, [, i]) => a + i.done, 0) / (STSL.length * ETAPAS.length);

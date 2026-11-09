@@ -17,7 +17,7 @@ function margenAlDia() {
   MG.tarea = Margen.enSegundoPlano(clonEstado(), R0, { demora: 250 }, (d) => {
     if (R !== R0) return;
     MG.R = R0; MG.datos = d; MG.tarea = null; dibujarReloj();
-    if (/^(BT|MT)-plan$/.test(view)) render(false);
+    if (/^(BT|MT|LA)-plan$/.test(view)) render(false);
     else { const box = $('#mgStrip'); if (box && /-plan$/.test(view)) box.innerHTML = margenStrip(view.split('-')[0]); }
     const tb = $('#tolBox'); if (tb && tb.dataset.key) tb.innerHTML = tolHTML(mgDe(tb.dataset.key), Number(tb.dataset.l));
   });

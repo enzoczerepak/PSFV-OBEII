@@ -392,7 +392,9 @@ body.ro tr.clk { cursor: default; } body.ro .bob tr.clk:hover td { background: i
 }
 
 /* ---------- módulos y apartados ---------- */
-:root { --cBT: #00939a; --cMT: #c97b12; --cPAT: #6a5acd; }
+:root { --cBT: #00939a; --cMT: #c97b12; --cPAT: #6a5acd; --cLA: #2f6fc2; }
+.g-LA { --gc: var(--cLA); } .c-LA { background: var(--cLA); } #nav .g-LA .tg { background: var(--cLA); }
+.legend i.c-LA, .cd .dots i.c-LA { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
 .mod { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
 .modh { display: flex; align-items: center; gap: 9px; color: #e8eef7; font-weight: 650; font-size: 13px; line-height: 1.25; padding: 10px 12px 8px; margin-top: 4px; border-top: 1px solid #22344f; }
 .mod:first-child .modh { border-top: 0; margin-top: 0; padding-top: 2px; }

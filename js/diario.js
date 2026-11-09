@@ -23,7 +23,7 @@ function puntasDe(rc) {
 function datosPorFecha() {
   const cMap = new Map(R.circuitos.map((c) => [c.id, c]));
   const dias = new Map(); let sinFecha = 0;
-  const dia = (d) => { if (!dias.has(d)) dias.set(d, { fecha: d, m: { BT: 0, MT: 0, PAT: 0 }, sec: new Map(), circ: new Map(), puntas: [], zanjas: [], fund: [], nCond: 0, bobinas: new Set() }); return dias.get(d); };
+  const dia = (d) => { if (!dias.has(d)) dias.set(d, { fecha: d, m: Object.fromEntries(CATK.map((c) => [c, 0])), sec: new Map(), circ: new Map(), puntas: [], zanjas: [], fund: [], nCond: 0, bobinas: new Set() }); return dias.get(d); };
   R.piezas.filter((p) => p.estado === 'ejecutado').forEach((p) => {
     if (!p.fecha) { sinFecha += p.len; return; }
     const D = dia(p.fecha), c = cMap.get(p.cid); if (!c) return;
@@ -38,7 +38,7 @@ function datosPorFecha() {
   });
   S.zanjas.forEach((z) => { if (z.estado === 'cerrada' && z.fechaCierre) { const rz = R.zlist.find((x) => x.id === z.id); if (rz) dia(z.fechaCierre).zanjas.push(rz); } });
   STSL.forEach((st) => ETAPAS.forEach(([k, n]) => { const v = ((S.fundaciones || {})[st] || {})[k]; if (!v) return; if (v.ini) dia(v.ini).fund.push({ st, n, t: 'inicio' }); if (v.ok && v.fin) dia(v.fin).fund.push({ st, n, t: 'fin' }); }));
-  dias.forEach((D) => { D.total = D.m.BT + D.m.MT + D.m.PAT; D.nPuntas = D.puntas.reduce((a, x) => a + x.n, 0); });
+  dias.forEach((D) => { D.total = CATK.reduce((a, c) => a + D.m[c], 0); D.nPuntas = D.puntas.reduce((a, x) => a + x.n, 0); });
   return { dias, sinFecha };
 }
 function vDiario(el) {
@@ -59,12 +59,12 @@ function vDiario(el) {
     const h = D && D.total ? 0.18 + 0.82 * (D.total / maxMes) : 0;
     cal += `<button class="cd${k === ui.dia ? ' csel' : ''}${k === hoy ? ' hoy' : ''}${D ? ' con' : ''}" data-d="${k}" style="--h:${(h * 100).toFixed(0)}%" title="${D ? `${fmt(D.total)} m tendidos${D.nPuntas ? ` · ${D.nPuntas} puntas` : ''}` : 'Sin registros'}">
       <span class="n">${d}</span>${D && D.total ? `<span class="m">${D.total >= 1000 ? fmt(D.total / 1000, 1) + 'k' : fmt(D.total)}</span>` : ''}
-      <span class="dots">${['BT', 'MT', 'PAT'].filter((c) => D && D.m[c] > 0).map((c) => `<i class="c-${c}"></i>`).join('')}${D && D.nPuntas ? '<i class="c-pt"></i>' : ''}${D && D.fund.length ? '<i class="c-fd"></i>' : ''}</span></button>`;
+      <span class="dots">${catsUso().filter((c) => D && D.m[c] > 0).map((c) => `<i class="c-${c}"></i>`).join('')}${D && D.nPuntas ? '<i class="c-pt"></i>' : ''}${D && D.fund.length ? '<i class="c-fd"></i>' : ''}</span></button>`;
   }
   cal += '</div>';
   const mesTot = delMes.reduce((a, D) => a + D.total, 0), mesDias = delMes.filter((D) => D.total > 0).length;
   const mejor = delMes.reduce((a, D) => (!a || D.total > a.total ? D : a), null);
-  cal += `<div class="legend" style="margin-top:10px">${['BT', 'MT', 'PAT'].map((c) => `<span><i class="c-${c}"></i>${c}</span>`).join('')}<span><i class="c-pt"></i>Puntas</span><span><i class="c-fd"></i>Fundaciones</span></div>
+  cal += `<div class="legend" style="margin-top:10px">${catsUso().map((c) => `<span><i class="c-${c}"></i>${c}</span>`).join('')}<span><i class="c-pt"></i>Puntas</span><span><i class="c-fd"></i>Fundaciones</span></div>
     <div class="kpis" style="grid-template-columns:1fr 1fr;margin-top:14px">${kpi('Tendido en el mes', mesTot)}${kpi('Días con tendido', mesDias, '')}${kpi('Promedio por día', mesDias ? mesTot / mesDias : 0)}${kpi('Mejor día', mejor ? mejor.total : 0, mejor ? `m · ${new Date(mejor.fecha + 'T12:00:00').getDate()}/${m + 1}` : 'm')}</div>
     ${sinFecha ? `<p class="hint">${fmt(sinFecha)} m tendidos no tienen fecha cargada y no figuran en el calendario.</p>` : ''}`;
   // detalle del día
@@ -73,9 +73,9 @@ function vDiario(el) {
   det += diaHTML(D);
   // columnas del mes
   const colsData = [];
-  for (let d = 1; d <= nd; d++) { const k = `${ym}-${String(d).padStart(2, '0')}`, X = dias.get(k); colsData.push({ key: k, label: String(d), sel: k === ui.dia, tip: fechaCorta(k), parts: ['BT', 'MT', 'PAT'].map((c) => ({ v: X ? X.m[c] : 0, color: SERIE[c], name: CATN[c] })) }); }
+  for (let d = 1; d <= nd; d++) { const k = `${ym}-${String(d).padStart(2, '0')}`, X = dias.get(k); colsData.push({ key: k, label: String(d), sel: k === ui.dia, tip: fechaCorta(k), parts: catsUso().map((c) => ({ v: X ? X.m[c] : 0, color: SERIE[c], name: CATN[c] })) }); }
   el.innerHTML = `<div class="diario"><div class="card calcard">${cal}</div><div class="card daycard">${det}</div></div>
-    <div class="card" style="margin-top:16px"><h3>Metros tendidos por día · ${MESES[m]} ${y}</h3>${Charts.cols(colsData)}${Charts.legend(['BT', 'MT', 'PAT'].map((c) => [SERIE[c], CATN[c]]))}</div>`;
+    <div class="card" style="margin-top:16px"><h3>Metros tendidos por día · ${MESES[m]} ${y}</h3>${Charts.cols(colsData)}${Charts.legend(catsUso().map((c) => [SERIE[c], CATN[c]]))}</div>`;
   $$('[data-cm]', el).forEach((b) => { b.onclick = () => { let mm = ui.cal.m + Number(b.dataset.cm), yy = ui.cal.y; if (mm < 0) { mm = 11; yy--; } if (mm > 11) { mm = 0; yy++; } ui.cal = { y: yy, m: mm }; render(false); }; });
   $$('[data-d]', el).forEach((b) => { b.onclick = () => { ui.dia = b.dataset.d; render(false); }; });
   $$('[data-dkey]', el).forEach((b) => { b.onclick = () => { ui.dia = b.dataset.dkey; render(false); }; });
@@ -86,7 +86,7 @@ function diaHTML(D, pdf) {
   if (!D) return `<div class="empty" style="padding:30px 10px"><b>Sin registros este día</b>Los tendidos aparecen acá con la fecha que se carga en Tender.</div>`;
   const sec = [...D.sec.entries()].sort((a, b) => b[1] - a[1]);
   const maxS = Math.max(1, ...sec.map((x) => x[1]));
-  const circ = [...D.circ.values()].sort((a, b) => (a.c.cat === b.c.cat ? a.c.idx - b.c.idx : ['BT', 'MT', 'PAT'].indexOf(a.c.cat) - ['BT', 'MT', 'PAT'].indexOf(b.c.cat)));
+  const circ = [...D.circ.values()].sort((a, b) => (a.c.cat === b.c.cat ? a.c.idx - b.c.idx : catsUso().indexOf(a.c.cat) - catsUso().indexOf(b.c.cat)));
   const nCirc = circ.filter((o) => o.c.cat !== 'PAT').length;
   let h = `<div class="kpis k4" style="margin-bottom:14px">${kpi('Metros tendidos', D.total)}${kpi('Circuitos', nCirc, `${circ.length - nCirc ? `+ ${circ.length - nCirc} PAT` : ''}`)}${kpi('Conductores', D.nCond, '')}${kpi('Puntas colocadas', D.nPuntas, '')}</div>`;
   if (sec.length) h += `<div class="secbars">${sec.map(([k, v]) => { const [cat, s2] = k.split('|'); return `<div class="sb"><span><i class="cdot c-${cat}"></i>${cat} ${s2} mm²</span><div class="sbt"><div style="width:${((v / maxS) * 100).toFixed(1)}%;background:${SERIE[cat]}"></div></div><b>${fmt(v, 1)} m</b></div>`; }).join('')}</div>`;
@@ -108,7 +108,7 @@ function vPuntas(el) {
   const btns = [['Exportar Excel', 'btn', () => exportPuntas()], ['PDF', 'btn', () => printPuntas()]];
   if (sel.length) btns.unshift([`${cat === 'BT' ? 'Lado inversor' : 'Origen'} (${sel.length})`, 'btn acc', () => registrarPuntas(sel, ['o'])], [`${cat === 'BT' ? 'Lado STS' : 'Destino'} (${sel.length})`, 'btn acc', () => registrarPuntas(sel, ['d'])], [`Ambos lados (${sel.length})`, 'btn pri', () => registrarPuntas(sel, ['o', 'd'])]);
   actions(btns);
-  const cs = R.circuitos.filter((c) => c.cat !== 'PAT');
+  const cs = R.circuitos.filter((c) => c.cat !== 'PAT' && c.cat !== 'LA');
   // tarjetas por sección
   const keys = [...new Set(cs.map((c) => `${c.cat}|${c.seccion}`))].sort((a, b) => (a[0] === b[0] ? Number(b.split('|')[1]) - Number(a.split('|')[1]) : a.localeCompare(b)));
   let h = `<div class="grid g4 stagger ptiles" style="margin-bottom:16px">${keys.map((k) => {
@@ -198,10 +198,10 @@ function printMes(ym) {
   const { dias } = datosPorFecha();
   const [y, m] = ym.split('-').map(Number), nd = new Date(y, m, 0).getDate();
   const ds = [...dias.values()].filter((D) => D.fecha.startsWith(ym)).sort((a, b) => a.fecha.localeCompare(b.fecha));
-  const colsData = []; for (let d = 1; d <= nd; d++) { const k = `${ym}-${String(d).padStart(2, '0')}`, X = dias.get(k); colsData.push({ label: String(d), parts: ['BT', 'MT', 'PAT'].map((c) => ({ v: X ? X.m[c] : 0, color: SERIE[c], name: c })) }); }
-  const t = (c) => ds.reduce((a, D) => a + D.m[c], 0), tot = t('BT') + t('MT') + t('PAT');
+  const colsData = []; for (let d = 1; d <= nd; d++) { const k = `${ym}-${String(d).padStart(2, '0')}`, X = dias.get(k); colsData.push({ label: String(d), parts: catsUso().map((c) => ({ v: X ? X.m[c] : 0, color: SERIE[c], name: c })) }); }
+  const t = (c) => ds.reduce((a, D) => a + D.m[c], 0), tot = CATK.reduce((a, c) => a + t(c), 0);
   let h = prHead(`Tendido de ${MESES[m - 1]} ${y}`);
-  h += `<div class="card"><div class="kpis k4">${kpi('Total del mes', tot)}${kpi('BT', t('BT'))}${kpi('MT', t('MT'))}${kpi('PAT', t('PAT'))}</div>${Charts.cols(colsData, { h: 170 })}${Charts.legend(['BT', 'MT', 'PAT'].map((c) => [SERIE[c], CATN[c]]))}</div>`;
+  h += `<div class="card"><div class="kpis k4">${kpi('Total del mes', tot)}${kpi('BT', t('BT'))}${kpi('MT', t('MT'))}${kpi('PAT', t('PAT'))}${t('LA') > 0 ? kpi('Línea aérea', t('LA')) : ''}</div>${Charts.cols(colsData, { h: 170 })}${Charts.legend(catsUso().map((c) => [SERIE[c], CATN[c]]))}</div>`;
   h += `<div class="card prday"><h3>Resumen por día</h3><table class="tbl dtbl"><thead><tr><th>Fecha</th><th class="num">BT</th><th class="num">MT</th><th class="num">PAT</th><th class="num">Total</th><th class="num">Circuitos</th><th class="num">Puntas</th><th>Zanjas cerradas</th></tr></thead><tbody>
     ${ds.map((D) => `<tr><td>${fechaCorta(D.fecha)}</td><td class="num">${fmt(D.m.BT)}</td><td class="num">${fmt(D.m.MT)}</td><td class="num">${fmt(D.m.PAT)}</td><td class="num"><b>${fmt(D.total)}</b></td><td class="num">${[...D.circ.values()].filter((o) => o.c.cat !== 'PAT').length}</td><td class="num">${D.nPuntas || ''}</td><td>${D.zanjas.length || ''}</td></tr>`).join('')}</tbody></table></div>`;
   ds.forEach((D) => { h += `<div class="card prday"><h3>${fechaLarga(D.fecha)}</h3>${diaHTML(D, true)}</div>`; });
@@ -212,7 +212,7 @@ function printAvance() {
   printHTML(prHead('Avance de obra · Tendido y aprovechamiento de cables') + $('#view').innerHTML, `Avance ${today()}.pdf`, true);
 }
 function printPuntas() {
-  const cs = R.circuitos.filter((c) => c.cat !== 'PAT');
+  const cs = R.circuitos.filter((c) => c.cat !== 'PAT' && c.cat !== 'LA');
   let h = prHead('Puntas de cable colocadas');
   ['BT', 'MT'].forEach((cat) => {
     const rows = cs.filter((c) => c.cat === cat); if (!rows.length) return;

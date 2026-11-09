@@ -35,7 +35,7 @@
     return null;
   }
 
-  const tipo = (v) => { const t = String(v || '').toUpperCase(); return /PAT|DESN/.test(t) ? 'PAT' : /MT|MEDIA/.test(t) ? 'MT' : /BT|BAJA/.test(t) ? 'BT' : null; };
+  const tipo = (v) => { const t = String(v || '').toUpperCase(); return /PRYSALAC|AL\s*\/\s*AC|A[EÉ]REA|\bLA\b/.test(t) ? 'LA' : /PAT|DESN/.test(t) ? 'PAT' : /MT|MEDIA/.test(t) ? 'MT' : /BT|BAJA/.test(t) ? 'BT' : null; };
   function parseBobinas(rows) {
     const h = findHeader(rows, ['BOBINA', 'SECCION'], [
       ['fecha', ['FECHA']], ['remito', ['REMITO']], ['codigo', ['CODIGO', 'INTERNO']],
@@ -132,7 +132,7 @@
     const wb = XLSX.utils.book_new();
     const cMap = new Map(R.circuitos.map((c) => [c.id, c]));
     const est = { ejecutado: 'Ejecutado', listo: 'Listo para cortar', provisorio: 'Provisorio (espera zanja)', falta: 'SIN BOBINA' };
-    const CN = (typeof window !== 'undefined' && window.CATN) || { BT: 'BT 0,8 kV', MT: 'MT 33 kV', PAT: 'PAT Cu desnudo' };
+    const CN = (typeof window !== 'undefined' && window.CATN) || { BT: 'BT 0,8 kV', MT: 'MT 33 kV', PAT: 'PAT Cu desnudo', LA: 'LA 33 kV Prysalac' };
 
     const res = [['Resumen – ' + (state.nombre || '')], ['Ver la hoja "Explicación" para el significado de cada columna.'], [],
       ['Tipo', 'Sección mm²', 'Bobinas (total)', 'Sin abrir (real)', 'En uso (real)', 'Terminadas (real)', 'Stock ingresado (m)', 'Requerido (m)', 'Tendido (m)', 'Saldo actual en bobinas (m)',
@@ -241,7 +241,7 @@
   }
   function exportPuntas(state, R, H) {
     const wb = XLSX.utils.book_new();
-    const cs = R.circuitos.filter((c) => c.cat !== 'PAT');
+    const cs = R.circuitos.filter((c) => c.cat !== 'PAT' && c.cat !== 'LA');
     const ks = [...new Set(cs.map((c) => `${c.cat}|${c.seccion}`))].sort();
     const res = [['Tipo', 'Sección (mm²)', 'Circuitos', 'Conductores', 'Puntas totales', 'Colocadas', 'Pendientes', '% colocadas']];
     ks.forEach((k) => { const [cat, s2] = k.split('|'); const g = cs.filter((c) => `${c.cat}|${c.seccion}` === k).map(H.puntasDe); const t = g.reduce((a, x) => a + x.tot, 0), cc = g.reduce((a, x) => a + x.col, 0); res.push([cat, Number(s2), g.length, g.reduce((a, x) => a + x.n, 0), t, cc, t - cc, t ? Math.round((cc / t) * 1000) / 10 : 0]); });

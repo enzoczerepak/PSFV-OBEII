@@ -44,7 +44,7 @@ function vCables(el) {
   const cnt = (cat) => { const cs = R.circuitos.filter((c) => c.cat === cat); return [cs.filter((c) => c.completo).length, cs.length, cs.filter((c) => c.estado === 'listo para tender').length]; };
   let h = `<div class="grid g3 stagger" style="margin-bottom:16px">
     <div class="card"><h3>Tendido</h3><table class="kt"><tr><th></th><th>Tendidos</th><th>Listos</th></tr>
-      ${['BT', 'MT', 'PAT'].map((c) => { const [a, b, l] = cnt(c); return `<tr><td>${ctag(c)}<b>${CATN[c]}</b></td><td><span class="mini ok"><div data-w="${pct(a, b)}" style="width:0"></div></span> ${a}/${b}</td><td>${l}</td></tr>`; }).join('')}</table></div>
+      ${catsUso().map((c) => { const [a, b, l] = cnt(c); return `<tr><td>${ctag(c)}<b>${CATN[c]}</b></td><td><span class="mini ok"><div data-w="${pct(a, b)}" style="width:0"></div></span> ${a}/${b}</td><td>${l}</td></tr>`; }).join('')}</table></div>
     <div class="card"><h3>Zanja realizada</h3>${zanjaCard('BT')}${zanjaCard('MT')}<div class="legend" style="margin-top:6px"><span><i class="c-done"></i>Cerrada</span><span><i class="c-acc"></i>Abierta</span></div></div>
     <div class="card"><h3>Alertas</h3><div class="alerts">${R.alerts.length ? R.alerts.map((a) => `<div class="alert ${a.tipo}">${esc(a.txt)}</div>`).join('') : '<div class="alert ok">Sin observaciones</div>'}</div></div>
   </div><div class="grid g3 stagger" style="margin-bottom:16px"><div class="card"><h3>PAT tendida</h3>${patCard()}</div>`;
@@ -62,14 +62,14 @@ function vCables(el) {
 }
 
 // ======================= AVANCE =======================
-const SERIE = { BT: '#00939a', MT: '#c97b12', PAT: '#6a5acd' };
+const SERIE = { BT: '#00939a', MT: '#c97b12', PAT: '#6a5acd', LA: '#2f6fc2' };
 const ST = { tend: '#00797f', listo: '#7fc6c9', pend: '#dfe5ec' };
 function vAvance(el) {
   actions([['Exportar Excel', 'btn', exportExcel], ['Exportar PDF', 'btn pri', printAvance]]);
   const sumCat = (cat) => { const rs = R.resumen.filter((r) => r.cat === cat); const f = (k) => rs.reduce((a, r) => a + r[k], 0); return { req: f('requerido'), tend: f('tendido'), listo: f('listo') }; };
   const nC = (cat) => { const cs = R.circuitos.filter((c) => c.cat === cat); return [cs.filter((c) => c.completo).length, cs.length]; };
   let h = `<h2 class="sech">Tendido y aprovechamiento de cables</h2><div class="grid g3 stagger" style="margin-bottom:16px">`;
-  ['BT', 'MT', 'PAT'].forEach((cat) => {
+  catsUso().forEach((cat) => {
     const t = sumCat(cat), [a, b] = nC(cat), p = t.req ? t.tend / t.req : 0;
     h += `<div class="card tile"><div>${Charts.ring(p, SERIE[cat], 'tendido')}</div><div><h3 style="margin-bottom:6px">${ctag(cat)}${CATN[cat]}</h3>
       <div class="kpis k1" style="gap:6px">${kpi('Metros tendidos', t.tend, `/ ${fmt(t.req)} m`)}${kpi('Circuitos completos', a, `/ ${b}`)}</div>
@@ -83,7 +83,7 @@ function vAvance(el) {
   h += `<div class="card"><h3>BT por STS</h3>${Charts.hbars(filas(grupo('BT', (c) => c.hasta)))}${leg}</div>`;
   h += `<div class="card"><h3>MT por circuito</h3>${Charts.hbars(filas(grupo('MT', (c) => c.designacion)), { labelW: 70 })}${leg}</div>`;
   // línea temporal
-  const series = ['BT', 'MT', 'PAT'].map((cat) => {
+  const series = catsUso().map((cat) => {
     const tot = sumCat(cat).req || 1;
     const ej = R.piezas.filter((p) => p.cat === cat && p.estado === 'ejecutado');
     const byDay = new Map();
@@ -103,7 +103,7 @@ function vAvance(el) {
     return { label: `${CATS[r.cat].corto} ${r.seccion}`, right: `${term}/${bs.length} terminadas`, parts: [{ v: term, color: '#4b5567', name: 'Terminadas' }, { v: uso, color: ST.tend, name: 'En uso' }, { v: sin, color: ST.pend, name: 'Sin empezar' }] }; });
   h += `<div class="card"><h3>Zanjas (metros)</h3>${Charts.hbars(zf, { labelW: 120 })}${Charts.legend([['#4b5567', 'Cerrada'], ['#f5a524', 'Abierta'], [ST.pend, 'Sin abrir']])}
     <h3 style="margin-top:18px">Bobinas</h3>${Charts.hbars(bf, { labelW: 80, unit: 'bobinas' })}${Charts.legend([['#4b5567', 'Terminadas'], [ST.tend, 'En uso'], [ST.pend, 'Sin empezar']])}</div>`;
-  const ptRows = (() => { const cs = R.circuitos.filter((c) => c.cat !== 'PAT'); const out = []; const add = (label, fn) => { let t = 0, c = 0; cs.forEach((x) => { const r = fn(x); if (r) { t += r[1]; c += r[0]; } }); if (t) out.push({ label, right: `${c}/${t}`, parts: [{ v: c, color: '#4b5567', name: 'Colocadas' }, { v: t - c, color: ST.pend, name: 'Pendientes' }] }); };
+  const ptRows = (() => { const cs = R.circuitos.filter((c) => c.cat !== 'PAT' && c.cat !== 'LA'); const out = []; const add = (label, fn) => { let t = 0, c = 0; cs.forEach((x) => { const r = fn(x); if (r) { t += r[1]; c += r[0]; } }); if (t) out.push({ label, right: `${c}/${t}`, parts: [{ v: c, color: '#4b5567', name: 'Colocadas' }, { v: t - c, color: ST.pend, name: 'Pendientes' }] }); };
     add('BT · lado inversor', (x) => x.cat === 'BT' && [puntasDe(x).o, puntasDe(x).n]); add('BT · lado STS', (x) => x.cat === 'BT' && [puntasDe(x).d, puntasDe(x).n]);
     ['STS – STS', 'STS – Sala de celdas', 'Sala de celdas – Piquete LMT', 'Piquete – ET'].forEach((g) => add('MT · ' + g, (x) => x.cat === 'MT' && tramo(x) === g && [puntasDe(x).col, puntasDe(x).tot])); return out; })();
   h += `</div><h2 class="sech">Puntas de cable</h2><div class="grid g2 stagger" style="margin-bottom:8px"><div class="card"><h3>Puntas colocadas por sección</h3>${(() => { const cs = R.circuitos.filter((c) => c.cat !== 'PAT'); const ks = [...new Set(cs.map((c) => `${c.cat}|${c.seccion}`))]; return Charts.hbars(ks.map((k) => { const g = cs.filter((c) => `${c.cat}|${c.seccion}` === k).map(puntasDe); const t = g.reduce((a, x) => a + x.tot, 0), cc = g.reduce((a, x) => a + x.col, 0); return { label: k.replace('|', ' '), right: `${cc}/${t} colocadas`, parts: [{ v: cc, color: '#4b5567', name: 'Colocadas' }, { v: t - cc, color: ST.pend, name: 'Pendientes' }] }; }), { labelW: 80, unit: 'puntas' }); })()}${Charts.legend([['#4b5567', 'Colocadas'], [ST.pend, 'Pendientes']])}</div><div class="card"><h3>Puntas por extremo y tramo</h3>${Charts.hbars(ptRows, { labelW: 220, rightW: 80, unit: 'puntas' })}${Charts.legend([['#4b5567', 'Colocadas'], [ST.pend, 'Pendientes']])}</div></div>` + fundAvanceHTML();

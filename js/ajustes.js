@@ -9,7 +9,7 @@ function vAjustes(el) {
     <label title="Del margen disponible de cada sección, qué parte se considera segura al tender. El resto es riesgo.">Tolerancia segura (% del margen)<input type="number" step="5" min="0" max="100" id="pTS" value="${p.tolSeg != null ? p.tolSeg : 50}"></label>
     <label>Cola no utilizable por bobina (m)<input type="number" step="1" min="0" id="pC" value="${p.cola}"></label></div>
     <h4 style="margin:16px 0 6px">Corrección de largo por tipo (%)</h4>
-    <div class="form">${['BT', 'MT', 'PAT'].map((k) => { const rs = R.resumen.filter((r) => r.cat === k && r.tendidoTeo > 0); const teo = rs.reduce((a, r) => a + r.tendidoTeo, 0), dv = rs.reduce((a, r) => a + r.desvio, 0);
+    <div class="form">${catsUso().map((k) => { const rs = R.resumen.filter((r) => r.cat === k && r.tendidoTeo > 0); const teo = rs.reduce((a, r) => a + r.tendidoTeo, 0), dv = rs.reduce((a, r) => a + r.desvio, 0);
       const sug = teo > 0 ? Math.round((dv / teo) * 1000) / 10 : null;
       return `<label>${CATN[k]}<input type="number" step="0.1" class="pAj" data-k="${k}" value="${(p.ajuste || {})[k] || 0}"><span class="muted" style="font-weight:400">${sug != null ? `Según lo tendido: ${sug > 0 ? '+' : ''}${fmt(sug, 1)} % (${fmt(teo)} m) <a href="#" class="useSug" data-k="${k}" data-v="${sug}">usar</a>` : 'Sin tendidos para sugerir'}</span></label>`; }).join('')}</div>
     <p class="hint">Si en campo sobra cable al tirar lo que dice la lista, poné un % negativo (por ejemplo −2 %): se corrigen todos los largos a cortar de ese tipo y el plan se recalcula. Para un circuito puntual, usá "Bobina / largo" en Circuitos. El margen por corte se suma a cada conductor solo si querés tolerancia extra.</p></div>
@@ -277,7 +277,7 @@ async function exportExcel() {
   const p = await window.api.saveBinary(IO.exportPlan(S, R), `Plan de cables ${today()}.xlsx`, 'xlsx', 'Excel');
   if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
 }
-const detectCat = (txt, def) => { const t = String(txt || '').toLowerCase(); if (/desn|cu\s*desn|cobre/.test(t)) return 'PAT'; if (/\/\s*\d+/.test(t) || /33\s*kv/.test(t)) return 'MT'; return def || 'BT'; };
+const detectCat = (txt, def) => { const t = String(txt || '').toLowerCase(); if (/prysalac|al\s*\/\s*ac|a[eé]rea/.test(t)) return 'LA'; if (/desn|cu\s*desn|cobre/.test(t)) return 'PAT'; if (/\/\s*\d+/.test(t) || /33\s*kv/.test(t)) return 'MT'; return def || 'BT'; };
 async function importExcel(ctxCat) {
   if (window.READONLY) return;
   const f = await window.api.pickExcel(); if (!f) return;

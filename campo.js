@@ -22,7 +22,7 @@
     S = JSON.parse(txt); R = window.Engine.calcular(S); D = d;
     // margen de tendido (tolerancia por conductor), en segundo plano
     MGc = null; if (MGt) MGt.cancelar();
-    if (window.Margen) MGt = window.Margen.enSegundoPlano(S, R, { metros: false, it: 9, cats: ['BT', 'MT'], demora: 400 }, (dd) => { MGc = dd; MGt = null; if (tab === 'plan' || tab === 'cargar') { const y = window.scrollY; render(); window.scrollTo(0, y); } });
+    if (window.Margen) MGt = window.Margen.enSegundoPlano(S, R, { metros: false, it: 9, cats: ['BT', 'MT', 'LA'], demora: 400 }, (dd) => { MGc = dd; MGt = null; if (tab === 'plan' || tab === 'cargar') { const y = window.scrollY; render(); window.scrollTo(0, y); } });
     if (!enviar) enviar = await W.enviador(d, id, k).catch(() => null);
     ses = { id, k, nombre, cap: !!(u && (u.cap || u.ed)) };
     KQ = 'campo-cola-' + id.slice(0, 16); KH = 'campo-hist-' + id.slice(0, 16);
@@ -101,7 +101,7 @@
     const ps = R.piezas.filter((p) => p.cat === cat && p.bobina && (p.estado === 'listo' || (p.estado === 'ejecutado' && p.fecha === H)));
     const yaBoton = new Set();
     const porB = new Map(); ps.forEach((p) => { if (!porB.has(p.bobina)) porB.set(p.bobina, []); porB.get(p.bobina).push(p); });
-    let h = `<div class="chips">${['BT', 'MT', 'PAT'].map((c) => `<button data-c="${c}" class="${c === cat ? 'on' : ''}">${c}</button>`).join('')}</div>`;
+    let h = `<div class="chips">${['BT', 'MT', 'PAT', ...(S.circuitos.some((x) => x.cat === 'LA') ? ['LA'] : [])].map((c) => `<button data-c="${c}" class="${c === cat ? 'on' : ''}">${c}</button>`).join('')}</div>`;
     if (!porB.size) h += `<div class="card empty"><b>Sin cortes listos en ${cat}</b><br>Los cortes aparecen cuando la oficina abre las zanjas.</div>`;
     [...porB.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es', { numeric: true })).forEach(([cod, arr]) => {
       const b = R.bobinas.find((x) => x.codigo === cod && x.cat === cat) || {};
