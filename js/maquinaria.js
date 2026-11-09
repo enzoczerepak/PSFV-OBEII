@@ -62,6 +62,30 @@ const evSem = (maq, sem, tipo) => maqE().filter((e) => (!maq || e.maq === maq) &
 const dispo = (t, p) => (t + p > 0 ? t / (t + p) : null);
 const numIn = (v) => (vacio(v) ? '' : String(Number(v)));
 
+// ---- mantenimiento programado: cada N horas de uso desde el último service ----
+// base: el último mantenimiento marcado como "service programado" (con su horómetro), si no el horómetro del último service
+// cargado en la ficha, si no el horómetro al ingreso.
+function servicio(m) {
+  const N = Number(m.mantCada); if (!(N > 0)) return null;
+  const sv = maqE().filter((e) => e.maq === m.id && e.tipo === 'mantenimiento' && e.reinicia).sort((a, b) => a.fecha.localeCompare(b.fecha)).pop();
+  let base = null, desde = m.fechaIngreso || '';
+  if (sv) { desde = sv.fecha; base = !vacio(sv.horo) ? Number(sv.horo) : m.sinHoro ? null : horoAntes(m.id, sumDias(sv.fecha, 1)); }
+  else if (!vacio(m.horoUltMant)) base = Number(m.horoUltMant);
+  else if (!vacio(m.horoIngreso)) base = Number(m.horoIngreso);
+  let usado;
+  if (m.sinHoro) usado = maqH().filter((r) => r.maq === m.id).reduce((a, r) => a + Object.entries(r.hs || {}).filter(([f]) => !desde || f > desde).reduce((x, [, v]) => x + (Number(v) || 0), 0), 0);
+  else { const u = ultLect(m.id); if (base == null) return { N, sinBase: true }; usado = Math.max(0, (u && u[0] >= (sv ? sv.fecha : '') ? u[1] : base) - base); }
+  const faltan = N - usado;
+  return { N, base, usado, faltan, prox: base != null ? base + N : null, desde, sv, nivel: faltan <= 0 ? 'venc' : faltan <= Math.max(20, N * 0.1) ? 'prox' : 'ok' };
+}
+function servHTML(m, corto) {
+  const s = servicio(m); if (!s) return corto ? '<span class="muted">–</span>' : '';
+  if (s.sinBase) return '<span class="muted" title="Cargá el horómetro al ingreso o del último service">sin base</span>';
+  const pct = Math.max(0, Math.min(100, (s.usado / s.N) * 100));
+  const txt = s.faltan <= 0 ? `vencido ${fmt(-s.faltan, 1)} h` : `faltan ${fmt(s.faltan, 1)} h`;
+  return `<div class="svc ${s.nivel}" title="Service cada ${fmt(s.N)} h · usadas ${fmt(s.usado, 1)} h${s.prox != null && !m.sinHoro ? ` · próximo a los ${fmt(s.prox, 1)} h de horómetro` : ''}"><b>${txt}</b><span class="svb"><i style="width:${pct.toFixed(0)}%"></i></span>${corto ? '' : `<small>cada ${fmt(s.N)} h${s.prox != null && !m.sinHoro ? ` · a los ${fmt(s.prox, 1)}` : ''}</small>`}</div>`;
+}
+
 // ======================= HORAS SEMANALES =======================
 function vMaq(el) {
   const sem = (ui.maqSem = ui.maqSem || lunesDe(today()));
@@ -77,6 +101,8 @@ function vMaq(el) {
     <span class="muted">${ms.length} equipo${ms.length === 1 ? '' : 's'}</span></div>
     <div class="kpis k4" style="margin-bottom:14px">${kpi('Horas trabajadas', tot.t, 'h', 1)}${kpi('Horas de parada', tot.p, 'h', 1)}${kpi('Horas de mantenimiento', tot.m, 'h', 1)}
       <div class="kpi"><span>Disponibilidad</span><b>${dg == null ? '–' : fmt(dg * 100)}<small>${dg == null ? '' : '%'}</small></b></div></div>`;
+  const avis = maqL().filter((m) => m.activa !== false).map((m) => [m, servicio(m)]).filter(([, x]) => x && !x.sinBase && x.nivel !== 'ok').sort((a, b) => a[1].faltan - b[1].faltan);
+  if (avis.length) h += `<div class="alerts" style="margin-bottom:12px">${avis.map(([m, x]) => `<div class="alert ${x.nivel === 'venc' ? 'error' : 'aviso'}" style="display:block"><b>${esc(m.interno)} · ${esc(m.descripcion)}</b>: ${x.faltan <= 0 ? `service vencido hace ${fmt(-x.faltan, 1)} h` : `faltan ${fmt(x.faltan, 1)} h para el service`} (cada ${fmt(x.N)} h${x.prox != null && !m.sinHoro ? `, a los ${fmt(x.prox, 1)} h de horómetro` : ''})</div>`).join('')}</div>`;
   if (!maqL().length) {
     el.innerHTML = h + `<div class="empty"><b>Todavía no hay equipos cargados</b><p>Cargá cada máquina con su número de interno, descripción, marca y modelo.</p>${ro ? '' : '<button class="btn pri" id="maqPrim">+ Cargar el primer equipo</button>'}</div>`;
     const b = $('#maqPrim'); if (b) b.onclick = () => editMaquina(null);
@@ -84,7 +110,7 @@ function vMaq(el) {
   }
   const ds = diasSem(sem), hoy = today();
   h += `<div class="tblwrap"><table class="tbl maqt"><thead><tr><th>Interno</th><th>Equipo</th>${ds.map((d, k) => `<th class="n dcol ${d === hoy ? 'hoy' : ''}">${DIAS[k]} ${d.slice(8)}</th>`).join('')}
-    <th class="n">Horas semana</th><th class="n">Parada (h)</th><th class="n">Mant. (h)</th><th class="n">Disponib.</th><th>Observaciones</th><th></th></tr></thead><tbody>`;
+    <th class="n">Horas semana</th><th>Próx. service</th><th class="n">Parada (h)</th><th class="n">Mant. (h)</th><th class="n">Disponib.</th><th>Observaciones</th><th></th></tr></thead><tbody>`;
   ms.forEach((m) => {
     const r = regDe(m.id, sem) || {}, L = lecturas(m.id), t = horasSem(m.id, sem), p = evSem(m.id, sem, 'parada'), mm = evSem(m.id, sem, 'mantenimiento'), d = dispo(t, p + mm);
     const evs = maqE().filter((e) => e.maq === m.id && enSemana(e.fecha, sem));
@@ -97,6 +123,7 @@ function vMaq(el) {
         return `<td class="n dcol"><button class="dcel ${vacio(v) ? 'vac' : ''} ${pd ? 'per' : ''}" data-d="${f}" ${ro ? 'disabled' : ''} title="${vacio(v) ? 'Sin registro' : `${pd ? pTxt.charAt(0).toUpperCase() + pTxt.slice(1) + ' · ' : ''}Horómetro ${fmt(Number(v), 1)} (inicio ${ant != null ? fmt(ant, 1) : '?'})`}">${vacio(v) ? '·' : `<b>${ant == null ? 'inicio?' : `${fmt(hd, 1)} h`}</b><small>${pd ? 'período' : fmt(Number(v), 1)}</small>`}</button></td>`;
       }).join('')}
       <td class="n"><b>${fmt(t, 1)}</b>${sinBase && L.some((x) => x[0] >= ds[0] && x[0] <= ds[6]) ? '<div class="hd" style="color:var(--warn)">cargá el horómetro al ingreso</div>' : ''}</td>
+      <td>${servHTML(m, true)}</td>
       <td class="n">${p ? `<b style="color:var(--bad)">${fmt(p, 1)}</b>` : '–'}</td><td class="n">${mm ? `<b style="color:var(--warn)">${fmt(mm, 1)}</b>` : '–'}</td>
       <td class="n">${d == null ? '–' : `<span class="pill ${d >= 0.85 ? 'p-done' : d >= 0.6 ? 'p-prov' : 'p-bad'}">${fmt(d * 100)} %</span>`}</td>
       <td><input type="text" class="mi mo" data-f="obs" value="${esc(r.obs || '')}" ${ro ? 'disabled' : ''}>${evs.length ? `<div class="muted" style="font-size:11.5px;margin-top:3px">${evs.map((e) => `${MAQ_TIPO[e.tipo][0]} ${fechaCorta(e.fecha)}: ${esc(e.motivo)} (${fmt(e.horas, 1)} h)`).join(' · ')}</div>` : ''}</td>
@@ -220,14 +247,14 @@ function vMaqEq(el) {
   let h = `<div class="tools"><div class="seg" id="fME"><button data-v="act">En obra</button><button data-v="baja">De baja</button><button data-v="all">Todos</button></div>
     <span class="muted">${ms.length} equipo${ms.length === 1 ? '' : 's'}</span><span class="sp"></span><input type="search" id="fMQ" placeholder="Buscar interno, equipo, marca…" value="${esc(ui.maqQ || '')}" style="width:240px"></div>
     <div class="tblwrap"><table class="tbl"><thead><tr><th>Interno</th><th>Descripción</th><th>Marca</th><th>Modelo</th><th>N° serie / dominio</th><th>Propiedad</th><th>Ingreso a obra</th>
-    <th class="n">Horas trabajadas</th><th class="n">Paradas (h)</th><th class="n">Mant. (h)</th><th class="n">Disponib.</th><th>Último horómetro</th><th>Estado</th><th></th></tr></thead><tbody>`;
+    <th class="n">Horas trabajadas</th><th class="n">Paradas (h)</th><th class="n">Mant. (h)</th><th class="n">Disponib.</th><th>Último horómetro</th><th>Mant. programado</th><th>Estado</th><th></th></tr></thead><tbody>`;
   ms.forEach((m) => {
     const t = horasTot(m.id);
     const ev = maqE().filter((e) => e.maq === m.id), p = ev.filter((e) => e.tipo === 'parada').reduce((a, e) => a + (Number(e.horas) || 0), 0), mm = ev.filter((e) => e.tipo === 'mantenimiento').reduce((a, e) => a + (Number(e.horas) || 0), 0);
     const ult = ultLect(m.id), d = dispo(t, p + mm);
     h += `<tr data-id="${m.id}"><td class="mono"><b>${esc(m.interno)}</b></td><td>${esc(m.descripcion)}${m.obs ? ` <span title="${esc(m.obs)}">ⓘ</span>` : ''}</td><td>${esc(m.marca || '')}</td><td>${esc(m.modelo || '')}</td><td>${esc(m.serie || '')}</td><td>${esc(m.propiedad || '')}</td><td>${m.fechaIngreso ? fechaCorta(m.fechaIngreso) : '–'}${vacio(m.horoIngreso) ? '' : `<div class="muted" style="font-size:11.5px">horómetro ${fmt(Number(m.horoIngreso), 1)}</div>`}</td>
       <td class="n">${fmt(t, 1)}</td><td class="n">${p ? fmt(p, 1) : '–'}</td><td class="n">${mm ? fmt(mm, 1) : '–'}</td><td class="n">${d == null ? '–' : fmt(d * 100) + ' %'}</td>
-      <td>${m.sinHoro ? '<span class="muted">sin horómetro</span>' : ult ? `${fmt(ult[1], 1)} h <span class="muted">(${fechaCorta(ult[0])})</span>` : '–'}</td><td>${m.activa === false ? '<span class="pill p-prov">de baja</span>' : '<span class="pill p-done">en obra</span>'}</td>
+      <td>${m.sinHoro ? '<span class="muted">sin horómetro</span>' : ult ? `${fmt(ult[1], 1)} h <span class="muted">(${fechaCorta(ult[0])})</span>` : '–'}</td><td>${servHTML(m, false)}</td><td>${m.activa === false ? '<span class="pill p-prov">de baja</span>' : '<span class="pill p-done">en obra</span>'}</td>
       <td>${ro ? '' : '<button class="btn sm ghost" data-a="ed">✎</button>'}</td></tr>`;
   });
   h += `</tbody></table>${ms.length ? '' : '<div class="empty"><b>Sin equipos</b></div>'}</div>`;
@@ -248,6 +275,8 @@ async function editMaquina(id) {
       <label>Propiedad<select name="propiedad">${['Propio', 'Alquilado', 'Subcontratista'].map((x) => `<option ${m.propiedad === x ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
  <label>Fecha de ingreso a obra<input type="date" name="fechaIngreso" value="${esc(m.fechaIngreso || '')}"></label>
       <label>Horómetro al ingreso a obra (h)<input type="number" step="0.1" min="0" name="horoIngreso" value="${numIn(m.horoIngreso)}" placeholder="inicio de la primera jornada"></label>
+      <label>Mantenimiento programado cada (h)<input type="number" step="1" min="0" name="mantCada" value="${numIn(m.mantCada)}" placeholder="ej. 200"></label>
+      <label>Horómetro del último service<input type="number" step="0.1" min="0" name="horoUltMant" value="${numIn(m.horoUltMant)}" placeholder="si no, se cuenta desde el ingreso"></label>
       <label class="chk"><input type="checkbox" name="sinHoro" ${m.sinHoro ? 'checked' : ''}> Sin horómetro: cargar horas trabajadas por día</label>
       <label class="chk"><input type="checkbox" name="activa" ${m.activa !== false ? 'checked' : ''}> En obra (sacalo cuando el equipo se retira)</label>
       <label class="full">Observaciones<input type="text" name="obs" value="${esc(m.obs || '')}"></label></div>`,
@@ -256,6 +285,7 @@ async function editMaquina(id) {
       if (!g('interno') || !g('descripcion')) { toast('Completá el N° de interno y la descripción', { err: true }); return false; }
       if (maqL().some((x) => x !== m && String(x.interno).toLowerCase() === g('interno').toLowerCase())) { toast(`Ya existe un equipo con el interno ${g('interno')}`, { err: true }); return false; }
       Object.assign(m, { interno: g('interno'), descripcion: g('descripcion'), marca: g('marca'), modelo: g('modelo'), serie: g('serie'), propiedad: g('propiedad'), activa: $('[name=activa]', box).checked, obs: g('obs'),
+        mantCada: g('mantCada') === '' ? '' : Number(g('mantCada')), horoUltMant: g('horoUltMant') === '' ? '' : Number(g('horoUltMant')),
         fechaIngreso: g('fechaIngreso'), horoIngreso: g('horoIngreso') === '' ? '' : Number(g('horoIngreso')), sinHoro: $('[name=sinHoro]', box).checked });
       return 'ok';
     }]],
@@ -311,16 +341,22 @@ async function editEvento(id, maq, sem) {
       <label>Fecha<input type="date" name="fecha" value="${esc(e.fecha)}"></label>
       <label>Horas<input type="number" step="0.5" min="0" name="horas" value="${e.horas}"></label>
       <label>Motivo<input type="text" name="motivo" list="evMot" value="${esc(e.motivo || '')}"><datalist id="evMot"></datalist></label>
+      <div id="evSvc" style="grid-column:1/-1;display:none"><label style="display:flex;gap:8px;align-items:center;flex-direction:row;font-weight:500"><input type="checkbox" name="reinicia" style="width:auto;margin:0" ${e.reinicia ? 'checked' : ''}> Es el <b>service programado</b>: reinicia el contador de horas para el próximo</label>
+        <label style="margin-top:8px">Horómetro al hacer el service<input type="number" step="0.1" min="0" name="horo" value="${numIn(e.horo)}" placeholder="si no se carga, se toma la lectura de ese día"></label></div>
       <label class="full">Observaciones<input type="text" name="obs" value="${esc(e.obs || '')}" placeholder="detalle, repuestos, quién lo hizo…"></label></div>`,
     buttons: [...(nuevo ? [] : [['Eliminar', 'btn danger', () => 'del']]), ['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (box) => {
       const g = (n) => $(`[name=${n}]`, box).value.trim();
       if (!g('maq') || !g('fecha') || !(Number(g('horas')) > 0) || !g('motivo')) { toast('Completá equipo, fecha, horas y motivo', { err: true }); return false; }
       Object.assign(e, { maq: g('maq'), tipo: g('tipo'), fecha: g('fecha'), horas: Number(g('horas')), motivo: g('motivo'), obs: g('obs') });
+      const rei = g('tipo') === 'mantenimiento' && $('[name=reinicia]', box).checked;
+      if (rei) { e.reinicia = true; e.horo = g('horo') === '' ? '' : Number(g('horo')); } else { delete e.reinicia; delete e.horo; }
       return 'ok';
     }]],
   });
   { const box = $('#modal .mbox'), t = $('[name=tipo]', box), dl = $('#evMot', box);
-    const upd = () => { dl.innerHTML = MAQ_MOT[t.value].map((x) => `<option value="${x}">`).join(''); };
+    const sv = $('#evSvc', box), sm = $('[name=maq]', box);
+    const upd = () => { dl.innerHTML = MAQ_MOT[t.value].map((x) => `<option value="${x}">`).join(''); const m = maqDe(sm.value); sv.style.display = t.value === 'mantenimiento' && m && Number(m.mantCada) > 0 ? '' : 'none'; };
+    sm.addEventListener('change', upd);
     t.onchange = upd; upd(); }
   const res = await pm;
   if (res === 'del') { if (await confirmar('Eliminar registro', '¿Eliminar este registro de parada / mantenimiento?', 'Eliminar', 'btn danger')) { S.maqEventos = maqE().filter((x) => x !== e); commit('Registro eliminado'); } }
@@ -332,14 +368,14 @@ async function exportMaq() {
   const wb = XLSX.utils.book_new(), r1 = (x) => Math.round(x * 10) / 10;
   const sh = (aoa, w, n) => { const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = w.map((x) => ({ wch: x })); XLSX.utils.book_append_sheet(wb, ws, n); };
   const ms = maqL().slice().sort(maqOrd);
-  const a1 = [['Interno', 'Descripción', 'Marca', 'Modelo', 'N° serie / dominio', 'Propiedad', 'Ingreso a obra', 'Horómetro al ingreso', 'Estado', 'Horas trabajadas', 'Horas de parada', 'Horas de mantenimiento', 'Disponibilidad %', 'Último horómetro', 'Observaciones']];
+  const a1 = [['Interno', 'Descripción', 'Marca', 'Modelo', 'N° serie / dominio', 'Propiedad', 'Ingreso a obra', 'Horómetro al ingreso', 'Estado', 'Horas trabajadas', 'Horas de parada', 'Horas de mantenimiento', 'Disponibilidad %', 'Último horómetro', 'Service cada (h)', 'Horas desde el último service', 'Faltan para el service (h)', 'Próximo service (horómetro)', 'Observaciones']];
   ms.forEach((m) => {
     const t = horasTot(m.id), ev = maqE().filter((e) => e.maq === m.id);
     const p = ev.filter((e) => e.tipo === 'parada').reduce((a, e) => a + (Number(e.horas) || 0), 0), mm = ev.filter((e) => e.tipo === 'mantenimiento').reduce((a, e) => a + (Number(e.horas) || 0), 0);
     const ult = ultLect(m.id), d = dispo(t, p + mm);
-    a1.push([m.interno, m.descripcion, m.marca || '', m.modelo || '', m.serie || '', m.propiedad || '', m.fechaIngreso || '', vacio(m.horoIngreso) ? '' : Number(m.horoIngreso), m.activa === false ? 'De baja' : 'En obra', r1(t), r1(p), r1(mm), d == null ? '' : r1(d * 100), m.sinHoro ? 'sin horómetro' : ult ? ult[1] : '', m.obs || '']);
+    a1.push([m.interno, m.descripcion, m.marca || '', m.modelo || '', m.serie || '', m.propiedad || '', m.fechaIngreso || '', vacio(m.horoIngreso) ? '' : Number(m.horoIngreso), m.activa === false ? 'De baja' : 'En obra', r1(t), r1(p), r1(mm), d == null ? '' : r1(d * 100), m.sinHoro ? 'sin horómetro' : ult ? ult[1] : '', ...(() => { const x = servicio(m); return x && !x.sinBase ? [x.N, r1(x.usado), r1(x.faltan), x.prox != null && !m.sinHoro ? r1(x.prox) : ''] : [x ? x.N : '', '', '', '']; })(), m.obs || '']);
   });
-  sh(a1, [10, 26, 14, 16, 18, 13, 13, 15, 10, 15, 15, 20, 15, 15, 30], 'Equipos');
+  sh(a1, [10, 26, 14, 16, 18, 13, 13, 15, 10, 15, 15, 20, 15, 15, 14, 18, 18, 20, 30], 'Equipos');
   // horas por semana y día
   const a2 = [['Semana (lunes)', 'Semana', 'Interno', 'Equipo', ...DIAS.map((d) => d + ' (h)'), 'Horas semana', 'Horas de parada', 'Horas de mantenimiento', 'Disponibilidad %', 'Observaciones']];
   maqH().slice().sort((a, b) => b.semana.localeCompare(a.semana) || maqOrd(maqDe(a.maq) || {}, maqDe(b.maq) || {})).forEach((r) => {

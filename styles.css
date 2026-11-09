@@ -946,3 +946,9 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 .maqt .dcel.vac { color: #c3ccd8; border-style: dashed; } .maqt .dcel:hover:not(:disabled) { border-color: var(--acc); background: #fff8ec; }
 .maqt .dcel:disabled { cursor: default; }
 .maqt .dcel.per { border-color: #c9b6ff; background: #f6f2ff; } .maqt .dcel.per small { color: #6a5acd; font-weight: 600; }
+/* mantenimiento programado */
+.svc { display: grid; gap: 3px; min-width: 120px; font-size: 12px; }
+.svc b { font-size: 12.5px; } .svc small { color: var(--mute, #7a8aa3); font-size: 11px; }
+.svc .svb { height: 5px; border-radius: 3px; background: #e6ebf2; overflow: hidden; } .svc .svb i { display: block; height: 100%; border-radius: 3px; background: #1a9a6b; }
+.svc.prox b { color: #c97b12; } .svc.prox .svb i { background: #f5a524; }
+.svc.venc b { color: var(--bad, #d64545); } .svc.venc .svb i { background: var(--bad, #d64545); }
