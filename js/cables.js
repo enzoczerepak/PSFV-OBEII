@@ -231,7 +231,8 @@ async function editCircuito(id, cat) {
       <label>Conductores (fases)<input type="number" name="fases" value="${c.fases || 3}" min="1" max="12"></label>
       <label>Longitud lineal (m)<input type="number" step="0.1" name="lineal" value="${c.lineal || 0}"></label>
       ${isLA ? `<label class="chk"><input type="checkbox" name="habilitado" ${c.habilitado ? 'checked' : ''}> Postes listos: habilitar el corte</label>` : `<label>Zanja<input type="text" disabled value="${rc ? esc(rc.zTitulo) + ' · ' + fmt(rc.zanjaLargo, 1) + ' m · ' + rc.zanja : 'propia (se crea al guardar)'}"></label>`}
-      <label class="full">Observaciones<input type="text" name="obs" value="${esc(c.obs || '')}"></label></div>
+      <label class="full">Observaciones<input type="text" name="obs" value="${esc(c.obs || '')}"></label>
+      ${(() => { const fi = Engine.ficha(c.cat || cat, c.formacion); return fi ? `<div class="full"><div class="alert info" style="margin:0">${fichaTxt(fi, 0)}</div></div>` : ''; })()}</div>
       <p class="hint">${isLA ? 'Tramo de línea aérea (ej. entre retenciones). Cantidad final = largo de un conductor × conductores, con flecha y puentes incluidos; el ajuste % del tipo LA se suma en Ajustes. Sin zanja: se corta cuando el tramo tiene los postes listos.' : 'El estado, el largo y la PAT se manejan por zanja (sección Zanjas). Para que varios circuitos compartan zanja, tildalos y tocá "Misma zanja".'}</p>`,
     buttons: [...(nuevo ? [] : [['Eliminar', 'btn danger', () => 'del']]), ['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (box) => {
       const g = (n) => $(`[name=${n}]`, box).value;
@@ -303,7 +304,7 @@ function stockPorZanja() {
   return [...g.values()];
 }
 async function exportStock() {
-  const p = await window.api.saveBinary(IO.exportStock(S, R, { stockConsolidado, cortesDetalle, stockPorZanja, EST_CORTE }), `Stock de bobinas ${today()}.xlsx`, 'xlsx', 'Excel');
+  const p = await window.api.saveBinary(IO.exportStock(S, R, { stockConsolidado, cortesDetalle, stockPorZanja, EST_CORTE, ficha: Engine.ficha }), `Stock de bobinas ${today()}.xlsx`, 'xlsx', 'Excel');
   if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
 }
 function printStock() {
@@ -343,8 +344,15 @@ function vBobinas(el) {
 }
 const SEC_DEF = { BT: '1x240', MT: '1x50/25', PAT: '1x25 Cu desnudo', LA: 'Prysalac 120/20' };
 // opciones de sección por tipo para la carga (la línea aérea usa el catálogo Prysalac Al/Ac)
-const SEC_OPC = { BT: ['1x240', '1x185', '1x150', '1x120', '1x95'], MT: ['1x50/25', '1x120/25', '1x150/25', '1x185/25', '1x240/25'], PAT: ['1x25 Cu desnudo', '1x35 Cu desnudo', '1x50 Cu desnudo', '1x95 Cu desnudo'],
+const SEC_OPC = { BT: Object.keys(Engine.RETENAX.BT.filas).map((s) => `1x${s}`).reverse(), MT: Object.keys(Engine.RETENAX.MT.filas).map((s) => `1x${s}/25`), PAT: ['1x25 Cu desnudo', '1x35 Cu desnudo', '1x50 Cu desnudo', '1x95 Cu desnudo'],
   LA: Engine.PRYSALAC.map((p) => `Prysalac ${p.sec}`) };
+// texto de la ficha técnica (y masa de la bobina si se conocen los metros)
+const dec = (x) => String(x).replace('.', ',');
+function fichaTxt(fi, metros) {
+  const kgB = metros > 0 ? ` · bobina ≈ <b>${fmt(Math.round(metros * fi.kg / 1000))} kg</b>` : '';
+  if (fi.cat === 'LA') return `<b>Prysalac ${fi.sec} mm² Al/Ac</b> (${fi.norma}) · Ø ${dec(fi.d)} mm · ${fi.kg} kg/km · carga de rotura ${dec(fi.kn)} kN · bobina habitual ${fmt(fi.largo)} m${kgB}`;
+  return `<b>${fi.nombre}</b> · ${fi.sec} mm² (${fi.norma}) · Ø ext. ${dec(fi.d)} mm · ${fmt(fi.kg)} kg/km${kgB}<br>R 90 °C ${dec(fi.r)} Ω/km · X ${dec(fi.x)} Ω/km · I enterrado ${fi.iEnt} A · I aire ${fi.iAire} A · aislación ${fi.aisl} ${dec(fi.ais)} mm`;
+}
 const prysDe = (txt) => { const m = String(txt || '').match(/(\d+)\s*\/\s*(\d+(?:[.,]\d+)?)/); return m ? Engine.PRYSALAC.find((p) => p.sec.replace(',', '.') === `${m[1]}/${m[2].replace(',', '.')}`) || null : null; };
 async function editBobina(id) {
   if (window.READONLY) return;
@@ -376,12 +384,12 @@ async function editBobina(id) {
     const upd = (cambioTipo) => {
       const k = sc.value; $('#secOpc', box).innerHTML = (SEC_OPC[k] || []).map((o) => `<option value="${o}">`).join('');
       if (cambioTipo && nuevo) si.value = SEC_DEF[k] || '';
-      const p = k === 'LA' ? prysDe(si.value) : null;
-      inf.style.display = k === 'LA' ? '' : 'none';
-      inf.innerHTML = k === 'LA' ? (p ? `<div class="alert info" style="margin:0">Prysalac ${p.sec} mm² Al/Ac · Ø ${String(p.d).replace('.', ',')} mm · ${p.kg} kg/km · carga de rotura ${String(p.kn).replace('.', ',')} kN · bobina habitual ${fmt(p.largo)} m</div>` : '<div class="alert aviso" style="margin:0">Elegí la sección Al/Ac de la lista (ej. Prysalac 120/20)</div>') : '';
+      const p = k === 'LA' ? prysDe(si.value) : null, fi = Engine.ficha(k, si.value);
+      inf.style.display = k === 'PAT' ? 'none' : '';
+      inf.innerHTML = fi ? `<div class="alert info" style="margin:0">${fichaTxt(fi, Number(en.value) || 0)}</div>` : k === 'LA' ? '<div class="alert aviso" style="margin:0">Elegí la sección Al/Ac de la lista (ej. Prysalac 120/20)</div>' : k === 'PAT' ? '' : '<div class="alert aviso" style="margin:0">Sección sin ficha de catálogo: elegila de la lista</div>';
       if (k === 'LA' && p && nuevo && !(Number(en.value) > 0)) en.placeholder = `habitual ${p.largo} m`;
     };
-    sc.onchange = () => upd(true); si.oninput = () => upd(false); upd(false);
+    sc.onchange = () => upd(true); si.oninput = () => upd(false); en.oninput = () => upd(false); upd(false);
   }
   const res = await pm;
   if (res === 'del') {

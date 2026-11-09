@@ -14,6 +14,27 @@
     ['185/30', 19.0, 748, 65.3, 2500], ['210/35', 20.3, 852, 73.4, 2500], ['240/40', 21.8, 990, 85.1, 2500], ['300/50', 24.4, 1239, 105, 2500],
     ['340/30', 25.0, 1178, 91.7, 1500], ['380/50', 27.0, 1454, 121, 1000], ['435/55', 28.8, 1654, 134, 1000], ['550/70', 32.4, 2093, 166, 700], ['680/85', 36.0, 2565, 207, 700]]
     .map(([sec, d, kg, kn, largo]) => ({ sec, d, kg, kn, largo }));
+  // Cables aislados Prysmian RETENAX de la obra (catálogos Prysmian Argentina): por sección de conductor (mm²)
+  // [Ø conductor, aislación, envoltura, Ø exterior (mm), masa (kg/km), R 90 °C (Ω/km), X 50 Hz (Ω/km), I enterrado (A), I aire (A)]
+  const RETENAX = {
+    BT: { nombre: 'Retenax Valio Al 0,6/1 kV · unipolar', norma: 'IRAM 2178-1', aisl: 'XLPE (polietileno reticulado)', env: 'PVC ecológico ST2', cond: 'Aluminio grado eléctrico, clase 2',
+      filas: { 95: [11.6, 1.1, 1.5, 18, 420, 0.410, 0.142, 265, 302], 120: [12.8, 1.2, 1.5, 19, 500, 0.324, 0.141, 302, 352], 150: [14.5, 1.4, 1.6, 21, 620, 0.264, 0.140, 338, 408],
+        185: [16.2, 1.6, 1.6, 23, 760, 0.210, 0.140, 384, 469], 240: [18.0, 1.7, 1.7, 26, 950, 0.160, 0.139, 448, 556], 300: [20.7, 1.8, 1.8, 29, 1200, 0.128, 0.137, 507, 644] },
+      notaI: 'I enterrado: 3 unipolares en contacto, directamente enterrados (D2) · I aire: separados un diámetro (G)' },
+    MT: { nombre: 'Retenax MT Al 19/33 (36) kV · Cat. I · unipolar sin armar', norma: 'IRAM 2178-2', aisl: 'XLPE', env: 'PVC ST2 negro', cond: 'Aluminio, pantalla de alambres de Cu recocido',
+      filas: { 50: [8.1, 8.0, 2.0, 33, 1030, 0.821, 0.231, 184, 196], 70: [9.8, 8.0, 2.0, 35, 1150, 0.567, 0.220, 224, 244], 95: [11.6, 8.0, 2.1, 36, 1300, 0.410, 0.210, 264, 296],
+        120: [12.8, 8.0, 2.1, 38, 1400, 0.324, 0.240, 300, 336], 150: [14.5, 8.0, 2.2, 40, 1570, 0.264, 0.199, 336, 380], 185: [16.2, 8.0, 2.2, 41, 1740, 0.210, 0.193, 376, 443],
+        240: [18.0, 8.0, 2.3, 43, 1960, 0.160, 0.186, 432, 521] },
+      notaI: 'Valores de catálogo para el cable estándar; la masa varía con la sección real de la pantalla (ej. 25 mm²)' },
+  };
+  // ficha técnica de un cable por tipo y sección (texto de la bobina o del circuito)
+  function ficha(cat, txt) {
+    if (cat === 'LA') { const m = String(txt || '').match(/(\d+)\s*\/\s*(\d+(?:[.,]\d+)?)/); const p = m && PRYSALAC.find((x) => x.sec.replace(',', '.') === `${m[1]}/${m[2].replace(',', '.')}`);
+      return p ? { cat, nombre: 'Prysalac Al/Ac (ACSR) · conductor desnudo', norma: 'IRAM 2187', sec: p.sec, d: p.d, kg: p.kg, kn: p.kn, largo: p.largo } : null; }
+    const T = RETENAX[cat]; if (!T) return null;
+    const s = parseSeccion(txt), f = T.filas[s]; if (!f) return null;
+    return { cat, nombre: T.nombre, norma: T.norma, aisl: T.aisl, env: T.env, cond: T.cond, sec: s, dc: f[0], ais: f[1], envE: f[2], d: f[3], kg: f[4], r: f[5], x: f[6], iEnt: f[7], iAire: f[8], notaI: T.notaI };
+  }
   const ZANJA = ['no abierta', 'abierta', 'cerrada'];
 
   function parseSeccion(txt) {
@@ -436,6 +457,6 @@
     return lotes;
   }
 
-  const Engine = { calcular, propuesta, sincronizarPAT, unirZanjas, separarCircuito, tituloZanja, PAT_SEC, parseSeccion, fasesDe, CATS, ZANJA, PRYSALAC };
+  const Engine = { calcular, propuesta, sincronizarPAT, unirZanjas, separarCircuito, tituloZanja, PAT_SEC, parseSeccion, fasesDe, CATS, ZANJA, PRYSALAC, RETENAX, ficha };
   if (typeof module !== 'undefined' && module.exports) module.exports = Engine; else root.Engine = Engine;
 })(typeof window !== 'undefined' ? window : globalThis);

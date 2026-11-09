@@ -261,12 +261,14 @@
     const T = (k) => filas.reduce((a, f) => a + f[k], 0);
     h1.push(['TOTAL', '', T('n'), T('sinAbrir'), T('enUso'), T('term'), '', '', '', '', '', '', '', '', '', '', '']);
     XLSX.utils.book_append_sheet(wb, sheet(h1, [7, 12, 9, 10, 9, 11, 12, 12, 15, 17, 15, 16, 14, 22, 18, 14, 8]), 'Consolidado');
-    const h2 = [['Tipo', 'Código', 'N° fabricante', 'Sección (mm²)', 'Remito', 'Fecha ingreso', 'Entrada (m)', 'Tendido (m)', 'Saldo actual (m)', 'Uso %', 'Estado', 'Plan pendiente (m)', 'Remanente previsto (m)', 'Al final', 'Observaciones']];
+    const h2 = [['Tipo', 'Código', 'N° fabricante', 'Sección (mm²)', 'Cable (catálogo)', 'Remito', 'Fecha ingreso', 'Entrada (m)', 'Tendido (m)', 'Saldo actual (m)', 'Uso %', 'Estado', 'Plan pendiente (m)', 'Remanente previsto (m)', 'Al final', 'Masa del cable (kg)', 'Observaciones']];
+    const fic = (b, o) => (F.ficha ? F.ficha(b.cat, o.seccion != null ? o.seccion : b.seccion) : null);
     R.bobinas.slice().sort((a, b) => a.cat.localeCompare(b.cat) || (a.seccion - b.seccion) || String(a.codigo).localeCompare(String(b.codigo), 'es', { numeric: true })).forEach((b) => {
       const o = state.bobinas.find((x) => x.id === b.id) || {};
-      h2.push([b.cat, b.codigo, b.nro, b.seccion, o.remito || '', o.fecha || '', b.entrada, r1(b.consumoReal), r1(b.saldoActual), r1(b.usoReal * 100), b.estadoReal, r1(b.asigListo + b.asigProv), r1(b.remanente), b.estado, o.obs || '']);
+      const fi = fic(b, o);
+      h2.push([b.cat, b.codigo, b.nro, b.cat === 'LA' && fi ? fi.sec : b.seccion, fi ? (fi.cat === 'LA' ? `Prysalac ${fi.sec} Al/Ac` : fi.nombre) : '', o.remito || '', o.fecha || '', b.entrada, r1(b.consumoReal), r1(b.saldoActual), r1(b.usoReal * 100), b.estadoReal, r1(b.asigListo + b.asigProv), r1(b.remanente), b.estado, fi ? Math.round(b.entrada * fi.kg / 1000) : '', o.obs || '']);
     });
-    XLSX.utils.book_append_sheet(wb, sheet(h2, [6, 10, 16, 12, 12, 12, 11, 11, 14, 8, 11, 16, 20, 16, 30]), 'Detalle por bobina');
+    XLSX.utils.book_append_sheet(wb, sheet(h2, [6, 10, 16, 12, 34, 12, 12, 11, 11, 14, 8, 11, 16, 20, 16, 16, 30]), 'Detalle por bobina');
     // discriminado por zanja y por circuito
     const Z = F.stockPorZanja();
     const h3 = [['Zanja', 'Tipo zanja', 'Estado zanja', 'Largo zanja (m)', 'Circuitos', 'Bobinas', 'Cable por sección (m)', 'Tendido (m)', 'Listo p/ cortar (m)', 'Provisorio (m)', 'Total (m)']];
