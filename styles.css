@@ -945,3 +945,4 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 .maqt .dcel b { font-size: 13px; color: #1a9a6b; } .maqt .dcel small { font-size: 10.5px; color: var(--mute, #7a8aa3); }
 .maqt .dcel.vac { color: #c3ccd8; border-style: dashed; } .maqt .dcel:hover:not(:disabled) { border-color: var(--acc); background: #fff8ec; }
 .maqt .dcel:disabled { cursor: default; }
+.maqt .dcel.per { border-color: #c9b6ff; background: #f6f2ff; } .maqt .dcel.per small { color: #6a5acd; font-weight: 600; }
