@@ -935,3 +935,9 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
   #printArea .card, #printArea .pr-bob { border: 1px solid #cfd6e0 !important; }
 }
 @media print { #printArea *::before, #printArea *::after { opacity: 1 !important; box-shadow: none !important; filter: none !important; } }
+/* maquinaria: planilla semanal por día */
+.maqt .dcol { padding-left: 4px; padding-right: 4px; }
+.maqt .md { width: 72px; text-align: right; }
+.maqt .mo { min-width: 160px; }
+.maqt th.hoy { color: var(--acc); }
+.maqt .hd { font-size: 11px; color: var(--ok, #1a9a6b); margin-top: 2px; min-height: 13px; font-weight: 600; }
