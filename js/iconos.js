@@ -19,6 +19,8 @@ const ICO = {
   sts: svgI('<path d="M3 20.5h18"/><path d="M5 20.5v-3.5h14v3.5"/><rect x="7" y="7" width="10" height="10" rx="1"/><path d="M10 7V4.5h4V7M9.5 11h5M9.5 13.5h5"/>'),
   hinca: svgI('<path d="M9 2.8h6v3H9z"/><path d="M10.2 5.8v12.5L12 21l1.8-2.7V5.8"/><path d="M4 13.5h16" stroke-dasharray="2 2"/>'),
   trackers: svgI('<path d="M5 3.5v17M12 3.5v17M19 3.5v17"/><rect x="3.4" y="6" width="3.2" height="12" rx=".6"/><rect x="10.4" y="6" width="3.2" height="12" rx=".6"/><rect x="17.4" y="6" width="3.2" height="12" rx=".6"/>'),
+  maquina: svgI('<path d="M3 17.5h11"/><circle cx="5.5" cy="17.5" r="2"/><circle cx="11.5" cy="17.5" r="2"/><path d="M3.5 15.5v-4h6l1.5-4h3v8"/><path d="M14 9.5l4-3 3 4-2.5 1.5"/><path d="M18.5 12v3l2 1.5"/>'),
+  llave: svgI('<path d="M14.5 6.5a4 4 0 0 0 5 5l-8.5 8.5a2 2 0 0 1-3-3l8.5-8.5a4 4 0 0 0-2-2z"/><path d="M15.5 4.5l2.5 2.5"/>'),
   camion: svgI('<path d="M2.5 6.5h12v10h-12z"/><path d="M14.5 9.5h3.5l3 3.5v3.5h-6.5"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>'),
   libro: svgI('<path d="M4 5.5c2.7-1.3 5.3-1.3 8 0v14c-2.7-1.3-5.3-1.3-8 0z"/><path d="M12 5.5c2.7-1.3 5.3-1.3 8 0v14c-2.7-1.3-5.3-1.3-8 0"/>'),
   ajustes: svgI('<path d="M4 6.5h10M18 6.5h2M4 12h4M12 12h8M4 17.5h12"/><circle cx="16" cy="6.5" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="17.5" r="2"/>'),
