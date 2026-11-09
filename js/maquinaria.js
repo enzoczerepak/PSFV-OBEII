@@ -66,7 +66,7 @@ const numIn = (v) => (vacio(v) ? '' : String(Number(v)));
 function vMaq(el) {
   const sem = (ui.maqSem = ui.maqSem || lunesDe(today()));
   const ro = window.READONLY;
-  actions([...(ro ? [] : [['+ Parada / mantenimiento', 'btn acc', () => editEvento(null)], ['+ Equipo', 'btn', () => editMaquina(null)]]),
+  actions([...(ro ? [] : [['Registrar horas', 'btn pri', () => registrarHoras(null, null)], ['+ Parada / mantenimiento', 'btn acc', () => editEvento(null)], ['+ Equipo', 'btn', () => editMaquina(null)]]),
     ['Exportar Excel', 'btn', exportMaq], ['PDF de la semana', 'btn', () => printMaqSemana(sem)]]);
   const ms = maqL().filter((m) => m.activa !== false || regDe(m.id, sem)).sort(maqOrd);
   const tot = { t: 0, p: 0, m: 0 };
@@ -91,10 +91,9 @@ function vMaq(el) {
     const sinBase = !m.sinHoro && horoAntes(m.id, ds[0], L) == null;
     h += `<tr data-id="${m.id}"><td class="mono"><b>${esc(m.interno)}</b></td><td>${esc(m.descripcion)}<div class="muted" style="font-size:11.5px">${esc([m.marca, m.modelo].filter(Boolean).join(' '))}${m.sinHoro ? ' · sin horómetro' : ''}</div></td>
       ${ds.map((f) => {
-        if (m.sinHoro) { const v = (r.hs || {})[f]; return `<td class="n dcol"><input type="number" step="0.5" min="0" class="mi md" data-d="${f}" value="${numIn(v)}" placeholder="h" title="Horas trabajadas el ${fechaCorta(f)}" ${ro ? 'disabled' : ''}></td>`; }
+        if (m.sinHoro) { const v = (r.hs || {})[f]; return `<td class="n dcol"><button class="dcel ${vacio(v) ? 'vac' : ''}" data-d="${f}" ${ro ? 'disabled' : ''} title="Horas trabajadas el ${fechaCorta(f)}">${vacio(v) ? '·' : `<b>${fmt(Number(v), 1)} h</b>`}</button></td>`; }
         const v = (r.lect || {})[f], ant = horoAntes(m.id, f, L), hd = horasDia(m.id, f, L);
-        return `<td class="n dcol"><input type="number" step="0.1" min="0" class="mi md" data-d="${f}" value="${numIn(v)}" placeholder="${ant != null ? fmt(ant, 1) : ''}" title="Horómetro al terminar la jornada del ${fechaCorta(f)}${ant != null ? ` (inicio: ${fmt(ant, 1)})` : ''}" ${ro ? 'disabled' : ''}>
-          <div class="hd">${!vacio(v) ? (ant == null ? '<span title="Falta el horómetro al ingreso o una lectura anterior">inicio?</span>' : `+${fmt(hd, 1)} h`) : ''}</div></td>`;
+        return `<td class="n dcol"><button class="dcel ${vacio(v) ? 'vac' : ''}" data-d="${f}" ${ro ? 'disabled' : ''} title="${vacio(v) ? 'Sin registro' : `Horómetro ${fmt(Number(v), 1)} (inicio ${ant != null ? fmt(ant, 1) : '?'})`}">${vacio(v) ? '·' : `<b>${ant == null ? 'inicio?' : `${fmt(hd, 1)} h`}</b><small>${fmt(Number(v), 1)}</small>`}</button></td>`;
       }).join('')}
       <td class="n"><b>${fmt(t, 1)}</b>${sinBase && L.some((x) => x[0] >= ds[0] && x[0] <= ds[6]) ? '<div class="hd" style="color:var(--warn)">cargá el horómetro al ingreso</div>' : ''}</td>
       <td class="n">${p ? `<b style="color:var(--bad)">${fmt(p, 1)}</b>` : '–'}</td><td class="n">${mm ? `<b style="color:var(--warn)">${fmt(mm, 1)}</b>` : '–'}</td>
@@ -102,30 +101,85 @@ function vMaq(el) {
       <td><input type="text" class="mi mo" data-f="obs" value="${esc(r.obs || '')}" ${ro ? 'disabled' : ''}>${evs.length ? `<div class="muted" style="font-size:11.5px;margin-top:3px">${evs.map((e) => `${MAQ_TIPO[e.tipo][0]} ${fechaCorta(e.fecha)}: ${esc(e.motivo)} (${fmt(e.horas, 1)} h)`).join(' · ')}</div>` : ''}</td>
       <td style="white-space:nowrap">${ro ? '' : `<button class="btn sm acc" data-a="ev" title="Registrar parada o mantenimiento">Parada / mant.</button> <button class="btn sm ghost" data-a="ed" title="Editar equipo">✎</button>`}</td></tr>`;
   });
-  h += `</tbody></table></div><p class="hint">Cargá <b>un solo dato por día: el horómetro al terminar la jornada</b>. El inicio de cada jornada es el fin de la anterior (se ve en gris), y las horas del día salen de la diferencia. Si un día no se carga, esas horas se suman a la próxima lectura. La primera vez se toma el horómetro al ingreso del equipo (en ✎). Los equipos sin horómetro cargan las horas trabajadas de cada día. Disponibilidad = trabajadas / (trabajadas + paradas + mantenimiento).</p>`;
+  h += `</tbody></table></div><p class="hint">Con <b>Registrar horas</b> (o tocando un día de la planilla) se carga <b>un solo dato por jornada: el horómetro al terminar el día</b>. El inicio de cada jornada es el fin de la anterior y las horas del día salen de la diferencia (en la planilla: horas del día y, debajo, el horómetro). Si un día no se carga, esas horas se suman a la próxima lectura. La primera vez se toma el horómetro al ingreso del equipo (en ✎). Los equipos sin horómetro cargan las horas trabajadas de cada día. Disponibilidad = trabajadas / (trabajadas + paradas + mantenimiento).</p>`;
   el.innerHTML = h;
   bindSem(el);
   if (ro) return;
   $$('tbody tr', el).forEach((tr) => {
     const id = tr.dataset.id, m = maqDe(id);
     const reg = () => { let r = regDe(id, sem); if (!r) { r = { id: `${id}|${sem}`, maq: id, semana: sem, _o: Date.now() }; maqH().push(r); } return r; };
-    $$('.md', tr).forEach((inp) => {
-      inp.onchange = () => {
-        const f = inp.dataset.d, r = reg(), v = inp.value === '' ? '' : Number(inp.value);
-        if (m.sinHoro) { r.hs = r.hs || {}; if (v === '') delete r.hs[f]; else r.hs[f] = v; }
-        else {
-          const ant = horoAntes(id, f), sig = lecturas(id).find((x) => x[0] > f);
-          if (v !== '' && ant != null && v < ant) { toast(`El horómetro (${fmt(v, 1)}) es menor que el de inicio de la jornada (${fmt(ant, 1)})`, { err: true }); inp.value = numIn((r.lect || {})[f]); return; }
-          if (v !== '' && sig && v > sig[1]) toast(`Ojo: es mayor que la lectura del ${fechaCorta(sig[0])} (${fmt(sig[1], 1)})`, { err: true });
-          r.lect = r.lect || {}; if (v === '') delete r.lect[f]; else r.lect[f] = v;
-        }
-        commit(`${m.interno}: ${fechaCorta(f)} ${v === '' ? 'borrado' : m.sinHoro ? fmt(v, 1) + ' h' : 'horómetro ' + fmt(v, 1)}`);
-      };
-    });
+    $$('.dcel', tr).forEach((b) => { b.onclick = () => registrarHoras(id, b.dataset.d); });
     const ob = tr.querySelector('[data-f=obs]'); ob.onchange = () => { reg().obs = ob.value.trim(); commit(`${m.interno}: observación de la semana`); };
     const b1 = tr.querySelector('[data-a=ev]'); if (b1) b1.onclick = () => editEvento(null, id, sem);
     const b2 = tr.querySelector('[data-a=ed]'); if (b2) b2.onclick = () => editMaquina(id);
   });
+}
+// ======================= REGISTRAR HORAS =======================
+// Un dato por equipo y jornada: el horómetro al terminar (o las horas, si el equipo no tiene horómetro).
+// El inicio de la jornada es la lectura anterior; las horas del día salen de la diferencia.
+function guardarLectura(id, f, v) {
+  const m = maqDe(id), sem = lunesDe(f);
+  let r = regDe(id, sem); if (!r) { r = { id: `${id}|${sem}`, maq: id, semana: sem, _o: Date.now() }; maqH().push(r); }
+  const k = m.sinHoro ? 'hs' : 'lect'; r[k] = r[k] || {};
+  if (v === '') delete r[k][f]; else r[k][f] = v;
+}
+async function registrarHoras(maq, fecha) {
+  if (window.READONLY) return;
+  const act = maqL().filter((m) => m.activa !== false || m.id === maq).sort(maqOrd);
+  if (!act.length) { toast('Primero cargá los equipos', { err: true }); return; }
+  let otro = false;
+  const pm = modal({
+    title: 'Registrar horas de máquina',
+    sub: 'Un dato por jornada: el horómetro al terminar el día. El inicio es el fin de la jornada anterior.',
+    body: `<div class="form"><label class="full">Equipo<select name="maq"><option value="">— elegí el equipo —</option>${act.map((m) => `<option value="${m.id}" ${m.id === maq ? 'selected' : ''}>${esc(maqNom(m))}${m.marca ? ' · ' + esc(m.marca) : ''}${m.sinHoro ? ' (sin horómetro)' : ''}</option>`).join('')}</select></label>
+      <label>Fecha (jornada)<input type="date" name="fecha" value="${fecha || today()}" max="${today()}"></label>
+      <label><span id="rhLbl">Horómetro al fin de la jornada</span><input type="number" step="0.1" min="0" name="valor" inputmode="decimal"></label>
+      <div id="rhCalc" style="grid-column:1/-1"></div></div>`,
+    buttons: [['Borrar registro', 'btn danger', (box) => (vacio(cur(box)) ? (toast('Ese día no tiene registro', { err: true }), false) : 'del')], ['Cancelar', 'btn', () => null],
+      ['Guardar y cargar otro', 'btn', (box) => (validar(box) ? ((otro = true), 'ok') : false)], ['Guardar', 'btn pri', (box) => (validar(box) ? 'ok' : false)]],
+  });
+  const box = $('#modal .mbox'), sM = $('[name=maq]', box), sF = $('[name=fecha]', box), sV = $('[name=valor]', box), calc = $('#rhCalc', box), lbl = $('#rhLbl', box);
+  // valor ya registrado para ese equipo y día
+  function cur() { const m = maqDe(sM.value); if (!m || !sF.value) return ''; const r = regDe(m.id, lunesDe(sF.value)) || {}; return ((m.sinHoro ? r.hs : r.lect) || {})[sF.value]; }
+  function upd(cargar) {
+    const m = maqDe(sM.value), f = sF.value;
+    if (!m || !f) { calc.innerHTML = ''; return; }
+    lbl.textContent = m.sinHoro ? 'Horas trabajadas en la jornada' : 'Horómetro al fin de la jornada';
+    sV.step = m.sinHoro ? '0.5' : '0.1';
+    if (cargar) { const c = cur(); sV.value = vacio(c) ? '' : String(Number(c)); }
+    const v = sV.value === '' ? null : Number(sV.value), ya = !vacio(cur());
+    if (m.sinHoro) { calc.innerHTML = `<div class="alert info" style="margin:0;display:block">${m.interno} no tiene horómetro: se cargan las horas trabajadas del ${fechaCorta(f)}.${ya ? ' Ya hay un registro ese día: se reemplaza.' : ''}</div>`; return; }
+    const L = lecturas(m.id).filter((x) => x[0] !== f), ant = horoAntes(m.id, f, L), prevD = L.filter((x) => x[0] < f).pop(), sig = L.find((x) => x[0] > f);
+    const ini = ant == null ? '<b style="color:var(--warn)">sin dato</b> (cargá el horómetro al ingreso en la ficha del equipo)' : `<b>${fmt(ant, 1)}</b> ${prevD ? `(fin de la jornada del ${fechaCorta(prevD[0])})` : '(horómetro al ingreso a obra)'}`;
+    let res = '';
+    if (v != null && ant != null) res = v < ant ? `<div style="color:var(--bad);margin-top:4px"><b>Es menor que el inicio de la jornada</b>: revisá el valor.</div>` : `<div style="margin-top:4px">Horas trabajadas: <b style="font-size:16px">${fmt(v - ant, 1)} h</b>${prevD && sumDias(prevD[0], 1) !== f ? ` <span class="muted">(desde el ${fechaCorta(prevD[0])}: incluye los días sin registro)</span>` : ''}</div>`;
+    if (v != null && sig && v > sig[1]) res += `<div style="color:var(--warn);margin-top:4px">Ojo: es mayor que la lectura del ${fechaCorta(sig[0])} (${fmt(sig[1], 1)}).</div>`;
+    calc.innerHTML = `<div class="alert ${v != null && ant != null && v < ant ? 'error' : 'info'}" style="margin:0;display:block">Inicio de la jornada: ${ini}${res}${ya ? '<div class="muted" style="margin-top:4px">Ya hay un registro ese día: se reemplaza.</div>' : ''}</div>`;
+  }
+  function validar() {
+    const m = maqDe(sM.value), f = sF.value, v = sV.value === '' ? null : Number(sV.value);
+    if (!m || !f || v == null || !(v >= 0)) { toast('Completá equipo, fecha y valor', { err: true }); return false; }
+    if (f > today()) { toast('La fecha no puede ser futura', { err: true }); return false; }
+    if (m.sinHoro) { if (v > 24) { toast('Más de 24 h en una jornada: revisá el valor', { err: true }); return false; } return true; }
+    const L = lecturas(m.id).filter((x) => x[0] !== f), ant = horoAntes(m.id, f, L);
+    if (ant != null && v < ant) { toast(`El horómetro (${fmt(v, 1)}) es menor que el inicio de la jornada (${fmt(ant, 1)})`, { err: true }); return false; }
+    const prevD = L.filter((x) => x[0] < f).pop(), dias = prevD ? Math.round((new Date(f) - new Date(prevD[0])) / 864e5) : 1;
+    if (ant != null && v - ant > 24 * dias) { toast(`${fmt(v - ant, 1)} h en ${dias} día${dias > 1 ? 's' : ''}: revisá el valor`, { err: true }); return false; }
+    return true;
+  }
+  sM.onchange = () => upd(true); sF.onchange = () => upd(true); sV.oninput = () => upd(false); upd(true);
+  setTimeout(() => (sM.value ? sV : sM).focus(), 60);
+  const res = await pm;
+  if (!res) return;
+  const m = maqDe(sM.value), f = sF.value;
+  if (res === 'del') { guardarLectura(m.id, f, ''); commit(`${m.interno}: registro del ${fechaCorta(f)} borrado`); }
+  else {
+    const v = Number(sV.value), L = lecturas(m.id).filter((x) => x[0] !== f), ant = m.sinHoro ? null : horoAntes(m.id, f, L);
+    guardarLectura(m.id, f, v);
+    commit(m.sinHoro ? `${m.interno} · ${fechaCorta(f)}: ${fmt(v, 1)} h` : `${m.interno} · ${fechaCorta(f)}: horómetro ${fmt(v, 1)}${ant != null ? ` → ${fmt(v - ant, 1)} h` : ''}`);
+    ui.maqSem = lunesDe(f);
+    if (otro) setTimeout(() => registrarHoras(null, f), 250);
+  }
 }
 function bindSem(el) {
   const set = (v) => { ui.maqSem = lunesDe(v); render(false); };

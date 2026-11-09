@@ -941,3 +941,7 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 .maqt .mo { min-width: 160px; }
 .maqt th.hoy { color: var(--acc); }
 .maqt .hd { font-size: 11px; color: var(--ok, #1a9a6b); margin-top: 2px; min-height: 13px; font-weight: 600; }
+.maqt .dcel { width: 74px; min-height: 40px; border: 1px solid var(--line); background: var(--card); border-radius: 8px; cursor: pointer; display: inline-grid; place-items: center; padding: 3px 2px; font: inherit; line-height: 1.15; color: var(--ink); }
+.maqt .dcel b { font-size: 13px; color: #1a9a6b; } .maqt .dcel small { font-size: 10.5px; color: var(--mute, #7a8aa3); }
+.maqt .dcel.vac { color: #c3ccd8; border-style: dashed; } .maqt .dcel:hover:not(:disabled) { border-color: var(--acc); background: #fff8ec; }
+.maqt .dcel:disabled { cursor: default; }
