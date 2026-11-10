@@ -6,7 +6,7 @@
   // Barras horizontales apiladas (100 % = total de cada fila)
   // rows: [{label, parts:[{v, color, name}], right}], opts: {labelW}
   function hbars(rows, opts = {}) {
-    const W = 640, lw = opts.labelW || 110, rw = opts.rightW || 150, bh = 18, gap = 14, top = 4;
+    const W = opts.W || 640, lw = opts.labelW || 110, rw = opts.rightW || 150, bh = 18, gap = 14, top = 4;
     const H = top + rows.length * (bh + gap);
     const bw = W - lw - rw;
     let s = `<svg class="ch" viewBox="0 0 ${W} ${H}" role="img">`;

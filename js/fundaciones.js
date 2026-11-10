@@ -137,7 +137,7 @@ function modulosHTML() {
     <div class="card mcard" data-go="cables" title="Ver detalle del tendido"><div class="mh"><div>${Charts.ring(tB ? tA / tB : 0, SERIE.BT, 'tendido')}</div><div><h3>Tendido y aprovechamiento de cables</h3><div class="muted">${fmt(tA)} / ${fmt(tB)} m</div></div></div>${tc.map(([c, a, b]) => fila(`${ctag(c)}${c}`, a, b, SERIE[c])).join('')}<div class="muted" style="margin-top:6px">Zanja BT ${fmt(R.zanjas.BT.realizada)} / ${fmt(R.zanjas.BT.total)} m · MT ${fmt(R.zanjas.MT.realizada)} / ${fmt(R.zanjas.MT.total)} m</div></div>
     <div class="card mcard" data-go="puntas" title="Ver detalle de puntas"><div class="mh"><div>${Charts.ring(pB ? pA / pB : 0, '#e0457b', 'colocadas')}</div><div><h3>Puntas de cable</h3><div class="muted">${fmt(pA)} / ${fmt(pB)} puntas</div></div></div>${pc.map(([c, a, b]) => fila(`${ctag(c)}${c}`, a, b, SERIE[c])).join('')}</div>
     <div class="card mcard" data-go="fundaciones" title="Ver detalle de fundaciones"><div class="mh" style="margin-bottom:4px"><div>${Charts.ring(fA, FCOL.done, 'bases')}</div><div><h3>Fundaciones STS</h3><div class="muted">${fi.reduce((a, [, i]) => a + i.done, 0)} / ${STSL.length * ETAPAS.length} etapas</div></div></div><div class="minists">${fi.map(([s, i]) => `<div>${stsSVG(i.p, { small: true })}<span>${s}</span></div>`).join('')}</div></div>
-    ${foModHTML()}${hincModHTML()}${cronoModHTML()}</div>`;
+    ${foModHTML()}${lmtModHTML()}${hincModHTML()}${cronoModHTML()}</div>`;
 }
 function fundAvanceHTML() {
   const fi = STSL.map((s) => [s, fundInfo(s)]);

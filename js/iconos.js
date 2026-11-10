@@ -20,6 +20,7 @@ const ICO = {
   hinca: svgI('<path d="M9 2.8h6v3H9z"/><path d="M10.2 5.8v12.5L12 21l1.8-2.7V5.8"/><path d="M4 13.5h16" stroke-dasharray="2 2"/>'),
   trackers: svgI('<path d="M5 3.5v17M12 3.5v17M19 3.5v17"/><rect x="3.4" y="6" width="3.2" height="12" rx=".6"/><rect x="10.4" y="6" width="3.2" height="12" rx=".6"/><rect x="17.4" y="6" width="3.2" height="12" rx=".6"/>'),
   fibra: svgI('<path d="M2.5 20c3.5 0 4.5-7.5 9-7.5"/><path d="M2.5 16.5c3 0 4-6.5 9-6.5"/><path d="M11.5 10v2.5h2.2l1.3-1.25-1.3-1.25z"/><path d="M17 11.25h4.5M16.6 8l3.6-2.2M16.6 14.5l3.6 2.2"/>'),
+  poste: svgI('<path d="M12 3v18"/><path d="M5 6.5h14M7 10h10"/><path d="M5 6.5v2M19 6.5v2M7 10v2M17 10v2"/><path d="M8.5 21l3.5-6 3.5 6"/>'),
   pc: svgI('<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16v4"/>'),
   edificio: svgI('<path d="M4 21V8l8-5 8 5v13"/><path d="M2 21h20"/><rect x="9" y="13" width="6" height="8"/><path d="M8 9h2M14 9h2"/>'),
   maquina: svgI('<path d="M3 17.5h11"/><circle cx="5.5" cy="17.5" r="2"/><circle cx="11.5" cy="17.5" r="2"/><path d="M3.5 15.5v-4h6l1.5-4h3v8"/><path d="M14 9.5l4-3 3 4-2.5 1.5"/><path d="M18.5 12v3l2 1.5"/>'),

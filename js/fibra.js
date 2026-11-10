@@ -13,7 +13,8 @@ const foCada = () => Number(foS().cfg.cada) > 0 ? Number(foS().cfg.cada) : 50;
 const foCamPrev = (z) => { const f = foZ(z.id); if (f.cam != null && f.cam !== '') return Number(f.cam); return z.largo > 0 ? Math.max(0, Math.ceil(z.largo / foCada() - 1e-9) - 1) : 0; };
 // tubo colocado: zanja de MT cerrada o marcada como cargada (el tubo va por encima de los cables)
 const foColocado = (z) => !foSin(z) && (z.estado === 'cerrada' || !!foZ(z.id).cargada);
-const foCamCol = (z) => { const f = foZ(z.id); if (f.camCol != null && f.camCol !== '') return Math.min(Number(f.camCol), foCamPrev(z)); return foColocado(z) ? foCamPrev(z) : 0; };
+// las cámaras se cargan a mano (se colocan aparte del tubo)
+const foCamCol = (z) => Math.min(Number(foZ(z.id).camCol) || 0, foCamPrev(z));
 const foTubo = (z) => z.largo * (1 + (Number(foS().cfg.adic) || 0) / 100);
 const foFecha = (z) => foZ(z.id).fecha || (z.estado === 'cerrada' ? z.fechaCierre || '' : '');
 function foZanjas() { return R.zlist.filter((z) => z.cat === 'MT').sort((a, b) => (Math.min(...a.miembros.map((c) => c.idx), 1e9) - Math.min(...b.miembros.map((c) => c.idx), 1e9))); }
@@ -44,7 +45,7 @@ function vFibra(el) {
     <div class="card" style="min-width:0"><h3>Criterio</h3><div class="form foCfg" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
       <label>Cámara cada (m)<input type="number" min="1" step="1" id="foCada" value="${foCada()}" ${ro ? 'disabled' : ''}></label>
       <label>Adicional de tubo (%)<input type="number" min="0" step="0.5" id="foAdic" value="${Number(F.cfg.adic) || 0}" ${ro ? 'disabled' : ''}></label></div>
-      <p class="muted" style="font-size:12px;margin:8px 0 0">El tubo se cuenta colocado cuando la zanja de MT está <b>cerrada</b> o marcada como <b>cargada</b> (va por encima de los cables). Largo del tubo = largo de la zanja + adicional.</p></div></div>
+      <p class="muted" style="font-size:12px;margin:8px 0 0">El tubo se cuenta colocado cuando la zanja de MT está <b>cerrada</b> o marcada como <b>cargada</b> (va por encima de los cables). Largo del tubo = largo de la zanja + adicional. Las cámaras colocadas se cargan a mano (− / + en la tabla).</p></div></div>
     <div class="tools"><div class="seg" id="fFO"><button data-v="all">Todos</button><button data-v="col">Colocado</button><button data-v="pend">Pendiente</button><button data-v="sin">Sin fibra</button></div>
     <span class="muted">${list.length} tramo${list.length === 1 ? '' : 's'} de MT</span><span class="sp"></span>${ro ? '' : `<button class="btn" id="foCarg" disabled>Marcar cargadas (tubo colocado)</button>`}</div>
     <div class="tblwrap"><table class="tbl"><thead><tr>${ro ? '' : '<th style="width:28px"><input type="checkbox" id="foAll"></th>'}<th>Zanja de MT</th><th>Circuitos</th><th class="n">Largo zanja</th><th>Estado zanja</th>
@@ -55,7 +56,7 @@ function vFibra(el) {
     h += `<tr data-id="${z.id}" ${sin ? 'style="opacity:.55"' : ''}>${ro ? '' : `<td><input type="checkbox" class="fosel" ${sin || z.estado === 'cerrada' ? 'disabled' : ''}></td>`}
       <td><b>${esc(z.titulo)}</b></td><td style="white-space:normal;max-width:240px;font-size:12px">${z.miembros.map((c) => esc(c.designacion)).join(', ')}</td>
       <td class="n">${fmt(z.largo, 1)}</td><td>${pill(z.estado)}</td><td class="n">${sin ? '–' : fmt(foTubo(z), 1)}</td><td>${est}</td>
-      <td class="n">${sin ? '–' : `<b>${cc}</b> / ${cp}${f.cam != null ? ' <span title="Cantidad cargada a mano">✎</span>' : ''}`}</td>
+      <td class="n" style="white-space:nowrap">${sin ? '–' : `${ro ? '' : `<button class="btn sm ghost camb" data-d="-1" ${cc <= 0 ? 'disabled' : ''} title="Una cámara menos">−</button>`}<b style="display:inline-block;min-width:44px;text-align:center">${cc} / ${cp}</b>${ro ? '' : `<button class="btn sm ghost camb" data-d="1" ${cc >= cp ? 'disabled' : ''} title="Una cámara colocada más">+</button>`}`}</td>
       <td>${foFecha(z) ? fechaCorta(foFecha(z)) : ''}</td><td style="font-size:12px">${esc(f.obs || '')}</td>
       <td style="white-space:nowrap">${ro ? '' : `${!sin && z.estado !== 'cerrada' ? `<button class="btn sm ${f.cargada ? 'ghost' : 'acc'}" data-a="carg">${f.cargada ? 'Quitar cargada' : 'Zanja cargada'}</button> ` : ''}<button class="btn sm ghost" data-a="ed">✎</button>`}</td></tr>`;
   });
@@ -76,6 +77,7 @@ function vFibra(el) {
     const id = tr.dataset.id, z = zs.find((x) => x.id === id);
     const b1 = tr.querySelector('[data-a=carg]'); if (b1) b1.onclick = () => { const c = !foZ(id).cargada; foGuardar(id, { cargada: c, fecha: c ? foZ(id).fecha || today() : '' }, `${z.titulo}: ${c ? 'zanja cargada, tubo de fibra colocado' : 'tubo de fibra pendiente'}`); };
     const b2 = tr.querySelector('[data-a=ed]'); if (b2) b2.onclick = () => editFibra(z);
+    $$('.camb', tr).forEach((b) => { b.onclick = () => { const n = Math.max(0, Math.min(foCamPrev(z), foCamCol(z) + Number(b.dataset.d))); foGuardar(id, { camCol: n }, `${z.titulo}: ${n} de ${foCamPrev(z)} cámaras colocadas`); }; });
   });
 }
 async function editFibra(z) {
@@ -87,11 +89,12 @@ async function editFibra(z) {
       <label class="chk" style="grid-column:1/-1"><input type="checkbox" name="cargada" ${f.cargada || z.estado === 'cerrada' ? 'checked' : ''} ${z.estado === 'cerrada' ? 'disabled' : ''}> Tubo colocado (zanja cargada)${z.estado === 'cerrada' ? ' — la zanja ya está cerrada' : ''}</label>
       <label>Fecha de colocación<input type="date" name="fecha" value="${esc(foFecha(z))}"></label>
       <label>Cámaras previstas<input type="number" min="0" step="1" name="cam" value="${f.cam != null ? f.cam : ''}" placeholder="${auto} (una cada ${fmt(foCada())} m)"></label>
-      <label>Cámaras colocadas<input type="number" min="0" step="1" name="camCol" value="${f.camCol != null ? f.camCol : ''}" placeholder="todas al colocar el tubo"></label>
+      <label>Cámaras colocadas<input type="number" min="0" step="1" name="camCol" value="${f.camCol != null ? f.camCol : ''}" placeholder="0"></label>
       <label class="full">Observaciones<input type="text" name="obs" value="${esc(f.obs || '')}"></label></div>
-      <p class="hint">Si dejás vacías las cámaras se calculan solas (una cada ${fmt(foCada())} m del tramo) y se cuentan colocadas junto con el tubo.</p>`,
+      <p class="hint">Las cámaras previstas se calculan solas (una cada ${fmt(foCada())} m del tramo) si dejás el campo vacío. Las colocadas se cargan a mano, acá o con los botones − / + de la tabla.</p>`,
     buttons: [['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (box) => {
       const g = (n) => $(`[name=${n}]`, box).value.trim(), num = (n) => (g(n) === '' ? '' : Math.max(0, Math.round(Number(g(n)))));
+      const prev = g('cam') === '' ? auto : num('cam'); if (num('camCol') !== '' && num('camCol') > prev) { toast(`Hay ${prev} cámaras previstas en el tramo: no pueden colocarse más`, { err: true }); return false; }
       const sinF = $('[name=sinFibra]', box).checked;
       return { sinFibra: foDefSin(z) ? '' : sinF, conFibra: foDefSin(z) ? !sinF : '', cargada: z.estado !== 'cerrada' && $('[name=cargada]', box).checked, fecha: g('fecha'), cam: num('cam'), camCol: num('camCol'), obs: g('obs') };
     }]],

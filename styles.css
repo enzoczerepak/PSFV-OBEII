@@ -985,3 +985,10 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 #nav .tg.pronto { background: #f5a524; color: #1b2433; font-size: 9px; text-transform: uppercase; letter-spacing: .3px; }
 .foCfg input { width: 100%; min-width: 0; box-sizing: border-box; }
 #nav button > em.tg.pronto { display: inline-block !important; margin-left: auto; padding: 1px 5px; border-radius: 4px; font-style: normal; font-weight: 700; }
+/* línea aérea MT: matriz de etapas por piquete */
+.lmtt th.fc { white-space: normal; min-width: 92px; max-width: 120px; font-size: 10.5px; line-height: 1.2; text-align: center; vertical-align: bottom; }
+.lmtt td.fc { text-align: center; padding: 4px 3px; }
+.lmc { width: 76px; min-height: 34px; border: 1px dashed #cfd7e2; background: var(--card); border-radius: 7px; cursor: pointer; display: inline-grid; place-items: center; padding: 2px; font: inherit; line-height: 1.1; color: #b9c3d0; }
+.lmc b { font-size: 13px; } .lmc small { font-size: 10.5px; }
+.lmc.cur { border: 1px solid #f5a524; background: #fff6e5; color: #b7791f; } .lmc.ok { border: 1px solid #2f9e5b; background: #e9f7ef; color: #23784a; }
+.lmc:hover:not(:disabled) { border-color: var(--acc); } .lmc:disabled { cursor: default; }
