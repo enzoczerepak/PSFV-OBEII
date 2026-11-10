@@ -115,6 +115,24 @@ function printFibra() {
   printHTML(h, `Fibra optica ${today()}.pdf`, true);
 }
 
+// ---- tarjeta del Inicio y bloque de Avance de obra ----
+function foModHTML() {
+  const T = foTotales(); if (!T.n) return '';
+  const fila = (lbl, a, b, col, u) => `<div class="mrow"><span>${lbl}</span><div class="sbt"><div style="width:${b ? ((a / b) * 100).toFixed(1) : 0}%;background:${col}"></div></div><b>${fmt(b ? (a / b) * 100 : 0)}%</b></div>`;
+  return `<div class="card mcard" data-go="fo" title="Ver detalle de fibra óptica"><div class="mh"><div>${Charts.ring(T.tubo ? T.col / T.tubo : 0, '#2f6fc2', 'tubo')}</div><div><h3>Fibra óptica</h3><div class="muted">${fmt(T.col)} / ${fmt(T.tubo)} m de tubo PEAD</div></div></div>
+    ${fila('Tubo PEAD', T.col, T.tubo, '#2f6fc2')}${fila(`Cámaras ${T.camCol}/${T.cam}`, T.camCol, T.cam, '#c97b12')}<div class="muted" style="margin-top:6px">${T.nCol} de ${T.n} tramos de MT con tubo · cámara cada ${fmt(foCada())} m</div></div>`;
+}
+function foAvanceHTML() {
+  const zs = foZanjas().filter((z) => !foSin(z)); if (!zs.length) return '';
+  const T = foTotales(), C = { col: '#2f6fc2', pend: ST.pend };
+  const rows = zs.map((z) => { const c = foColocado(z); return { label: z.titulo.length > 34 ? z.titulo.slice(0, 33) + '…' : z.titulo, right: `${c ? 'colocado' : 'pendiente'} · ${foCamCol(z)}/${foCamPrev(z)} cám.`, parts: [{ v: c ? foTubo(z) : 0, color: C.col, name: 'Tubo colocado' }, { v: c ? 0 : foTubo(z), color: C.pend, name: 'Pendiente' }] }; });
+  return `<h2 class="sech">Fibra óptica</h2><div class="grid g2 stagger" style="margin-bottom:16px">
+    <div class="card tile"><div>${Charts.ring(T.tubo ? T.col / T.tubo : 0, C.col, 'tubo')}</div><div><h3 style="margin-bottom:6px">Tubo PEAD y cámaras</h3>
+      <div class="kpis k1" style="gap:6px">${kpi('Tubo colocado', T.col, `/ ${fmt(T.tubo)} m`)}${kpi('Cámaras de inspección', T.camCol, `/ ${T.cam}`)}</div>
+      <div class="muted" style="margin-top:6px">${T.nCol} de ${T.n} tramos · cámara cada ${fmt(foCada())} m${Number(foS().cfg.adic) ? ` · tubo + ${fmt(foS().cfg.adic)} %` : ''}</div></div></div>
+    <div class="card"><h3>Tubo por tramo de MT (m)</h3>${Charts.hbars(rows, { labelW: 230, rightW: 150 })}${Charts.legend([[C.col, 'Tubo colocado'], [C.pend, 'Pendiente']])}</div></div>`;
+}
+
 // ======================= SALA DE OPERACIÓN Y CONTROL =======================
 function vSala(el) {
   actions([]);

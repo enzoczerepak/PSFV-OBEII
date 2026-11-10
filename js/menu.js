@@ -4,8 +4,8 @@
 const MENU = [
   ['resumen', 'Inicio', 'inicio'], ['avance', 'Avance de obra', 'avance'], ['plano', 'Plano de obra', 'plano'], ['partes', 'Partes de campo', 'partes'],
   ['crono', 'Cronograma', 'crono'],
-  { s: 'cables', t: 'Tendido de cables', ico: 'cable', grupos: true, items: [['cables', 'Resumen de tendido', 'barras'], ['diario', 'Tendido por fecha', 'dia'], ['zanjas', 'Zanjas', 'zanja'], ['bobinas', 'Bobinas', 'bobina'], ['propuesta', 'Propuesta de tendido', 'lista']] },
-  ['puntas', 'Puntas de cable', 'punta'], ['fundaciones', 'Fundaciones STS', 'sts'], ['fo', 'Fibra óptica', 'fibra'], ['sala', 'Sala de operación y control', 'edificio', 'pronto'],
+  { s: 'cables', t: 'Tendido de cables', ico: 'cable', grupos: true, items: [['cables', 'Resumen de tendido', 'barras'], ['diario', 'Tendido por fecha', 'dia'], ['zanjas', 'Zanjas', 'zanja'], ['bobinas', 'Bobinas', 'bobina'], ['propuesta', 'Propuesta de tendido', 'lista'], ['puntas', 'Puntas de cable', 'punta']] },
+  ['fo', 'Fibra óptica', 'fibra'], ['fundaciones', 'Fundaciones STS', 'sts'], ['sala', 'Sala de operación y control', 'pc', 'pronto'],
   { s: 'hinc', t: 'Hincado', ico: 'hinca', items: [['hincado', 'Avance de hincado', 'barras'], ['hplano', 'Plano de hincado', 'plano'], ['htrk', 'Distribución por tracker', 'trackers'], ['hrec', 'Recepción de hincas', 'camion'], ['hcat', 'Catálogo y distribución', 'libro']] },
   { s: 'maqs', t: 'Maquinaria de obra', ico: 'maquina', items: [['maq', 'Horas mensuales', 'dia'], ['maqev', 'Paradas y mantenimientos', 'llave'], ['maqeq', 'Equipos', 'camion']] },
 ];

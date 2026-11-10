@@ -209,7 +209,7 @@ function printMes(ym) {
   printHTML(h, `Tendido ${ym}.pdf`);
 }
 function printAvance() {
-  printHTML(prHead('Avance de obra · Tendido y aprovechamiento de cables') + $('#view').innerHTML, `Avance ${today()}.pdf`, true);
+  printHTML(prHead('Avance de obra') + $('#view').innerHTML, `Avance ${today()}.pdf`, true);
 }
 function printPuntas() {
   const cs = R.circuitos.filter((c) => c.cat !== 'PAT' && c.cat !== 'LA');
