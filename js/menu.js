@@ -7,7 +7,7 @@ const MENU = [
   { s: 'cables', t: 'Tendido de cables', ico: 'cable', grupos: true, items: [['cables', 'Resumen de tendido', 'barras'], ['diario', 'Tendido por fecha', 'dia'], ['zanjas', 'Zanjas', 'zanja'], ['bobinas', 'Bobinas', 'bobina'], ['propuesta', 'Propuesta de tendido', 'lista']] },
   ['puntas', 'Puntas de cable', 'punta'], ['fundaciones', 'Fundaciones STS', 'sts'],
   { s: 'hinc', t: 'Hincado', ico: 'hinca', items: [['hincado', 'Avance de hincado', 'barras'], ['hplano', 'Plano de hincado', 'plano'], ['htrk', 'Distribución por tracker', 'trackers'], ['hrec', 'Recepción de hincas', 'camion'], ['hcat', 'Catálogo y distribución', 'libro']] },
-  { s: 'maqs', t: 'Maquinaria de obra', ico: 'maquina', items: [['maq', 'Horas semanales', 'dia'], ['maqev', 'Paradas y mantenimientos', 'llave'], ['maqeq', 'Equipos', 'camion']] },
+  { s: 'maqs', t: 'Maquinaria de obra', ico: 'maquina', items: [['maq', 'Horas mensuales', 'dia'], ['maqev', 'Paradas y mantenimientos', 'llave'], ['maqeq', 'Equipos', 'camion']] },
 ];
 // vistas que no tienen botón propio: se marca la del menú que las contiene
 const MENU_ALIAS = { gantt: 'crono' };

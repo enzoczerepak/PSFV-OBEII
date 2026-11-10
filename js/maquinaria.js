@@ -87,61 +87,81 @@ function servHTML(m, corto) {
 }
 
 // ======================= HORAS SEMANALES =======================
+// ---- mes: días AAAA-MM-DD del mes 'AAAA-MM' ----
+const MESL = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const mesTxt = (ym) => `${MESL[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
+function diasMes(ym) { const [y, m] = ym.split('-').map(Number), n = new Date(y, m, 0).getDate(); return Array.from({ length: n }, (_, i) => `${ym}-${String(i + 1).padStart(2, '0')}`); }
+const mesMas = (ym, k) => { const [y, m] = ym.split('-').map(Number), d = new Date(y, m - 1 + k, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+const DSEM = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+const dowDe = (f) => new Date(f + 'T12:00:00').getDay();
+function horasMes(maq, ym, L) { L = L || lecturas(maq); return diasMes(ym).reduce((a, d) => a + horasDia(maq, d, L), 0); }
+const evMes = (maq, ym, tipo) => maqE().filter((e) => (!maq || e.maq === maq) && e.fecha.startsWith(ym) && (!tipo || e.tipo === tipo)).reduce((a, e) => a + (Number(e.horas) || 0), 0);
+const tieneMes = (maq, ym) => maqH().some((r) => r.maq === maq && (Object.keys(r.lect || {}).some((f) => f.startsWith(ym)) || Object.keys(r.hs || {}).some((f) => f.startsWith(ym))));
+const datoDia = (maq, f) => { const r = regDe(maq, lunesDe(f)) || {}; return { v: (r.lect || {})[f], h: (r.hs || {})[f], per: (r.per || {})[f] }; };
+
+// ======================= HORAS MENSUALES (registro diario) =======================
 function vMaq(el) {
-  const sem = (ui.maqSem = ui.maqSem || lunesDe(today()));
+  const ym = (ui.maqMes = ui.maqMes || today().slice(0, 7));
   const ro = window.READONLY;
   actions([...(ro ? [] : [['Registrar horas', 'btn pri', () => registrarHoras(null, null)], ['+ Parada / mantenimiento', 'btn acc', () => editEvento(null)], ['+ Equipo', 'btn', () => editMaquina(null)]]),
-    ['Exportar Excel', 'btn', exportMaq], ['PDF de la semana', 'btn', () => printMaqSemana(sem)]]);
-  const ms = maqL().filter((m) => m.activa !== false || regDe(m.id, sem)).sort(maqOrd);
+    ['Exportar Excel', 'btn', exportMaq], ['PDF del mes', 'btn', () => printMaqMes(ym)]]);
+  const ms = maqL().filter((m) => m.activa !== false || tieneMes(m.id, ym)).sort(maqOrd);
   const tot = { t: 0, p: 0, m: 0 };
-  ms.forEach((m) => { tot.t += horasSem(m.id, sem); tot.p += evSem(m.id, sem, 'parada'); tot.m += evSem(m.id, sem, 'mantenimiento'); });
+  ms.forEach((m) => { tot.t += horasMes(m.id, ym); tot.p += evMes(m.id, ym, 'parada'); tot.m += evMes(m.id, ym, 'mantenimiento'); });
   const dg = dispo(tot.t, tot.p + tot.m);
-  let h = `<div class="tools"><button class="btn" id="semAnt">◀</button><b style="min-width:220px;text-align:center">Semana del ${semTxt(sem)}</b><button class="btn" id="semSig">▶</button>
-    <input type="date" id="semFecha" value="${sem}" title="Ir a la semana de esta fecha"><button class="btn ghost" id="semHoy">Esta semana</button><span class="sp"></span>
+  let h = `<div class="tools"><button class="btn" id="mesAnt">◀</button><b style="min-width:160px;text-align:center">${mesTxt(ym)}</b><button class="btn" id="mesSig">▶</button>
+    <input type="month" id="mesSel" value="${ym}" title="Ir al mes"><button class="btn ghost" id="mesHoy">Este mes</button><span class="sp"></span>
     <span class="muted">${ms.length} equipo${ms.length === 1 ? '' : 's'}</span></div>
-    <div class="kpis k4" style="margin-bottom:14px">${kpi('Horas trabajadas', tot.t, 'h', 1)}${kpi('Horas de parada', tot.p, 'h', 1)}${kpi('Horas de mantenimiento', tot.m, 'h', 1)}
+    <div class="kpis k4" style="margin-bottom:14px">${kpi('Horas trabajadas en el mes', tot.t, 'h', 1)}${kpi('Horas de parada', tot.p, 'h', 1)}${kpi('Horas de mantenimiento', tot.m, 'h', 1)}
       <div class="kpi"><span>Disponibilidad</span><b>${dg == null ? '–' : fmt(dg * 100)}<small>${dg == null ? '' : '%'}</small></b></div></div>`;
   const avis = maqL().filter((m) => m.activa !== false).map((m) => [m, servicio(m)]).filter(([, x]) => x && !x.sinBase && x.nivel !== 'ok').sort((a, b) => a[1].faltan - b[1].faltan);
   if (avis.length) h += `<div class="alerts" style="margin-bottom:12px">${avis.map(([m, x]) => `<div class="alert ${x.nivel === 'venc' ? 'error' : 'aviso'}" style="display:block"><b>${esc(m.interno)} · ${esc(m.descripcion)}</b>: ${x.faltan <= 0 ? `service vencido hace ${fmt(-x.faltan, 1)} h` : `faltan ${fmt(x.faltan, 1)} h para el service`} (cada ${fmt(x.N)} h${x.prox != null && !m.sinHoro ? `, a los ${fmt(x.prox, 1)} h de horómetro` : ''})</div>`).join('')}</div>`;
   if (!maqL().length) {
     el.innerHTML = h + `<div class="empty"><b>Todavía no hay equipos cargados</b><p>Cargá cada máquina con su número de interno, descripción, marca y modelo.</p>${ro ? '' : '<button class="btn pri" id="maqPrim">+ Cargar el primer equipo</button>'}</div>`;
     const b = $('#maqPrim'); if (b) b.onclick = () => editMaquina(null);
-    bindSem(el); return;
+    bindMes(); return;
   }
-  const ds = diasSem(sem), hoy = today();
-  h += `<div class="tblwrap"><table class="tbl maqt"><thead><tr><th>Interno</th><th>Equipo</th>${ds.map((d, k) => `<th class="n dcol ${d === hoy ? 'hoy' : ''}">${DIAS[k]} ${d.slice(8)}</th>`).join('')}
-    <th class="n">Horas semana</th><th>Próx. service</th><th class="n">Parada (h)</th><th class="n">Mant. (h)</th><th class="n">Disponib.</th><th>Observaciones</th><th></th></tr></thead><tbody>`;
+  const ds = diasMes(ym), hoy = today();
+  h += `<div class="tblwrap maqwrap"><table class="tbl maqt maqm"><thead><tr><th class="fx1">Interno</th><th class="fx2">Equipo</th><th class="n fx3">Mes (h)</th><th class="fx4">Próx. service</th><th class="n fx5">Parada</th><th class="n fx6">Mant.</th><th class="n fx7">Disp.</th>
+    ${ds.map((d) => { const w = dowDe(d); return `<th class="n dcol ${d === hoy ? 'hoy' : ''} ${w === 0 || w === 6 ? 'fds' : ''}">${DSEM[w]}<br>${Number(d.slice(8))}</th>`; }).join('')}<th></th></tr></thead><tbody>`;
   ms.forEach((m) => {
-    const r = regDe(m.id, sem) || {}, L = lecturas(m.id), t = horasSem(m.id, sem), p = evSem(m.id, sem, 'parada'), mm = evSem(m.id, sem, 'mantenimiento'), d = dispo(t, p + mm);
-    const evs = maqE().filter((e) => e.maq === m.id && enSemana(e.fecha, sem));
-    const sinBase = !m.sinHoro && horoAntes(m.id, ds[0], L) == null;
-    h += `<tr data-id="${m.id}"><td class="mono"><b>${esc(m.interno)}</b></td><td>${esc(m.descripcion)}<div class="muted" style="font-size:11.5px">${esc([m.marca, m.modelo].filter(Boolean).join(' '))}${m.sinHoro ? ' · sin horómetro' : ''}</div></td>
+    const L = lecturas(m.id), t = horasMes(m.id, ym, L), p = evMes(m.id, ym, 'parada'), mm = evMes(m.id, ym, 'mantenimiento'), d = dispo(t, p + mm);
+    const evD = {}; maqE().filter((e) => e.maq === m.id && e.fecha.startsWith(ym)).forEach((e) => { (evD[e.fecha] = evD[e.fecha] || []).push(e); });
+    h += `<tr data-id="${m.id}"><td class="mono fx1"><b>${esc(m.interno)}</b></td><td class="fx2">${esc(m.descripcion)}<div class="muted" style="font-size:11px">${esc([m.marca, m.modelo].filter(Boolean).join(' '))}${m.sinHoro ? ' · sin horómetro' : ''}</div></td>
+      <td class="n fx3"><b>${fmt(t, 1)}</b></td><td class="fx4">${servHTML(m, true)}</td>
+      <td class="n fx5">${p ? `<b style="color:var(--bad)">${fmt(p, 1)}</b>` : '–'}</td><td class="n fx6">${mm ? `<b style="color:var(--warn)">${fmt(mm, 1)}</b>` : '–'}</td>
+      <td class="n fx7">${d == null ? '–' : `<span class="pill ${d >= 0.85 ? 'p-done' : d >= 0.6 ? 'p-prov' : 'p-bad'}">${fmt(d * 100)}%</span>`}</td>
       ${ds.map((f) => {
-        const pd = (r.per || {})[f], pTxt = pd ? `período desde ${fechaCorta(pd)}` : '';
-        if (m.sinHoro) { const v = (r.hs || {})[f]; return `<td class="n dcol"><button class="dcel ${vacio(v) ? 'vac' : ''} ${pd ? 'per' : ''}" data-d="${f}" ${ro ? 'disabled' : ''} title="${pd ? 'Horas del ' + pTxt : 'Horas trabajadas el ' + fechaCorta(f)}">${vacio(v) ? '·' : `<b>${fmt(Number(v), 1)} h</b>${pd ? '<small>período</small>' : ''}`}</button></td>`; }
-        const v = (r.lect || {})[f], ant = horoAntes(m.id, f, L), hd = horasDia(m.id, f, L);
-        return `<td class="n dcol"><button class="dcel ${vacio(v) ? 'vac' : ''} ${pd ? 'per' : ''}" data-d="${f}" ${ro ? 'disabled' : ''} title="${vacio(v) ? 'Sin registro' : `${pd ? pTxt.charAt(0).toUpperCase() + pTxt.slice(1) + ' · ' : ''}Horómetro ${fmt(Number(v), 1)} (inicio ${ant != null ? fmt(ant, 1) : '?'})`}">${vacio(v) ? '·' : `<b>${ant == null ? 'inicio?' : `${fmt(hd, 1)} h`}</b><small>${pd ? 'período' : fmt(Number(v), 1)}</small>`}</button></td>`;
+        const x = datoDia(m.id, f), w = dowDe(f), ev = evD[f] || [], evT = ev.map((e) => `${MAQ_TIPO[e.tipo][0]}: ${e.motivo} (${fmt(e.horas, 1)} h)`).join(' · ');
+        const evI = ev.length ? `<i class="evd ${ev.some((e) => e.tipo === 'parada') ? 'par' : 'man'}"></i>` : '';
+        const cls = `dcol ${w === 0 || w === 6 ? 'fds' : ''} ${f === hoy ? 'hoy' : ''}`;
+        if (m.sinHoro) return `<td class="n ${cls}"><button class="dcel ${vacio(x.h) ? 'vac' : ''} ${x.per ? 'per' : ''}" data-d="${f}" ${ro || f > hoy ? 'disabled' : ''} title="${fechaCorta(f)}${vacio(x.h) ? ' · sin registro' : ` · ${fmt(Number(x.h), 1)} h${x.per ? ' (período desde ' + fechaCorta(x.per) + ')' : ''}`}${evT ? ' · ' + evT : ''}">${vacio(x.h) ? '·' : `<b>${fmt(Number(x.h), 1)}</b>${x.per ? '<small>per.</small>' : ''}`}${evI}</button></td>`;
+        const ant = horoAntes(m.id, f, L), hd = horasDia(m.id, f, L);
+        return `<td class="n ${cls}"><button class="dcel ${vacio(x.v) ? 'vac' : ''} ${x.per ? 'per' : ''}" data-d="${f}" ${ro || f > hoy ? 'disabled' : ''} title="${fechaCorta(f)}${vacio(x.v) ? ' · sin registro' : ` · horómetro ${fmt(Number(x.v), 1)} (inicio ${ant != null ? fmt(ant, 1) : '?'}) → ${fmt(hd, 1)} h${x.per ? ' · período desde ' + fechaCorta(x.per) : ''}`}${evT ? ' · ' + evT : ''}">${vacio(x.v) ? '·' : `<b>${ant == null ? '?' : fmt(hd, 1)}</b><small>${x.per ? 'per.' : fmt(Number(x.v), 1)}</small>`}${evI}</button></td>`;
       }).join('')}
-      <td class="n"><b>${fmt(t, 1)}</b>${sinBase && L.some((x) => x[0] >= ds[0] && x[0] <= ds[6]) ? '<div class="hd" style="color:var(--warn)">cargá el horómetro al ingreso</div>' : ''}</td>
-      <td>${servHTML(m, true)}</td>
-      <td class="n">${p ? `<b style="color:var(--bad)">${fmt(p, 1)}</b>` : '–'}</td><td class="n">${mm ? `<b style="color:var(--warn)">${fmt(mm, 1)}</b>` : '–'}</td>
-      <td class="n">${d == null ? '–' : `<span class="pill ${d >= 0.85 ? 'p-done' : d >= 0.6 ? 'p-prov' : 'p-bad'}">${fmt(d * 100)} %</span>`}</td>
-      <td><input type="text" class="mi mo" data-f="obs" value="${esc(r.obs || '')}" ${ro ? 'disabled' : ''}>${evs.length ? `<div class="muted" style="font-size:11.5px;margin-top:3px">${evs.map((e) => `${MAQ_TIPO[e.tipo][0]} ${fechaCorta(e.fecha)}: ${esc(e.motivo)} (${fmt(e.horas, 1)} h)`).join(' · ')}</div>` : ''}</td>
       <td style="white-space:nowrap">${ro ? '' : `<button class="btn sm acc" data-a="ev" title="Registrar parada o mantenimiento">Parada / mant.</button> <button class="btn sm ghost" data-a="ed" title="Editar equipo">✎</button>`}</td></tr>`;
   });
-  h += `</tbody></table></div><p class="hint">Con <b>Registrar horas</b> (o tocando un día de la planilla) se carga <b>un solo dato por jornada: el horómetro al terminar el día</b>. El inicio de cada jornada es el fin de la anterior y las horas del día salen de la diferencia (en la planilla: horas del día y, debajo, el horómetro). Si un día no se carga, esas horas se suman a la próxima lectura. La primera vez se toma el horómetro al ingreso del equipo (en ✎). Los equipos sin horómetro cargan las horas trabajadas de cada día. Disponibilidad = trabajadas / (trabajadas + paradas + mantenimiento).</p>`;
+  h += `</tbody></table></div><p class="hint">Cada casillero es una jornada: arriba las horas del día y abajo el horómetro al terminar (el inicio de cada jornada es el fin de la anterior). Se carga con <b>Registrar horas</b> o tocando el día. Si un día no se carga, esas horas se suman a la próxima lectura. Puntito rojo = parada, naranja = mantenimiento (pasá el mouse para ver el detalle). Sábados y domingos sombreados. Disponibilidad = trabajadas / (trabajadas + paradas + mantenimiento).</p>`;
   el.innerHTML = h;
-  bindSem(el);
+  bindMes();
+  // ubicar el día de hoy a la vista
+  const wrap = $('.maqwrap', el), th = $('th.hoy', el); if (wrap && th) wrap.scrollLeft = Math.max(0, th.offsetLeft - 590 - (wrap.clientWidth - 590) / 2);
   if (ro) return;
   $$('tbody tr', el).forEach((tr) => {
-    const id = tr.dataset.id, m = maqDe(id);
-    const reg = () => { let r = regDe(id, sem); if (!r) { r = { id: `${id}|${sem}`, maq: id, semana: sem, _o: Date.now() }; maqH().push(r); } return r; };
+    const id = tr.dataset.id;
     $$('.dcel', tr).forEach((b) => { b.onclick = () => registrarHoras(id, b.dataset.d); });
-    const ob = tr.querySelector('[data-f=obs]'); ob.onchange = () => { reg().obs = ob.value.trim(); commit(`${m.interno}: observación de la semana`); };
-    const b1 = tr.querySelector('[data-a=ev]'); if (b1) b1.onclick = () => editEvento(null, id, sem);
+    const b1 = tr.querySelector('[data-a=ev]'); if (b1) b1.onclick = () => editEvento(null, id, null);
     const b2 = tr.querySelector('[data-a=ed]'); if (b2) b2.onclick = () => editMaquina(id);
   });
 }
+function bindMes() {
+  const set = (v) => { ui.maqMes = v; render(false); };
+  $('#mesAnt').onclick = () => set(mesMas(ui.maqMes, -1));
+  $('#mesSig').onclick = () => set(mesMas(ui.maqMes, 1));
+  $('#mesHoy').onclick = () => set(today().slice(0, 7));
+  $('#mesSel').onchange = (e) => { if (e.target.value) set(e.target.value); };
+}
+
 // ======================= REGISTRAR HORAS =======================
 // Un dato por equipo y jornada: el horómetro al terminar (o las horas, si el equipo no tiene horómetro).
 // El inicio de la jornada es la lectura anterior; las horas del día salen de la diferencia.
@@ -225,18 +245,10 @@ async function registrarHoras(maq, fecha) {
     guardarLectura(m.id, f, v, per);
     const cuando = per ? `período ${fechaCorta(per)} al ${fechaCorta(f)}` : fechaCorta(f);
     commit(m.sinHoro ? `${m.interno} · ${cuando}: ${fmt(v, 1)} h` : `${m.interno} · ${cuando}: horómetro ${fmt(v, 1)}${ant != null ? ` → ${fmt(v - ant, 1)} h` : ''}`);
-    ui.maqSem = lunesDe(f);
+    ui.maqMes = f.slice(0, 7);
     if (otro) setTimeout(() => registrarHoras(null, f), 250);
   }
 }
-function bindSem(el) {
-  const set = (v) => { ui.maqSem = lunesDe(v); render(false); };
-  $('#semAnt').onclick = () => set(sumDias(ui.maqSem, -7));
-  $('#semSig').onclick = () => set(sumDias(ui.maqSem, 7));
-  $('#semHoy').onclick = () => set(today());
-  $('#semFecha').onchange = (e) => { if (e.target.value) set(e.target.value); };
-}
-
 // ======================= EQUIPOS =======================
 function vMaqEq(el) {
   const ro = window.READONLY;
@@ -376,13 +388,15 @@ async function exportMaq() {
     a1.push([m.interno, m.descripcion, m.marca || '', m.modelo || '', m.serie || '', m.propiedad || '', m.fechaIngreso || '', vacio(m.horoIngreso) ? '' : Number(m.horoIngreso), m.activa === false ? 'De baja' : 'En obra', r1(t), r1(p), r1(mm), d == null ? '' : r1(d * 100), m.sinHoro ? 'sin horómetro' : ult ? ult[1] : '', ...(() => { const x = servicio(m); return x && !x.sinBase ? [x.N, r1(x.usado), r1(x.faltan), x.prox != null && !m.sinHoro ? r1(x.prox) : ''] : [x ? x.N : '', '', '', '']; })(), m.obs || '']);
   });
   sh(a1, [10, 26, 14, 16, 18, 13, 13, 15, 10, 15, 15, 20, 15, 15, 14, 18, 18, 20, 30], 'Equipos');
-  // horas por semana y día
-  const a2 = [['Semana (lunes)', 'Semana', 'Interno', 'Equipo', ...DIAS.map((d) => d + ' (h)'), 'Horas semana', 'Horas de parada', 'Horas de mantenimiento', 'Disponibilidad %', 'Observaciones']];
-  maqH().slice().sort((a, b) => b.semana.localeCompare(a.semana) || maqOrd(maqDe(a.maq) || {}, maqDe(b.maq) || {})).forEach((r) => {
-    const m = maqDe(r.maq) || {}, L = lecturas(r.maq), t = horasSem(r.maq, r.semana), p = evSem(r.maq, r.semana, 'parada'), mm = evSem(r.maq, r.semana, 'mantenimiento'), d = dispo(t, p + mm);
-    a2.push([r.semana, semTxt(r.semana), m.interno || '', m.descripcion || '', ...diasSem(r.semana).map((f) => r1(horasDia(r.maq, f, L))), r1(t), r1(p), r1(mm), d == null ? '' : r1(d * 100), r.obs || '']);
-  });
-  sh(a2, [13, 22, 10, 26, 8, 8, 8, 8, 8, 8, 8, 13, 15, 20, 15, 30], 'Horas semanales');
+  // horas por mes y día
+  const meses = [...new Set(maqH().flatMap((r) => [...Object.keys(r.lect || {}), ...Object.keys(r.hs || {})].map((f) => f.slice(0, 7))))].sort().reverse();
+  const a2 = [['Mes', 'Interno', 'Equipo', ...Array.from({ length: 31 }, (_, i) => String(i + 1)), 'Horas mes', 'Horas de parada', 'Horas de mantenimiento', 'Disponibilidad %']];
+  meses.forEach((ym) => ms.forEach((m) => {
+    if (!tieneMes(m.id, ym) && !evMes(m.id, ym)) return;
+    const L = lecturas(m.id), ds = diasMes(ym), t = horasMes(m.id, ym, L), p = evMes(m.id, ym, 'parada'), mm = evMes(m.id, ym, 'mantenimiento'), d = dispo(t, p + mm);
+    a2.push([mesTxt(ym), m.interno, m.descripcion, ...Array.from({ length: 31 }, (_, i) => (ds[i] ? (horasDia(m.id, ds[i], L) ? r1(horasDia(m.id, ds[i], L)) : '') : '')), r1(t), r1(p), r1(mm), d == null ? '' : r1(d * 100)]);
+  }));
+  sh(a2, [15, 10, 24, ...Array(31).fill(5), 11, 14, 20, 15], 'Horas mensuales');
   // lecturas diarias de horómetro: inicio (= fin de la jornada anterior), fin y horas
   const a4 = [['Fecha', 'Interno', 'Equipo', 'Horómetro inicio', 'Horómetro fin', 'Horas trabajadas', 'Período sin registro diario desde']];
   ms.forEach((m) => {
@@ -391,28 +405,30 @@ async function exportMaq() {
   });
   a4.sort((x, y) => (x[0] === 'Fecha' ? -1 : y[0] === 'Fecha' ? 1 : y[0].localeCompare(x[0]) || String(x[1]).localeCompare(String(y[1]), 'es', { numeric: true })));
   sh(a4, [12, 10, 26, 17, 15, 17, 28], 'Horómetro por jornada');
-  const a3 = [['Fecha', 'Semana (lunes)', 'Interno', 'Equipo', 'Tipo', 'Horas', 'Motivo', 'Observaciones']];
-  maqE().slice().sort((a, b) => b.fecha.localeCompare(a.fecha)).forEach((e) => { const m = maqDe(e.maq) || {}; a3.push([e.fecha, lunesDe(e.fecha), m.interno || '', m.descripcion || '', MAQ_TIPO[e.tipo][0], r1(Number(e.horas) || 0), e.motivo || '', e.obs || '']); });
+  const a3 = [['Fecha', 'Mes', 'Interno', 'Equipo', 'Tipo', 'Horas', 'Motivo', 'Observaciones']];
+  maqE().slice().sort((a, b) => b.fecha.localeCompare(a.fecha)).forEach((e) => { const m = maqDe(e.maq) || {}; a3.push([e.fecha, mesTxt(e.fecha.slice(0, 7)), m.interno || '', m.descripcion || '', MAQ_TIPO[e.tipo][0], r1(Number(e.horas) || 0), e.motivo || '', e.obs || '']); });
   sh(a3, [12, 14, 10, 26, 15, 8, 28, 40], 'Paradas y mantenimientos');
   const p = await window.api.saveBinary(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), `Maquinaria de obra ${today()}.xlsx`, 'xlsx', 'Excel');
   if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
 }
-function printMaqSemana(sem) {
-  const ms = maqL().filter((m) => m.activa !== false || regDe(m.id, sem)).sort(maqOrd);
+function printMaqMes(ym) {
+  const ms = maqL().filter((m) => m.activa !== false || tieneMes(m.id, ym)).sort(maqOrd);
   if (!ms.length) { toast('No hay equipos cargados', { err: true }); return; }
-  let tt = 0, tp = 0, tm = 0;
-  const ds = diasSem(sem);
-  let h = prHead(`Maquinaria de obra · semana del ${semTxt(sem)}`) + `<div class="card"><table class="tbl stk"><thead><tr><th>Interno</th><th>Equipo</th>${ds.map((d, k) => `<th class="n">${DIAS[k]} ${d.slice(8)}</th>`).join('')}<th class="n">Semana</th><th class="n">Parada</th><th class="n">Mant.</th><th class="n">Disponib.</th><th>Observaciones</th></tr></thead><tbody>`;
+  const ds = diasMes(ym); let tt = 0, tp = 0, tm = 0;
+  let h = prHead(`Maquinaria de obra · ${mesTxt(ym)}`) + `<div class="card"><table class="tbl maqpr"><thead><tr><th>Interno</th><th>Equipo</th>${ds.map((d) => { const w = dowDe(d); return `<th class="n ${w === 0 || w === 6 ? 'fds' : ''}">${DSEM[w]}<br>${Number(d.slice(8))}</th>`; }).join('')}<th class="n">Mes</th><th class="n">Parada</th><th class="n">Mant.</th><th class="n">Disp.</th></tr></thead><tbody>`;
   ms.forEach((m) => {
-    const r = regDe(m.id, sem) || {}, L = lecturas(m.id), t = horasSem(m.id, sem), p = evSem(m.id, sem, 'parada'), mm = evSem(m.id, sem, 'mantenimiento'), d = dispo(t, p + mm); tt += t; tp += p; tm += mm;
-    h += `<tr><td><b>${esc(m.interno)}</b></td><td>${esc(m.descripcion)}<br><span style="font-size:7pt;color:#666">${esc([m.marca, m.modelo].filter(Boolean).join(' '))}</span></td>
-      ${ds.map((f) => { const hd = horasDia(m.id, f, L), v = (r.lect || {})[f]; return `<td class="n">${hd ? `<b>${fmt(hd, 1)}</b>` : ''}${!m.sinHoro && !vacio(v) ? `<br><span style="font-size:6.5pt;color:#666">${fmt(Number(v), 1)}</span>` : ''}</td>`; }).join('')}
-      <td class="n"><b>${fmt(t, 1)}</b></td><td class="n">${p ? fmt(p, 1) : ''}</td><td class="n">${mm ? fmt(mm, 1) : ''}</td><td class="n">${d == null ? '' : fmt(d * 100) + ' %'}</td><td style="white-space:normal">${esc(r.obs || '')}</td></tr>`;
+    const L = lecturas(m.id), t = horasMes(m.id, ym, L), p = evMes(m.id, ym, 'parada'), mm = evMes(m.id, ym, 'mantenimiento'), d = dispo(t, p + mm); tt += t; tp += p; tm += mm;
+    h += `<tr><td><b>${esc(m.interno)}</b></td><td>${esc(m.descripcion)}</td>${ds.map((f) => { const hd = horasDia(m.id, f, L), w = dowDe(f), x = datoDia(m.id, f); return `<td class="n ${w === 0 || w === 6 ? 'fds' : ''}">${hd ? fmt(hd, 1) : vacio(x.v) && vacio(x.h) ? '' : '0'}${x.per ? '*' : ''}</td>`; }).join('')}
+      <td class="n"><b>${fmt(t, 1)}</b></td><td class="n">${p ? fmt(p, 1) : ''}</td><td class="n">${mm ? fmt(mm, 1) : ''}</td><td class="n">${d == null ? '' : fmt(d * 100) + '%'}</td></tr>`;
   });
-  h += `<tr><td colspan="9"><b>Total</b></td><td class="n"><b>${fmt(tt, 1)}</b></td><td class="n"><b>${fmt(tp, 1)}</b></td><td class="n"><b>${fmt(tm, 1)}</b></td><td class="n">${dispo(tt, tp + tm) == null ? '' : fmt(dispo(tt, tp + tm) * 100) + ' %'}</td><td></td></tr></tbody></table>
-    <p class="muted" style="font-size:8pt;margin:6px 0 0">Por día: horas trabajadas y, debajo, el horómetro al fin de la jornada (el inicio de cada jornada es el fin de la anterior).</p></div>`;
-  const evs = maqE().filter((e) => enSemana(e.fecha, sem)).sort((a, b) => a.fecha.localeCompare(b.fecha));
-  if (evs.length) h += `<div class="card"><h3>Paradas y mantenimientos de la semana</h3><table class="tbl stk"><thead><tr><th>Fecha</th><th>Interno</th><th>Equipo</th><th>Tipo</th><th class="n">Horas</th><th>Motivo</th><th>Observaciones</th></tr></thead><tbody>${evs.map((e) => { const m = maqDe(e.maq) || {}; return `<tr><td>${fechaCorta(e.fecha)}</td><td><b>${esc(m.interno || '')}</b></td><td>${esc(m.descripcion || '')}</td><td>${MAQ_TIPO[e.tipo][0]}</td><td class="n">${fmt(e.horas, 1)}</td><td>${esc(e.motivo || '')}</td><td style="white-space:normal">${esc(e.obs || '')}</td></tr>`; }).join('')}</tbody></table></div>`;
-  h += `<p class="muted" style="font-size:9pt">Disponibilidad = horas trabajadas / (trabajadas + paradas + mantenimiento).</p>`;
-  printHTML(h, `Maquinaria semana ${sem}.pdf`, true);
+  h += `<tr><td colspan="${ds.length + 2}"><b>Total</b></td><td class="n"><b>${fmt(tt, 1)}</b></td><td class="n"><b>${fmt(tp, 1)}</b></td><td class="n"><b>${fmt(tm, 1)}</b></td><td class="n">${dispo(tt, tp + tm) == null ? '' : fmt(dispo(tt, tp + tm) * 100) + '%'}</td></tr></tbody></table>
+    <p class="muted" style="font-size:7.5pt;margin:6px 0 0">Horas trabajadas por jornada (horómetro al fin del día menos el del día anterior). * = período sin registro diario. Disponibilidad = trabajadas / (trabajadas + paradas + mantenimiento).</p></div>`;
+  // lecturas del mes por equipo
+  h += `<div class="card"><h3>Horómetro al fin de cada jornada</h3><table class="tbl stk"><thead><tr><th>Interno</th><th>Equipo</th><th class="n">Inicio del mes</th><th class="n">Última lectura</th><th>Fecha</th><th class="n">Horas del mes</th><th>Próximo service</th></tr></thead><tbody>${ms.map((m) => {
+    const L = lecturas(m.id), ini = m.sinHoro ? null : horoAntes(m.id, ds[0], L), ul = L.filter((x) => x[0] <= ds[ds.length - 1]).pop(), sv = servicio(m);
+    return `<tr><td><b>${esc(m.interno)}</b></td><td>${esc(m.descripcion)}</td><td class="n">${ini != null ? fmt(ini, 1) : m.sinHoro ? 'sin horómetro' : '–'}</td><td class="n">${ul && !m.sinHoro ? fmt(ul[1], 1) : '–'}</td><td>${ul && !m.sinHoro ? fechaCorta(ul[0]) : ''}</td><td class="n"><b>${fmt(horasMes(m.id, ym, L), 1)}</b></td><td>${sv && !sv.sinBase ? (sv.faltan <= 0 ? `vencido ${fmt(-sv.faltan, 1)} h` : `faltan ${fmt(sv.faltan, 1)} h`) + (sv.prox != null && !m.sinHoro ? ` (a los ${fmt(sv.prox, 1)})` : '') : '–'}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+  const evs = maqE().filter((e) => e.fecha.startsWith(ym)).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  if (evs.length) h += `<div class="card"><h3>Paradas y mantenimientos del mes</h3><table class="tbl stk"><thead><tr><th>Fecha</th><th>Interno</th><th>Equipo</th><th>Tipo</th><th class="n">Horas</th><th>Motivo</th><th>Observaciones</th></tr></thead><tbody>${evs.map((e) => { const m = maqDe(e.maq) || {}; return `<tr><td>${fechaCorta(e.fecha)}</td><td><b>${esc(m.interno || '')}</b></td><td>${esc(m.descripcion || '')}</td><td>${MAQ_TIPO[e.tipo][0]}</td><td class="n">${fmt(e.horas, 1)}</td><td>${esc(e.motivo || '')}</td><td style="white-space:normal">${esc(e.obs || '')}</td></tr>`; }).join('')}</tbody></table></div>`;
+  printHTML(h, `Maquinaria ${mesTxt(ym)}.pdf`, true);
 }

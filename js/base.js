@@ -181,7 +181,7 @@ document.addEventListener('click', () => $$('.expdd.on').forEach((x) => x.classL
 
 // ======================= navegación =======================
 const VIEWS = {
-  maq: ['Horas semanales de máquinas', () => 'Registro semanal por equipo: horómetro, horas trabajadas, paradas, mantenimientos y disponibilidad'],
+  maq: ['Horas de máquinas', () => 'Registro mensual con detalle diario por equipo: horómetro, horas trabajadas, paradas, mantenimientos y disponibilidad'],
   maqev: ['Paradas y mantenimientos', () => 'Horas de parada y de mantenimiento de cada equipo, con motivo y observaciones'],
   maqeq: ['Equipos', () => 'Máquinas de la obra: N° de interno, descripción, marca, modelo y horas acumuladas'],
   hincado: ['Avance de hincado', () => 'Trackers e hincas por sector y configuración de la discretización Trina · recepciones verificadas'],

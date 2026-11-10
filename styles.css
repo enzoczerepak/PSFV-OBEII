@@ -952,3 +952,33 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 .svc .svb { height: 5px; border-radius: 3px; background: #e6ebf2; overflow: hidden; } .svc .svb i { display: block; height: 100%; border-radius: 3px; background: #1a9a6b; }
 .svc.prox b { color: #c97b12; } .svc.prox .svb i { background: #f5a524; }
 .svc.venc b { color: var(--bad, #d64545); } .svc.venc .svb i { background: var(--bad, #d64545); }
+/* maquinaria: planilla mensual (un casillero por jornada) */
+.maqwrap { overflow-x: auto; }
+.maqm th, .maqm td { white-space: nowrap; }
+.maqm .fx1 { position: sticky; left: 0; z-index: 2; background: var(--card); min-width: 64px; }
+.maqm .fx2 { position: sticky; left: 64px; z-index: 2; background: var(--card); min-width: 150px; box-shadow: 6px 0 6px -6px rgba(16,30,54,.25); }
+.maqm thead .fx1, .maqm thead .fx2 { z-index: 3; }
+.maqm th.dcol { font-size: 10.5px; line-height: 1.15; padding: 6px 2px; text-align: center; }
+.maqm td.dcol { padding: 4px 1px; }
+.maqm .dcel { width: 46px; min-height: 38px; position: relative; padding: 2px 1px; border-radius: 6px; }
+.maqm .dcel b { font-size: 12px; } .maqm .dcel small { font-size: 9px; }
+.maqm .fds { background: #f3f5f9; } .maqm th.hoy, .maqm td.hoy { background: #fff6e5; }
+.maqm .dcel:disabled.vac { opacity: .45; }
+.evd { position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%; }
+.evd.par { background: var(--bad, #d64545); } .evd.man { background: #f5a524; }
+@media print {
+  #printArea .maqpr th, #printArea .maqpr td { padding: 3px 2px !important; font-size: 6.5pt !important; white-space: nowrap; text-align: center; }
+  #printArea .maqpr td:nth-child(2) { text-align: left; } #printArea .maqpr .fds { background: #eef1f5 !important; }
+}
+.maqm .fx2 { box-shadow: none; }
+.maqm .fx3, .maqm .fx4, .maqm .fx5, .maqm .fx6, .maqm .fx7 { position: sticky; z-index: 2; background: var(--card); }
+.maqm .fx3 { left: 214px; width: 64px; min-width: 64px; } .maqm .fx4 { left: 278px; width: 128px; min-width: 128px; } .maqm .fx4 .svc { min-width: 0; }
+.maqm .fx5 { left: 406px; width: 54px; min-width: 54px; } .maqm .fx6 { left: 460px; width: 54px; min-width: 54px; }
+.maqm .fx7 { left: 514px; width: 66px; min-width: 66px; box-shadow: 6px 0 6px -6px rgba(16,30,54,.3); }
+.maqm .fx2 { width: 150px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.maqm thead .fx3, .maqm thead .fx4, .maqm thead .fx5, .maqm thead .fx6, .maqm thead .fx7 { z-index: 3; }
+.maqm .fx1, .maqm .fx2, .maqm .fx3, .maqm .fx4, .maqm .fx5, .maqm .fx6, .maqm .fx7 { box-sizing: border-box; padding-left: 8px; padding-right: 8px; }
+.maqm .fx1 { width: 64px; min-width: 64px; max-width: 64px; } .maqm .fx2 { width: 150px; min-width: 150px; max-width: 150px; }
+.maqm .fx3 { max-width: 64px; } .maqm .fx4 { max-width: 128px; } .maqm .fx5 { max-width: 54px; } .maqm .fx6 { max-width: 54px; } .maqm .fx7 { max-width: 66px; }
+.maqm .fx2 .muted { overflow: hidden; text-overflow: ellipsis; }
+.maqm .fx7 .pill { padding: 2px 6px; }
