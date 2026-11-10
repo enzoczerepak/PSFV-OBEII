@@ -181,6 +181,8 @@ document.addEventListener('click', () => $$('.expdd.on').forEach((x) => x.classL
 
 // ======================= navegación =======================
 const VIEWS = {
+  fo: ['Fibra óptica', () => 'Tubo PEAD de fibra sobre los cables de MT (zanja cerrada o cargada) y cámaras de inspección · comunicaciones entre CTs y sala de celdas'],
+  sala: ['Sala de operación y control', () => 'Construcción de la sala de celdas y operación · próximamente'],
   maq: ['Horas de máquinas', () => 'Registro mensual con detalle diario por equipo: horómetro, horas trabajadas, paradas, mantenimientos y disponibilidad'],
   maqev: ['Paradas y mantenimientos', () => 'Horas de parada y de mantenimiento de cada equipo, con motivo y observaciones'],
   maqeq: ['Equipos', () => 'Máquinas de la obra: N° de interno, descripción, marca, modelo y horas acumuladas'],
@@ -259,7 +261,7 @@ function render(anim) {
   const [t, sub] = VIEWS[view];
   const vc = view.split('-')[0];
   setTimeout(badgePartes, 0);
-  $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : view === 'fundaciones' ? 'Fundaciones STS' : ['hincado', 'htrk', 'hrec', 'hcat'].includes(view) ? 'Hincado' : MAQ_V.includes(view) ? 'Maquinaria de obra' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
+  $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'fo' ? 'Fibra óptica' : view === 'sala' ? 'Sala de operación y control' : ['hincado', 'htrk', 'hrec', 'hcat'].includes(view) ? 'Hincado' : MAQ_V.includes(view) ? 'Maquinaria de obra' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
   $('#vTitle').innerHTML = (CATN[vc] && view.includes('-') ? `<span class="cchip c-${vc}">${CATL[vc]}</span>` : '') + esc(t); $('#vSub').innerHTML = sub();
   $('#projName').textContent = S.nombre;
   const el = $('#view'), sc = el.scrollTop;
@@ -270,7 +272,7 @@ function render(anim) {
   const [cat, kind] = view.split('-');
   if (kind === 'plan') vPlan(el, cat);
   else if (kind === 'circ') vCircuitos(el, cat);
-  else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hrec: vHRec, hcat: vHCat, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
+  else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hrec: vHRec, hcat: vHCat, fo: vFibra, sala: vSala, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
   if (anim) { void el.offsetWidth; el.classList.add('enter'); el.scrollTop = 0; countUp(el); }
   else {
     el.scrollTop = sc;

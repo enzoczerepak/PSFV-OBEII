@@ -132,7 +132,7 @@ function vMaq(el) {
       <td class="n fx5">${p ? `<b style="color:var(--bad)">${fmt(p, 1)}</b>` : '–'}</td><td class="n fx6">${mm ? `<b style="color:var(--warn)">${fmt(mm, 1)}</b>` : '–'}</td>
       <td class="n fx7">${d == null ? '–' : `<span class="pill ${d >= 0.85 ? 'p-done' : d >= 0.6 ? 'p-prov' : 'p-bad'}">${fmt(d * 100)}%</span>`}</td>
       ${ds.map((f) => {
-        const x = datoDia(m.id, f), w = dowDe(f), ev = evD[f] || [], evT = ev.map((e) => `${MAQ_TIPO[e.tipo][0]}: ${e.motivo} (${fmt(e.horas, 1)} h)`).join(' · ');
+        const x = datoDia(m.id, f), w = dowDe(f), ev = evD[f] || [], evT = ev.map((e) => `${MAQ_TIPO[e.tipo][0]}: ${e.motivo} (${fmt(e.horas, 1)} h${vacio(e.horo) ? '' : ` a los ${fmt(Number(e.horo), 1)}`})`).join(' · ');
         const evI = ev.length ? `<i class="evd ${ev.some((e) => e.tipo === 'parada') ? 'par' : 'man'}"></i>` : '';
         const cls = `dcol ${w === 0 || w === 6 ? 'fds' : ''} ${f === hoy ? 'hoy' : ''}`;
         if (m.sinHoro) return `<td class="n ${cls}"><button class="dcel ${vacio(x.h) ? 'vac' : ''} ${x.per ? 'per' : ''}" data-d="${f}" ${ro || f > hoy ? 'disabled' : ''} title="${fechaCorta(f)}${vacio(x.h) ? ' · sin registro' : ` · ${fmt(Number(x.h), 1)} h${x.per ? ' (período desde ' + fechaCorta(x.per) + ')' : ''}`}${evT ? ' · ' + evT : ''}">${vacio(x.h) ? '·' : `<b>${fmt(Number(x.h), 1)}</b>${x.per ? '<small>per.</small>' : ''}`}${evI}</button></td>`;
@@ -259,14 +259,14 @@ function vMaqEq(el) {
   let h = `<div class="tools"><div class="seg" id="fME"><button data-v="act">En obra</button><button data-v="baja">De baja</button><button data-v="all">Todos</button></div>
     <span class="muted">${ms.length} equipo${ms.length === 1 ? '' : 's'}</span><span class="sp"></span><input type="search" id="fMQ" placeholder="Buscar interno, equipo, marca…" value="${esc(ui.maqQ || '')}" style="width:240px"></div>
     <div class="tblwrap"><table class="tbl"><thead><tr><th>Interno</th><th>Descripción</th><th>Marca</th><th>Modelo</th><th>N° serie / dominio</th><th>Propiedad</th><th>Ingreso a obra</th>
-    <th class="n">Horas trabajadas</th><th class="n">Paradas (h)</th><th class="n">Mant. (h)</th><th class="n">Disponib.</th><th>Último horómetro</th><th>Mant. programado</th><th>Estado</th><th></th></tr></thead><tbody>`;
+    <th class="n">Horas trabajadas</th><th class="n">Paradas (h)</th><th class="n">Mant. (h)</th><th class="n">Disponib.</th><th>Último horómetro</th><th>Último mantenimiento</th><th>Mant. programado</th><th>Estado</th><th></th></tr></thead><tbody>`;
   ms.forEach((m) => {
     const t = horasTot(m.id);
     const ev = maqE().filter((e) => e.maq === m.id), p = ev.filter((e) => e.tipo === 'parada').reduce((a, e) => a + (Number(e.horas) || 0), 0), mm = ev.filter((e) => e.tipo === 'mantenimiento').reduce((a, e) => a + (Number(e.horas) || 0), 0);
     const ult = ultLect(m.id), d = dispo(t, p + mm);
     h += `<tr data-id="${m.id}"><td class="mono"><b>${esc(m.interno)}</b></td><td>${esc(m.descripcion)}${m.obs ? ` <span title="${esc(m.obs)}">ⓘ</span>` : ''}</td><td>${esc(m.marca || '')}</td><td>${esc(m.modelo || '')}</td><td>${esc(m.serie || '')}</td><td>${esc(m.propiedad || '')}</td><td>${m.fechaIngreso ? fechaCorta(m.fechaIngreso) : '–'}${vacio(m.horoIngreso) ? '' : `<div class="muted" style="font-size:11.5px">horómetro ${fmt(Number(m.horoIngreso), 1)}</div>`}</td>
       <td class="n">${fmt(t, 1)}</td><td class="n">${p ? fmt(p, 1) : '–'}</td><td class="n">${mm ? fmt(mm, 1) : '–'}</td><td class="n">${d == null ? '–' : fmt(d * 100) + ' %'}</td>
-      <td>${m.sinHoro ? '<span class="muted">sin horómetro</span>' : ult ? `${fmt(ult[1], 1)} h <span class="muted">(${fechaCorta(ult[0])})</span>` : '–'}</td><td>${servHTML(m, false)}</td><td>${m.activa === false ? '<span class="pill p-prov">de baja</span>' : '<span class="pill p-done">en obra</span>'}</td>
+      <td>${m.sinHoro ? '<span class="muted">sin horómetro</span>' : ult ? `${fmt(ult[1], 1)} h <span class="muted">(${fechaCorta(ult[0])})</span>` : '–'}</td><td>${(() => { const u = maqE().filter((e) => e.maq === m.id && e.tipo === 'mantenimiento').sort((a, b) => a.fecha.localeCompare(b.fecha)).pop(); return u ? `${fechaCorta(u.fecha)}${vacio(u.horo) ? '' : ` · <b>${fmt(Number(u.horo), 1)} h</b>`}<div class="muted" style="font-size:11.5px">${esc(u.motivo)}</div>` : '–'; })()}</td><td>${servHTML(m, false)}</td><td>${m.activa === false ? '<span class="pill p-prov">de baja</span>' : '<span class="pill p-done">en obra</span>'}</td>
       <td>${ro ? '' : '<button class="btn sm ghost" data-a="ed">✎</button>'}</td></tr>`;
   });
   h += `</tbody></table>${ms.length ? '' : '<div class="empty"><b>Sin equipos</b></div>'}</div>`;
@@ -327,11 +327,11 @@ function vMaqEv(el) {
     <span class="muted">${list.length} registro${list.length === 1 ? '' : 's'}</span></div>
     <div class="grid g3" style="margin-bottom:14px;align-items:start"><div class="card"><div class="kpis k1">${kpi('Horas de parada', hs('parada'), 'h', 1)}</div></div><div class="card"><div class="kpis k1">${kpi('Horas de mantenimiento', hs('mantenimiento'), 'h', 1)}</div></div>
     <div class="card"><h3>Principales motivos (horas)</h3>${top.length ? top.map(([k, v]) => `<div class="zrow"><span>${esc(k)}</span><b>${fmt(v, 1)} h</b></div>`).join('') : '<span class="muted">Sin registros</span>'}</div></div>
-    <div class="tblwrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Interno</th><th>Equipo</th><th>Tipo</th><th class="n">Horas</th><th>Motivo</th><th>Observaciones</th><th></th></tr></thead><tbody>`;
+    <div class="tblwrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Interno</th><th>Equipo</th><th>Tipo</th><th class="n">Horas</th><th class="n">Horómetro</th><th>Motivo</th><th>Observaciones</th><th></th></tr></thead><tbody>`;
   list.forEach((e) => {
     const m = maqDe(e.maq) || {};
     h += `<tr data-id="${e.id}"><td>${fechaCorta(e.fecha)}</td><td class="mono"><b>${esc(m.interno || '?')}</b></td><td>${esc(m.descripcion || '')}</td><td><span class="pill ${MAQ_TIPO[e.tipo][1]}">${MAQ_TIPO[e.tipo][0]}</span></td>
-      <td class="n">${fmt(e.horas, 1)}</td><td>${esc(e.motivo || '')}</td><td>${esc(e.obs || '')}</td><td>${ro ? '' : '<button class="btn sm ghost" data-a="ed">✎</button>'}</td></tr>`;
+      <td class="n">${fmt(e.horas, 1)}</td><td class="n">${vacio(e.horo) ? '<span class="muted">–</span>' : `<b>${fmt(Number(e.horo), 1)}</b>`}</td><td>${esc(e.motivo || '')}${e.reinicia ? ' <span class="pill p-ready" title="Reinicia el contador del mantenimiento programado">service</span>' : ''}</td><td>${esc(e.obs || '')}</td><td>${ro ? '' : '<button class="btn sm ghost" data-a="ed">✎</button>'}</td></tr>`;
   });
   h += `</tbody></table>${list.length ? '' : '<div class="empty"><b>Sin paradas ni mantenimientos registrados</b></div>'}</div>`;
   el.innerHTML = h;
@@ -353,22 +353,40 @@ async function editEvento(id, maq, sem) {
       <label>Fecha<input type="date" name="fecha" value="${esc(e.fecha)}"></label>
       <label>Horas<input type="number" step="0.5" min="0" name="horas" value="${e.horas}"></label>
       <label>Motivo<input type="text" name="motivo" list="evMot" value="${esc(e.motivo || '')}"><datalist id="evMot"></datalist></label>
-      <div id="evSvc" style="grid-column:1/-1;display:none"><label style="display:flex;gap:8px;align-items:center;flex-direction:row;font-weight:500"><input type="checkbox" name="reinicia" style="width:auto;margin:0" ${e.reinicia ? 'checked' : ''}> Es el <b>service programado</b>: reinicia el contador de horas para el próximo</label>
-        <label style="margin-top:8px">Horómetro al hacer el service<input type="number" step="0.1" min="0" name="horo" value="${numIn(e.horo)}" placeholder="si no se carga, se toma la lectura de ese día"></label></div>
+      <label id="evHoroL"><span id="evHoroT">Horómetro al realizarlo</span><input type="number" step="0.1" min="0" name="horo" value="${numIn(e.horo)}"></label>
+      <div id="evHoroRef" class="muted" style="align-self:end;font-size:12px;padding-bottom:9px"></div>
+      <div id="evSvc" style="grid-column:1/-1;display:none"><label style="display:flex;gap:8px;align-items:center;flex-direction:row;font-weight:500"><input type="checkbox" name="reinicia" style="width:auto;margin:0" ${e.reinicia ? 'checked' : ''}> Es el <b>service programado</b>: reinicia el contador de horas para el próximo</label></div>
       <label class="full">Observaciones<input type="text" name="obs" value="${esc(e.obs || '')}" placeholder="detalle, repuestos, quién lo hizo…"></label></div>`,
     buttons: [...(nuevo ? [] : [['Eliminar', 'btn danger', () => 'del']]), ['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (box) => {
       const g = (n) => $(`[name=${n}]`, box).value.trim();
       if (!g('maq') || !g('fecha') || !(Number(g('horas')) > 0) || !g('motivo')) { toast('Completá equipo, fecha, horas y motivo', { err: true }); return false; }
+      const mq = maqDe(g('maq'));
+      if (g('tipo') === 'mantenimiento' && !mq.sinHoro && g('horo') === '') { toast('Cargá el horómetro al que se hizo el mantenimiento', { err: true }); return false; }
+      if (g('horo') !== '' && !mq.sinHoro) {
+        const L = lecturas(mq.id), ant = horoAntes(mq.id, g('fecha'), L), fin = (L.find((x) => x[0] === g('fecha')) || [])[1], h = Number(g('horo'));
+        if (ant != null && h < ant - 0.05) { toast(`El horómetro (${fmt(h, 1)}) es menor que el del inicio de esa jornada (${fmt(ant, 1)})`, { err: true }); return false; }
+        if (fin != null && h > fin + 0.05) { toast(`El horómetro (${fmt(h, 1)}) es mayor que el del fin de esa jornada (${fmt(fin, 1)})`, { err: true }); return false; }
+      }
       Object.assign(e, { maq: g('maq'), tipo: g('tipo'), fecha: g('fecha'), horas: Number(g('horas')), motivo: g('motivo'), obs: g('obs') });
-      const rei = g('tipo') === 'mantenimiento' && $('[name=reinicia]', box).checked;
-      if (rei) { e.reinicia = true; e.horo = g('horo') === '' ? '' : Number(g('horo')); } else { delete e.reinicia; delete e.horo; }
+      if (g('horo') !== '' && !mq.sinHoro) e.horo = Number(g('horo')); else delete e.horo;
+      if (g('tipo') === 'mantenimiento' && $('[name=reinicia]', box).checked) e.reinicia = true; else delete e.reinicia;
       return 'ok';
     }]],
   });
   { const box = $('#modal .mbox'), t = $('[name=tipo]', box), dl = $('#evMot', box);
-    const sv = $('#evSvc', box), sm = $('[name=maq]', box);
-    const upd = () => { dl.innerHTML = MAQ_MOT[t.value].map((x) => `<option value="${x}">`).join(''); const m = maqDe(sm.value); sv.style.display = t.value === 'mantenimiento' && m && Number(m.mantCada) > 0 ? '' : 'none'; };
-    sm.addEventListener('change', upd);
+    const sv = $('#evSvc', box), sm = $('[name=maq]', box), sf = $('[name=fecha]', box), hl = $('#evHoroL', box), ht = $('#evHoroT', box), hr = $('#evHoroRef', box), hi = $('[name=horo]', box);
+    const upd = () => {
+      dl.innerHTML = MAQ_MOT[t.value].map((x) => `<option value="${x}">`).join('');
+      const m = maqDe(sm.value), conH = m && !m.sinHoro;
+      sv.style.display = t.value === 'mantenimiento' && m && Number(m.mantCada) > 0 ? '' : 'none';
+      hl.style.display = conH ? '' : 'none'; hr.style.display = conH ? '' : 'none';
+      ht.textContent = t.value === 'mantenimiento' ? 'Horómetro al hacer el mantenimiento' : 'Horómetro al producirse la parada (opcional)';
+      if (!conH || !sf.value) { hr.innerHTML = ''; return; }
+      const L = lecturas(m.id), ant = horoAntes(m.id, sf.value, L), fin = (L.find((x) => x[0] === sf.value) || [])[1];
+      hr.innerHTML = ant == null && fin == null ? 'sin lecturas cerca de esa fecha' : `Ese día: ${ant != null ? `inicio <a href="#" data-h="${ant}">${fmt(ant, 1)}</a>` : ''}${ant != null && fin != null ? ' · ' : ''}${fin != null ? `fin <a href="#" data-h="${fin}">${fmt(fin, 1)}</a>` : ''}`;
+      $$('a[data-h]', hr).forEach((a) => { a.onclick = (ev) => { ev.preventDefault(); hi.value = a.dataset.h; }; });
+    };
+    sm.addEventListener('change', upd); sf.addEventListener('change', upd);
     t.onchange = upd; upd(); }
   const res = await pm;
   if (res === 'del') { if (await confirmar('Eliminar registro', '¿Eliminar este registro de parada / mantenimiento?', 'Eliminar', 'btn danger')) { S.maqEventos = maqE().filter((x) => x !== e); commit('Registro eliminado'); } }
@@ -405,9 +423,9 @@ async function exportMaq() {
   });
   a4.sort((x, y) => (x[0] === 'Fecha' ? -1 : y[0] === 'Fecha' ? 1 : y[0].localeCompare(x[0]) || String(x[1]).localeCompare(String(y[1]), 'es', { numeric: true })));
   sh(a4, [12, 10, 26, 17, 15, 17, 28], 'Horómetro por jornada');
-  const a3 = [['Fecha', 'Mes', 'Interno', 'Equipo', 'Tipo', 'Horas', 'Motivo', 'Observaciones']];
-  maqE().slice().sort((a, b) => b.fecha.localeCompare(a.fecha)).forEach((e) => { const m = maqDe(e.maq) || {}; a3.push([e.fecha, mesTxt(e.fecha.slice(0, 7)), m.interno || '', m.descripcion || '', MAQ_TIPO[e.tipo][0], r1(Number(e.horas) || 0), e.motivo || '', e.obs || '']); });
-  sh(a3, [12, 14, 10, 26, 15, 8, 28, 40], 'Paradas y mantenimientos');
+  const a3 = [['Fecha', 'Mes', 'Interno', 'Equipo', 'Tipo', 'Horas', 'Horómetro', 'Motivo', 'Service programado', 'Observaciones']];
+  maqE().slice().sort((a, b) => b.fecha.localeCompare(a.fecha)).forEach((e) => { const m = maqDe(e.maq) || {}; a3.push([e.fecha, mesTxt(e.fecha.slice(0, 7)), m.interno || '', m.descripcion || '', MAQ_TIPO[e.tipo][0], r1(Number(e.horas) || 0), vacio(e.horo) ? '' : Number(e.horo), e.motivo || '', e.reinicia ? 'Sí' : '', e.obs || '']); });
+  sh(a3, [12, 14, 10, 26, 15, 8, 11, 28, 17, 40], 'Paradas y mantenimientos');
   const p = await window.api.saveBinary(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), `Maquinaria de obra ${today()}.xlsx`, 'xlsx', 'Excel');
   if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
 }
@@ -429,6 +447,6 @@ function printMaqMes(ym) {
     return `<tr><td><b>${esc(m.interno)}</b></td><td>${esc(m.descripcion)}</td><td class="n">${ini != null ? fmt(ini, 1) : m.sinHoro ? 'sin horómetro' : '–'}</td><td class="n">${ul && !m.sinHoro ? fmt(ul[1], 1) : '–'}</td><td>${ul && !m.sinHoro ? fechaCorta(ul[0]) : ''}</td><td class="n"><b>${fmt(horasMes(m.id, ym, L), 1)}</b></td><td>${sv && !sv.sinBase ? (sv.faltan <= 0 ? `vencido ${fmt(-sv.faltan, 1)} h` : `faltan ${fmt(sv.faltan, 1)} h`) + (sv.prox != null && !m.sinHoro ? ` (a los ${fmt(sv.prox, 1)})` : '') : '–'}</td></tr>`;
   }).join('')}</tbody></table></div>`;
   const evs = maqE().filter((e) => e.fecha.startsWith(ym)).sort((a, b) => a.fecha.localeCompare(b.fecha));
-  if (evs.length) h += `<div class="card"><h3>Paradas y mantenimientos del mes</h3><table class="tbl stk"><thead><tr><th>Fecha</th><th>Interno</th><th>Equipo</th><th>Tipo</th><th class="n">Horas</th><th>Motivo</th><th>Observaciones</th></tr></thead><tbody>${evs.map((e) => { const m = maqDe(e.maq) || {}; return `<tr><td>${fechaCorta(e.fecha)}</td><td><b>${esc(m.interno || '')}</b></td><td>${esc(m.descripcion || '')}</td><td>${MAQ_TIPO[e.tipo][0]}</td><td class="n">${fmt(e.horas, 1)}</td><td>${esc(e.motivo || '')}</td><td style="white-space:normal">${esc(e.obs || '')}</td></tr>`; }).join('')}</tbody></table></div>`;
+  if (evs.length) h += `<div class="card"><h3>Paradas y mantenimientos del mes</h3><table class="tbl stk"><thead><tr><th>Fecha</th><th>Interno</th><th>Equipo</th><th>Tipo</th><th class="n">Horas</th><th class="n">Horómetro</th><th>Motivo</th><th>Observaciones</th></tr></thead><tbody>${evs.map((e) => { const m = maqDe(e.maq) || {}; return `<tr><td>${fechaCorta(e.fecha)}</td><td><b>${esc(m.interno || '')}</b></td><td>${esc(m.descripcion || '')}</td><td>${MAQ_TIPO[e.tipo][0]}${e.reinicia ? ' (service)' : ''}</td><td class="n">${fmt(e.horas, 1)}</td><td class="n">${vacio(e.horo) ? '' : fmt(Number(e.horo), 1)}</td><td>${esc(e.motivo || '')}</td><td style="white-space:normal">${esc(e.obs || '')}</td></tr>`; }).join('')}</tbody></table></div>`;
   printHTML(h, `Maquinaria ${mesTxt(ym)}.pdf`, true);
 }

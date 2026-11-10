@@ -982,3 +982,6 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 .maqm .fx3 { max-width: 64px; } .maqm .fx4 { max-width: 128px; } .maqm .fx5 { max-width: 54px; } .maqm .fx6 { max-width: 54px; } .maqm .fx7 { max-width: 66px; }
 .maqm .fx2 .muted { overflow: hidden; text-overflow: ellipsis; }
 .maqm .fx7 .pill { padding: 2px 6px; }
+#nav .tg.pronto { background: #f5a524; color: #1b2433; font-size: 9px; text-transform: uppercase; letter-spacing: .3px; }
+.foCfg input { width: 100%; min-width: 0; box-sizing: border-box; }
+#nav button > em.tg.pronto { display: inline-block !important; margin-left: auto; padding: 1px 5px; border-radius: 4px; font-style: normal; font-weight: 700; }

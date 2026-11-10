@@ -7,7 +7,7 @@
   // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
   const PROTO = 2;
   // 'hc' catálogo y distribución de hincas, 'ht:' hincado por tracker, 'hr:' recepciones de hincas
-  const nuevo = (k) => k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:');
+  const nuevo = (k) => k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:');
   const conocido = (k) => k === 'cfg' || k === 'comp' || k === 'km' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
 
   // JSON con claves ordenadas: el orden interno de los campos no cuenta como cambio
@@ -29,6 +29,8 @@
       Object.entries(S.hincado.avance || {}).forEach(([id, v]) => { if (v) m.set('ht:' + id, v); });
       (S.hincado.recep || []).forEach((r) => m.set('hr:' + r.id, r));
     }
+    // fibra óptica: criterio y un registro por zanja de MT
+    if (S.fibra) { if (S.fibra.cfg) m.set('fc', S.fibra.cfg); Object.entries(S.fibra.z || {}).forEach(([id, v]) => { if (v) m.set('fo:' + id, v); }); }
     // registros de versiones más nuevas: se guardan tal cual para no borrarlos
     Object.entries(S.__otros || {}).forEach(([k, v]) => m.set(k, v));
     return m;
@@ -55,6 +57,11 @@
       const id = k.slice(3), i = H.recep.findIndex((x) => x.id === id);
       if (d) { if (i >= 0) H.recep.splice(i, 1); } else if (i >= 0) H.recep[i] = v; else H.recep.push(v);
       return;
+    }
+    if (k === 'fc' || k.startsWith('fo:')) {
+      const F = (S.fibra = S.fibra || {}); F.z = F.z || {};
+      if (k === 'fc') { if (!d && v) F.cfg = v; return; }
+      const id = k.slice(3); if (d) delete F.z[id]; else F.z[id] = v; return;
     }
     if (k.startsWith('f:')) { const [sts, e] = k.slice(2).split('|'); S.fundaciones = S.fundaciones || {}; const o = (S.fundaciones[sts] = S.fundaciones[sts] || {}); if (d) delete o[e]; else o[e] = v; return; }
     const [p, id] = [k.slice(0, 1), k.slice(2)];
@@ -148,7 +155,7 @@
   }
   // Cliente que se une por primera vez
   function reemplazarPorServidor(S) {
-    S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {}; S.cronoTareas = []; S.cronoMeta = null; S.partes = []; S.maquinas = []; S.maqHoras = []; S.maqEventos = []; S.hincado = { catalogo: [], matriz: {}, avance: {}, recep: [] };
+    S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {}; S.cronoTareas = []; S.cronoMeta = null; S.partes = []; S.maquinas = []; S.maqHoras = []; S.maqEventos = []; S.fibra = { cfg: { cada: 50, adic: 0 }, z: {} }; S.hincado = { catalogo: [], matriz: {}, avance: {}, recep: [] };
     S.__sync = { snap: {}, meta: {}, pend: {}, rev: 0, peerRev: 0 };
   }
   function marcarTodoPendiente(S) {
