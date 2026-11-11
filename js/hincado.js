@@ -36,6 +36,9 @@ const chipH = (c, small) => { const k = hcat(c); const col = k ? k.color : ''; r
 const colorChip = (col) => `<span class="hcol"><i class="hc" style="--hc:${HCOL[col] || '#ccc'}" data-c="${esc(col)}"></i>${esc(col)}</span>`;
 // posiciones de un tracker según la matriz de su configuración
 const posDe = (t) => { const m = S.hincado.matriz[cfgDe(t)] || {}; return Array.from({ length: m.n || 0 }, (_, i) => (m.pos || [])[i] || ''); };
+// replanteo de hincas (OBEII-CI-LI-211 r3): frame de la lista, cantidad y coordenadas de cada hinca
+const repDe = (id) => (window.REPLANTEO && window.REPLANTEO.trk[id]) || null;
+const nHincas = (t) => { const r = repDe(t.id); return r ? r.n : (S.hincado.matriz[cfgDe(t)] || {}).n || 0; };
 const matrizOk = (k) => { const m = S.hincado.matriz[k]; return m && m.n > 0 && Array.from({ length: m.n }, (_, i) => (m.pos || [])[i]).every(Boolean); };
 function hincInfo() {
   const P = window.PLANO; if (!P) return null;
@@ -52,7 +55,12 @@ function hincInfo() {
   const rec = {}, recDud = {};
   H.recep.forEach((r) => { const v = verificar(r); (v.ok ? rec : recDud)[r.codigo] = ((v.ok ? rec : recDud)[r.codigo] || 0) + (Number(r.cant) || 0); });
   const nH = Object.keys(H.avance).filter((id) => trk.some((t) => t.id === id)).length;
-  return { P, trk, cfgN, usadas, completa, req, hecho, rec, recDud, porSec, nH, nPil: Object.values(req).reduce((a, b) => a + b, 0), nPilH: Object.values(hecho).reduce((a, b) => a + b, 0) };
+  // cantidad de hincas: del replanteo (aunque falte el código de cada posición)
+  const RP = window.REPLANTEO, nRep = RP ? trk.reduce((a, t) => a + nHincas(t), 0) : 0, nRepH = RP ? trk.filter((t) => H.avance[t.id]).reduce((a, t) => a + nHincas(t), 0) : 0;
+  trk.forEach((t) => { const s = porSec[t.s]; s.rep = (s.rep || 0) + nHincas(t); if (H.avance[t.id]) s.repH = (s.repH || 0) + nHincas(t); });
+  const repObs = RP ? { mix: trk.filter((t) => (repDe(t.id) || {}).mix), dif: trk.filter((t) => (repDe(t.id) || {}).dif), extra: RP.extra || [] } : null;
+  if (repObs) repObs.n = trk.filter((t) => { const r = repDe(t.id) || {}; return r.mix || r.dif; }).length;
+  return { P, trk, cfgN, usadas, completa, req, hecho, rec, recDud, porSec, nH, nPil: completa ? Object.values(req).reduce((a, b) => a + b, 0) : nRep, nPilH: completa ? Object.values(hecho).reduce((a, b) => a + b, 0) : nRepH, nRep, nRepH, RP, repObs };
 }
 // verificación de una recepción contra el manual: color, largo y perfil
 function verificar(r) {
@@ -75,13 +83,14 @@ function hincPrecargaHTML(I) {
   return `<div class="card hpre"><div class="hpreh"><span class="pill p-warn">PRECARGA</span><b>Hincado en condición de precarga</b><span class="muted">· la distribución de hincas por tracker todavía no está determinada</span></div>
     <div class="hprec"><div><h4>Datos cargados</h4><ul>
       <li>✓ Catálogo de hincas: Trina <b>CIV-DW-26050-2402-0B</b> "Post details" (rev. 0B, 25/08/2026) · ${S.hincado.catalogo.length} códigos con perfil, largos y color de punta.</li>
+      ${I.RP ? `<li>✓ Replanteo de hincas: <b>OBEII-CI-LI-211 r3</b> (21/10/2026) · ${fmt(I.RP.nHincas)} hincas en ${fmt(I.RP.nFrames)} frames, con coordenadas: 13 por tracker 1P52 y 7 por 1P26.${I.repObs.mix.length || I.repObs.dif.length || I.repObs.extra.length ? ` <a href="#" data-go="htrk">${I.repObs.n} trackers a revisar</a>` : ''}</li>` : ''}
       <li>✓ Discretización: Trina <b>TT-OPP-094140_5</b> "General Layout Discretization" (opción 3, rev. 02) · ${fmt(I.trk.length)} trackers en ${I.usadas.length} configuraciones (zona y suelo).</li></ul></div>
     <div><h4>Documentos que faltan para determinar</h4><ol>
       <li><b>Distribución de hincas por tracker</b> (Trina, probablemente CIV-DW-26050-2401 · "Post layout" / "Pile distribution" / "Ramming plan"): cantidad de hincas y código en cada posición para las ${I.usadas.length} configuraciones. <span class="muted">Faltan ${inc} de ${I.usadas.length}.</span></li>
-      <li><b>Replanteo de estructuras · hincado de perfiles</b> (OBEII-CI-PL-211-rA): posición de cada hinca en obra.</li>
+      ${I.RP ? '' : '<li><b>Replanteo de estructuras · hincado de perfiles</b> (OBEII-CI-PL-211-rA): posición de cada hinca en obra.</li>'}
       <li><b>Confirmación de la discretización</b> contra el layout vigente (OBEII-GR-PL-001-r4)${rev.length ? `: ${rev.length} trackers no coinciden (${rev.join(', ')})` : ''}.</li>
       <li><b>Packing list / remitos de Trina</b> por código: para controlar cantidades en la recepción.</li></ol></div></div>
-    <p class="hint" style="margin:6px 0 0">Hasta tener el punto 1 se registra el avance por tracker y las recepciones (verificadas contra el catálogo), pero no se calculan hincas requeridas, stock ni la secuencia de colores. La distribución se carga en <a href="#" data-go="hcat">Catálogo y distribución</a>.</p></div>`;
+    <p class="hint" style="margin:6px 0 0">Hasta tener el punto 1 se registra el avance por tracker (con la cantidad de hincas del replanteo) y las recepciones verificadas contra el catálogo, pero no se calculan las hincas requeridas por código, el stock ni la secuencia de colores. La distribución se carga en <a href="#" data-go="hcat">Catálogo y distribución</a>.</p></div>`;
 }
 // cartel al entrar al menú Hincado mientras la distribución no esté completa
 let hincAvisoVisto = false;
@@ -94,7 +103,7 @@ async function hincAvisoEntrada() {
       <p><b>Ya se puede usar:</b> registrar el avance de hincado tracker por tracker, ver el plano por discretización y verificar las recepciones de hincas contra el manual de Trina (código, color, largo y perfil).</p>
       <p><b>Faltan para determinar:</b></p><ol>
         <li>Distribución de hincas por tracker de Trina (probablemente CIV-DW-26050-2401): ${inc} de ${I.usadas.length} configuraciones sin cargar.</li>
-        <li>Replanteo de estructuras · hincado de perfiles (OBEII-CI-PL-211-rA).</li>
+        ${I.RP ? '' : '<li>Replanteo de estructuras · hincado de perfiles (OBEII-CI-PL-211-rA).</li>'}
         <li>Confirmación de la discretización contra el layout vigente (${I.trk.filter((t) => t.rev).length} trackers a verificar).</li>
         <li>Packing list / remitos de Trina por código.</li></ol></div></div>`,
     buttons: [['Ver detalle', 'btn', () => 'det'], ['Entendido', 'btn pri', () => null]] }).then((r) => { if (r === 'det') go('hincado'); });
@@ -114,13 +123,13 @@ function vHincado(el) {
   el.innerHTML = `${hincPrecargaHTML(I)}
     <div class="grid g4 stagger" style="margin-bottom:16px">
       <div class="card kpi"><div class="kl">Trackers hincados</div><div class="kv">${fmt(I.nH)}<small> / ${fmt(I.trk.length)}</small></div><div class="sbt"><div style="width:${pct(I.nH, I.trk.length).toFixed(1)}%;background:#00939a"></div></div><div class="muted">${fmt(pct(I.nH, I.trk.length), 1)} %</div></div>
-      <div class="card kpi"><div class="kl">Hincas hincadas</div><div class="kv">${I.completa ? `${fmt(I.nPilH)}<small> / ${fmt(I.nPil)}</small>` : '–'}</div><div class="sbt"><div style="width:${pct(I.nPilH, I.nPil).toFixed(1)}%;background:#00939a"></div></div><div class="muted">${I.completa ? fmt(pct(I.nPilH, I.nPil), 1) + ' %' : 'falta la distribución'}</div></div>
+      <div class="card kpi"><div class="kl">Hincas hincadas</div><div class="kv">${I.nPil ? `${fmt(I.nPilH)}<small> / ${fmt(I.nPil)}</small>` : '–'}</div><div class="sbt"><div style="width:${pct(I.nPilH, I.nPil).toFixed(1)}%;background:#00939a"></div></div><div class="muted">${I.nPil ? fmt(pct(I.nPilH, I.nPil), 1) + ' %' + (I.completa ? '' : ' · cantidades del replanteo') : 'falta la distribución'}</div></div>
       <div class="card kpi"><div class="kl">Hincas recibidas (verificadas)</div><div class="kv">${fmt(Object.values(I.rec).reduce((a, b) => a + b, 0))}</div><div class="muted">${Object.values(I.recDud).reduce((a, b) => a + b, 0) ? `<b class="tneg">${fmt(Object.values(I.recDud).reduce((a, b) => a + b, 0))} a revisar</b> (no coinciden con el manual)` : 'todo coincide con el manual'}</div></div>
       <div class="card kpi"><div class="kl">Discretización</div><div class="kv">${I.usadas.length}<small> configuraciones</small></div><div class="muted">${fmt(I.trk.filter((t) => t.sl === 'B').length)} trackers en suelo blando</div></div>
     </div>
     <div class="grid g2" style="margin-bottom:16px">
-      <div class="card"><h3>Avance por sector</h3>${secs.map((s) => { const x = I.porSec[s]; return `<div class="mrow"><span><i class="cdot" style="background:${SECT_COL[s]}"></i>Sector ${s}</span><div class="sbt"><div style="width:${pct(x.h, x.n).toFixed(1)}%;background:${SECT_COL[s]}"></div></div><b>${x.h}/${x.n}</b></div>`; }).join('')}
-        <p class="hint">Trackers con hincado completo sobre el total del sector${I.completa ? '' : ''}.</p></div>
+      <div class="card"><h3>Avance por sector</h3>${secs.map((s) => { const x = I.porSec[s]; return `<div class="mrow"><span><i class="cdot" style="background:${SECT_COL[s]}"></i>Sector ${s}</span><div class="sbt"><div style="width:${pct(x.h, x.n).toFixed(1)}%;background:${SECT_COL[s]}"></div></div><b>${x.h}/${x.n}</b></div>${x.rep ? `<div class="muted" style="font-size:11.5px;margin:-4px 0 6px 16px">${fmt(x.repH || 0)} de ${fmt(x.rep)} hincas</div>` : ''}`; }).join('')}
+        <p class="hint">Trackers con hincado completo sobre el total del sector.</p></div>
       <div class="card"><h3>Hincado por fecha</h3>${curva.length ? Charts.line([{ name: 'Hincado', color: '#7c5cbf', pts: curva.map(([f, v]) => ({ x: new Date(f + 'T12:00:00'), y: v / I.trk.length, tip: `${fechaCorta(f)}: ${v} trackers (${fmt(v / I.trk.length * 100, 1)} %)` })) }]) : '<p class="muted">Todavía no hay trackers hincados.</p>'}
         ${fs.length ? `<div class="muted">Último día: ${fechaCorta(fs[fs.length - 1])} · ${porF[fs[fs.length - 1]]} trackers</div>` : ''}</div></div>
     <div class="card" style="margin-bottom:16px"><h3>Trackers por configuración y sector</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Configuración</th>${secs.map((s) => `<th class="n">Sector ${s}</th>`).join('')}<th class="n">Total</th><th class="n">Hincados</th><th>Distribución</th></tr></thead><tbody>
@@ -141,18 +150,20 @@ function vHTrk(el) {
   let list = I.trk.slice();
   if (f.s !== 'all') list = list.filter((t) => t.s === f.s);
   if (f.c !== 'all') list = list.filter((t) => cfgDe(t) === f.c);
-  if (f.e !== 'all') list = list.filter((t) => (f.e === 'h' ? !!H.avance[t.id] : !H.avance[t.id]));
-  if (f.q) { const q = f.q.toUpperCase(); list = list.filter((t) => t.id.includes(q)); }
+  if (f.e === 'h' || f.e === 'p') list = list.filter((t) => (f.e === 'h' ? !!H.avance[t.id] : !H.avance[t.id]));
+  if (f.q) { const q = f.q.toUpperCase().replace(/^F(RAME)?\s*/, ''); list = list.filter((t) => t.id.includes(q) || ((repDe(t.id) || {}).fr || '') === q); }
+  if (f.e === 'r') list = list.filter((t) => { const r = repDe(t.id) || {}; return r.mix || r.dif; });
   const secs = Object.keys(I.porSec).sort();
   el.innerHTML = `${hincPrecargaHTML(I)}<div class="tools"><div class="seg" id="hS"><button data-v="all">Todos los sectores</button>${secs.map((s) => `<button data-v="${s}">S${s}</button>`).join('')}</div>
       <select id="hC" class="sel"><option value="all">Todas las configuraciones</option>${HCFGS.filter((k) => I.cfgN[k]).map((k) => `<option value="${k}" ${f.c === k ? 'selected' : ''}>${cfgTxt(k)} (${I.cfgN[k]})</option>`).join('')}</select>
-      <div class="seg" id="hE"><button data-v="all">Todos</button><button data-v="p">Pendientes</button><button data-v="h">Hincados</button></div>
-      <span class="sp"></span><span class="muted">${list.length} trackers</span><input type="search" id="hQ" placeholder="Buscar TRK-123…" value="${esc(f.q)}" style="width:170px"></div>
-    <div class="tblwrap" style="max-height:calc(100vh - 250px)"><table class="tbl htbl"><thead><tr><th><input type="checkbox" id="selAll"></th><th>Tracker</th><th>Sector</th><th>Configuración</th><th>Hincas en orden (norte → sur)</th><th>Hincado</th></tr></thead><tbody>
+      <div class="seg" id="hE"><button data-v="all">Todos</button><button data-v="p">Pendientes</button><button data-v="h">Hincados</button>${I.repObs && I.repObs.n ? `<button data-v="r">Replanteo a revisar (${I.repObs.n})</button>` : ''}</div>
+      <span class="sp"></span><span class="muted">${list.length} trackers</span><input type="search" id="hQ" placeholder="TRK-123 o frame…" value="${esc(f.q)}" style="width:170px"></div>
+    <div class="tblwrap" style="max-height:calc(100vh - 250px)"><table class="tbl htbl"><thead><tr><th><input type="checkbox" id="selAll"></th><th>Tracker</th><th title="N° de frame en la lista de replanteo OBEII-CI-LI-211 r3">Frame</th><th>Sector</th><th>Configuración</th><th class="n">Hincas</th><th>Hincas en orden (norte → sur)</th><th>Hincado</th></tr></thead><tbody>
     ${list.map((t) => { const ps = posDe(t), av = H.avance[t.id], k = cfgDe(t);
-      return `<tr data-id="${t.id}" class="${ui.sel.has(t.id) ? 'sel' : ''}"><td><input type="checkbox" class="sel" ${ui.sel.has(t.id) ? 'checked' : ''}></td><td><b>${t.id}</b>${t.rev ? ' <span class="pill p-warn" title="La discretización no coincide con el layout en este tracker: verificar">verificar</span>' : ''}</td><td>${t.s}</td>
+      const r = repDe(t.id) || {}, rTit = r.mix ? `En la lista de replanteo las hincas de este tracker figuran repartidas entre los frames ${r.mix.join(', ')}: la numeración de frames de la lista está corrida en este sector` : r.dif ? `El replanteo tiene ${r.n} hincas en la posición de este tracker y el layout espera ${r.dif}` : '';
+      return `<tr data-id="${t.id}" class="${ui.sel.has(t.id) ? 'sel' : ''}"><td><input type="checkbox" class="sel" ${ui.sel.has(t.id) ? 'checked' : ''}></td><td><b>${t.id}</b>${t.rev ? ' <span class="pill p-warn" title="La discretización no coincide con el layout en este tracker: verificar">verificar</span>' : ''}</td><td>${r.fr ? esc(r.fr) : '–'}${rTit ? ` <span class="pill p-warn" title="${esc(rTit)}">revisar</span>` : ''}</td><td>${t.s}</td>
         <td><i class="cdot" style="background:${CFGCOL[k.split('|').slice(0, 2).join('|')]}"></i>${cfgTxt(k)}</td>
-        <td class="hseq">${ps.some(Boolean) ? ps.map((c, i) => `<span class="hp" title="Posición ${i + 1}: ${esc(c || 'sin definir')}${c && hcat(c) ? ' · ' + hcat(c).color : ''}"><i class="hc" style="--hc:${HCOL[(hcat(c) || {}).color] || '#ddd'}" data-c="${esc((hcat(c) || {}).color || '')}"></i></span>`).join('') : '<span class="muted">distribución a cargar</span>'}</td>
+        <td class="n">${r.n != null ? r.n : ''}</td><td class="hseq">${ps.some(Boolean) ? ps.map((c, i) => `<span class="hp" title="Posición ${i + 1}: ${esc(c || 'sin definir')}${c && hcat(c) ? ' · ' + hcat(c).color : ''}"><i class="hc" style="--hc:${HCOL[(hcat(c) || {}).color] || '#ddd'}" data-c="${esc((hcat(c) || {}).color || '')}"></i></span>`).join('') : '<span class="muted">distribución a cargar</span>'}</td>
         <td>${av ? `<span class="pill p-done">✓ ${fechaCorta(av.f)}</span>` : '<span class="muted">pendiente</span>'}</td></tr>`; }).join('')}
     </tbody></table></div>
     <p class="hint">Tildá los trackers terminados y tocá <b>Marcar hincados</b> (pide la fecha). El orden de las hincas sigue la matriz de su configuración (posición 1 al norte). <b>PDF para campo</b> saca la lista del sector filtrado con los colores, para distribuir las hincas.</p>`;
@@ -278,7 +289,7 @@ function printHinc() {
   list.sort((a, b) => a.s.localeCompare(b.s) || a.id.localeCompare(b.id));
   const cods = {}; list.forEach((t) => posDe(t).forEach((c) => { if (c) cods[c] = (cods[c] || 0) + 1; }));
   const ley = Object.keys(cods).sort().map((c) => `<span style="margin-right:12px;white-space:nowrap">${chipH(c)} × ${cods[c]}</span>`).join('');
-  const rows = list.map((t) => `<tr><td><b>${t.id}</b></td><td>${t.s}</td><td>${cfgTxt(cfgDe(t))}</td><td>${posDe(t).map((c, i) => `<span class="hpp"><small>${i + 1}</small><i class="hc" style="--hc:${HCOL[(hcat(c) || {}).color] || '#ddd'}" data-c="${esc((hcat(c) || {}).color || '')}"></i><small>${esc(String(c).replace(/^26050-/, ''))}</small></span>`).join('')}</td><td>${S.hincado.avance[t.id] ? '✓' : ''}</td></tr>`).join('');
+  const rows = list.map((t) => `<tr><td><b>${t.id}</b>${(repDe(t.id) || {}).fr ? `<br><small>frame ${repDe(t.id).fr}</small>` : ''}</td><td>${t.s}</td><td>${cfgTxt(cfgDe(t))}</td><td>${posDe(t).map((c, i) => `<span class="hpp"><small>${i + 1}</small><i class="hc" style="--hc:${HCOL[(hcat(c) || {}).color] || '#ddd'}" data-c="${esc((hcat(c) || {}).color || '')}"></i><small>${esc(String(c).replace(/^26050-/, ''))}</small></span>`).join('')}</td><td>${S.hincado.avance[t.id] ? '✓' : ''}</td></tr>`).join('');
   printHTML(prHead(`Distribución de hincas${f.s !== 'all' ? ' · Sector ' + f.s : ''}`) + `<div class="card prday"><div style="margin-bottom:8px">${ley}</div><table class="tbl dtbl hprint"><thead><tr><th>Tracker</th><th>Sector</th><th>Configuración</th><th>Hincas (posición 1 = norte)</th><th>Hincado</th></tr></thead><tbody>${rows}</tbody></table></div>`, `Distribucion de hincas ${f.s !== 'all' ? 'S' + f.s + ' ' : ''}${today()}.pdf`, true);
 }
 function hincModHTML() {

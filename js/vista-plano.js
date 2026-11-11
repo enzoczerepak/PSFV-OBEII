@@ -1,6 +1,6 @@
 /* PSFV-OBE II · Plano de obra interactivo. */
 // ======================= PLANO DE OBRA =======================
-const PL_CAPAS = [['sect', 'Sectores'], ['trk', 'Trackers'], ['bt', 'Zanjas BT'], ['mt', 'Zanjas MT'], ['inv', 'Inversores'], ['sts', 'STS'], ['ctx', 'Caminos y cerco']];
+const PL_CAPAS = [['sect', 'Sectores'], ['trk', 'Trackers'], ['bt', 'Zanjas BT'], ['mt', 'Zanjas MT'], ['inv', 'Inversores'], ['sts', 'STS'], ['sala', 'Edificio O&M'], ['ctx', 'Caminos y cerco']];
 const SECT_COL = { 1: '#4e79a7', 2: '#59a14f', 3: '#b07aa1', 4: '#f28e2b', 5: '#00939a', 6: '#e15759' };
 const ZEST = { 'no abierta': '#b9c2cf', abierta: '#f5a524', cerrada: '#2f9e5b' };
 const KWP = (n) => `${fmt(n * 0.625, 1)}–${fmt(n * 0.635, 1)} kWp`;
@@ -43,6 +43,9 @@ function vPlano(el) {
   });
   if (cap('inv')) P.inv.forEach((v) => { const c = circ.get(v.id); g += `<rect x="${v.x - 1.6}" y="${v.y - 1.6}" width="3.2" height="3.2" class="pl-inv${c && c.completo ? ' ok' : ''}${pl.sel === 'i|' + v.id ? ' pl-on' : ''}" data-pk="i|${v.id}"><title>${v.id}</title></rect>`; });
   if (cap('sts')) P.sts.forEach((s) => { const f = fundInfo(s.id); g += `<g data-pk="e|${s.id}" class="pl-sts${pl.sel === 'e|' + s.id ? ' pl-on' : ''}"><rect x="${s.x - 7}" y="${s.y - 4.5}" width="14" height="9" rx="1.5"/><rect x="${s.x - 7}" y="${s.y - 4.5}" width="${(14 * f.p).toFixed(1)}" height="9" rx="1.5" class="pl-stsf"/><text x="${s.x}" y="${s.y - 7}" class="pl-stst">${s.id} · ${fmt(s.mva, 1)} MVA</text><title>${s.id} · ${fmt(s.mva, 1)} MVA · fundación ${fmt(f.p * 100)} %</title></g>`; });
+  // edificio de O&M (layout r5): planta con sus salas, pintada con el avance de obra
+  if (cap('sala') && P.sala && typeof salaInfo === 'function') { const B = P.sala, SI = salaInfo(), q = (p) => p.map(([a, b]) => `${(B.x + a).toFixed(2)},${(B.y - b).toFixed(2)}`).join(' ');
+    g += `<g data-pk="o|sala" class="pl-sala${pl.sel === 'o|sala' ? ' pl-on' : ''}"><rect x="${B.x}" y="${(B.y - B.h).toFixed(2)}" width="${B.w}" height="${B.h}" class="pl-salab"/><rect x="${B.x}" y="${(B.y - B.h).toFixed(2)}" width="${(B.w * SI.p).toFixed(2)}" height="${B.h}" class="pl-salaf"/>${B.rooms.map((r) => `<polygon points="${q(r.p)}" class="pl-salar"/>`).join('')}<text x="${(B.x + B.w / 2).toFixed(2)}" y="${(B.y - B.h - 1.5).toFixed(2)}" class="pl-stst pl-salat">Edificio O&amp;M · ${fmt(SI.p * 100)} %</text><title>Edificio de operación y mantenimiento · ${fmt(SI.p * 100)} % de avance</title></g>`; }
   if (cap('sect')) P.sect.forEach((s) => { g += `<text x="${s.lx}" y="${s.ly}" class="pl-sectl" style="fill:${SECT_COL[s.n]}">Sector ${s.n}</text>`; });
   const vb = pl.vb || [0, 0, P.W, P.H];
   // panel lateral
@@ -102,6 +105,7 @@ function planoPanel(I) {
   if (k === 't') {
     const t = P.trk.find((x) => x.id === id), n = t.t === '1P52' ? 52 : 26;
     return `<h3>${t.id}</h3>${fila('Tipo', `Trina ${t.t}${t.v ? ' ' + t.v : ''} · 60°`)}${fila('Módulos', `${n} · ${t.t === '1P52' ? '≈ 60 m' : '≈ 30 m'}`)}${fila('Potencia', KWP(n))}${fila('Sector', t.s)}
+      ${repDe(t.id) ? fila('Replanteo', `frame ${esc(repDe(t.id).fr)} · ${repDe(t.id).n} hincas${repDe(t.id).mix || repDe(t.id).dif ? ' <span class="pill p-warn">revisar</span>' : ''}`) : ''}
       ${t.z ? fila('Discretización', `${cfgTxt(cfgDe(t))}${t.rev ? ' <span class="pill p-warn">verificar</span>' : ''}`) : ''}
       ${(() => { const av = S.hincado.avance[t.id], ps = posDe(t); return fila('Hincado', av ? `<span class="pill p-done">✓ ${fechaCorta(av.f)}</span>` : 'pendiente') + (ps.some(Boolean) ? `<h4 class="dh">Hincas (1 = norte)</h4><div class="hpanel">${ps.map((c, i) => `<div class="hpr"><span>${i + 1}</span>${c ? chipH(c, true) : '<span class="muted">sin definir</span>'}</div>`).join('')}</div>` : '<p class="muted" style="margin:6px 0">Distribución de hincas a cargar (Hincado → Catálogo y distribución).</p>') + (window.READONLY ? '' : `<div class="plact"><button class="btn sm ${av ? '' : 'acc'}" data-hinc="${t.id}">${av ? 'Quitar hincado' : 'Marcar hincado'}</button></div>`); })()}
       <p class="hint">Potencia según el panel instalado (625, 630 o 635 W).</p>`;
@@ -125,6 +129,11 @@ function planoPanel(I) {
     return `<h3>${id}</h3>${fila('Potencia', fmt(s.mva, 1) + ' MVA')}${fila('Fundación', `${fmt(f.p * 100)} % · ${f.done}/${f.n} etapas`)}${fila('Etapa', f.done === f.n ? 'terminada' : f.curso.length ? 'en curso: ' + esc(f.curso.map(([kk]) => ETN[kk]).join(', ')) : 'próxima: ' + esc(f.sig[1]))}
       ${fila('Inversores', cs.length)}${fila('Cable BT tendido', `${cs.filter((c) => c.completo).length} / ${cs.length}`)}<div style="max-width:240px;margin:8px auto">${stsSVG(f.p)}</div>
       <div class="plact"><button class="btn sm" data-goc="fundaciones">Ver fundaciones</button></div>`;
+  }
+  if (k === 'o') {
+    const SI = salaInfo(), B = P.sala;
+    return `<h3>Edificio de O&amp;M</h3>${fila('Salas', B.rooms.filter((r) => r.n).map((r) => esc(r.n)).join(', '))}${fila('Planta', `${fmt(B.w, 2)} × ${fmt(B.h, 2)} m`)}${fila('Avance', `${fmt(SI.p * 100, 1)} % · ${SI.done}/${SI.ets.length} etapas`)}${fila('Zapatas hormigonadas', `${SI.nZH} / 12`)}${fila('Etapa', SI.curso.length ? 'en curso: ' + esc(SI.curso.map((x) => x.e.n).join(', ')) : SI.sig ? 'próxima: ' + esc(SI.sig.e.n) : 'terminado')}
+      <div style="margin:8px 0">${salaPlantaSVG(SI, { ro: true, w: 300 })}</div><div class="plact"><button class="btn sm" data-goc="sala">Ver edificio</button></div><p class="hint">Ubicación según el layout general r5.</p>`;
   }
   if (k === 's') {
     const n = Number(id), ts = P.trk.filter((t) => t.s === id), mods = ts.reduce((a, t) => a + (t.t === '1P52' ? 52 : 26), 0);

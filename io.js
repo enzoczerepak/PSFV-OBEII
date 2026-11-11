@@ -302,6 +302,14 @@
     const r4 = [['Código', 'Tipo', 'Suelo', 'Perfil', 'Largo total', 'Sobre terreno', 'NRL', 'MRL', 'Color de punta']];
     H.catalogo.forEach((k) => r4.push([k.codigo, k.tipo, k.suelo === 'B' ? 'Blando' : 'Normal', k.perfil, k.largo, k.sobre, k.nrl, k.mrl, k.color]));
     XLSX.utils.book_append_sheet(wb, sheet(r4, [22, 16, 8, 10, 10, 12, 8, 8, 14]), 'Catálogo Trina');
+    // replanteo: coordenadas de cada hinca (para topografía), en orden norte → sur
+    if (I.RP) {
+      const r5 = [['Tracker', 'Frame (lista de replanteo)', 'Sector', 'Tipo', 'Hinca', 'X (UTM)', 'Y (UTM)', 'Hincado', 'Observación del replanteo']];
+      I.trk.forEach((t) => { const r = I.RP.trk[t.id]; if (!r) return; const ob = r.mix ? 'hincas repartidas entre frames ' + r.mix.join(', ') + ' en la lista' : r.dif ? `${r.n} hincas en la posición (se esperan ${r.dif})` : '';
+        r.p.forEach((q, i) => r5.push([t.id, r.fr, t.s, t.t, i + 1, q[0], q[1], H.avance[t.id] ? 'sí' : '', i === 0 ? ob : ''])); });
+      (I.RP.extra || []).forEach((e) => e.p.forEach((q, i) => r5.push(['(fuera del layout)', e.fr, '', '', i + 1, q[0], q[1], '', i === 0 ? `hincas del frame ${e.fr} que no caen sobre ningún tracker del layout · cerca de ${e.cerca}` : ''])));
+      XLSX.utils.book_append_sheet(wb, sheet(r5, [16, 12, 7, 7, 7, 14, 14, 8, 60]), 'Replanteo');
+    }
     return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   }
   function exportFund(state, ETAPAS, STSL, fundInfo) {
