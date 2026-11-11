@@ -1100,3 +1100,15 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 }
 @media print { #mbar, #mtabs, #msheet { display: none !important; } }
 .lgapk { display: block; margin-top: 14px; text-align: center; padding: 11px; border-radius: 10px; background: #e8f5f5; color: #00797f; font-weight: 600; text-decoration: none; font-size: 14px; }
+
+/* instalar en iPhone */
+.iosov { position: fixed; inset: 0; z-index: 9999; background: rgba(10,20,36,.6); display: flex; align-items: flex-end; justify-content: center; padding: 16px 12px calc(46px + env(safe-area-inset-bottom)); font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+.iosbox { background: #fff; color: #142033; border-radius: 18px; padding: 20px 18px 16px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,.3); }
+.iosbox img { width: 64px; height: 64px; border-radius: 15px; } .iosbox h3 { margin: 8px 0 4px; font-size: 19px; }
+.iossub { margin: 0 0 12px; color: #6b7a90; font-size: 13.5px; }
+.iosbox ol { text-align: left; margin: 0 0 14px; padding-left: 22px; font-size: 14.5px; line-height: 1.45; } .iosbox li { margin-bottom: 8px; }
+.iosi { width: 20px; height: 20px; vertical-align: -4px; fill: none; stroke: #0a7aff; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.iosok { width: 100%; border: 0; border-radius: 12px; padding: 13px; background: #142033; color: #fff; font: 600 15px inherit; }
+.iosflecha { position: fixed; bottom: calc(8px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); color: #fff; font-size: 24px; animation: iosb 1.2s ease-in-out infinite; }
+@keyframes iosb { 50% { transform: translate(-50%, 6px); } }
+@media (max-width: 860px) { #mbar { padding-top: env(safe-area-inset-top); height: calc(56px + env(safe-area-inset-top)); } body { padding-top: calc(58px + env(safe-area-inset-top)); } }

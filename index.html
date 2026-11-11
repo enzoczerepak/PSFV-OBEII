@@ -2,9 +2,14 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1e33">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="OBE II">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; script-src 'self'; connect-src 'self' https://api.github.com https://api.open-meteo.com http://localhost:4999">
-<link rel="icon" href="icon.png">
+<link rel="icon" href="icon.png"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="manifest" href="visor.webmanifest">
 <title>PSFV-OBE II · Visor</title>
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -13,8 +18,8 @@
 <label>Usuario<input type="text" id="lgU" autocomplete="username" required></label>
 <label>Contraseña<input type="password" id="lgP" autocomplete="current-password" required></label>
 <label class="lgchk"><input type="checkbox" id="lgR" checked> Recordarme en este equipo</label>
-<button class="btn pri" id="lgB" type="submit">Ingresar</button><div id="lgE" class="lgerr"></div><a id="lgApk" class="lgapk" href="OBE-II.apk" download="OBE-II.apk">📱 Descargar la app para Android</a></form></div>
-<script>if (window.AndroidApp || !/Android/i.test(navigator.userAgent)) document.getElementById('lgApk').style.display = 'none';</script>
+<button class="btn pri" id="lgB" type="submit">Ingresar</button><div id="lgE" class="lgerr"></div><a id="lgApk" class="lgapk" href="OBE-II.apk" download="OBE-II.apk">📱 Descargar la app para Android</a><a id="lgIos" class="lgapk" href="#" style="display:none"> Instalar en el iPhone</a></form></div>
+<script src="instalar.js"></script>
 <aside id="side">
   <div class="brand">
     <svg viewBox="0 0 40 40" class="logo" aria-hidden="true">

@@ -5,9 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#142033">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Campo OBEII">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; connect-src 'self' https://api.github.com http://localhost:4999">
-<link rel="icon" href="icon.png"><link rel="apple-touch-icon" href="icon.png"><link rel="manifest" href="campo.webmanifest">
+<link rel="icon" href="icon.png"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="manifest" href="campo.webmanifest">
 <title>Campo · PSFV-OBEII</title>
 <link rel="stylesheet" href="campo.css">
 </head>
@@ -16,7 +18,7 @@
 <label>Usuario<input type="text" id="lgU" autocomplete="username" autocapitalize="none" required></label>
 <label>Contraseña<input type="password" id="lgP" autocomplete="current-password" required></label>
 <label class="chk"><input type="checkbox" id="lgR" checked> Recordarme en este celular</label>
-<button class="b pri" id="lgB" type="submit">Ingresar</button><div id="lgE" class="err"></div></form></div>
+<button class="b pri" id="lgB" type="submit">Ingresar</button><div id="lgE" class="err"></div><a id="lgApk" class="lgapk" href="OBE-II.apk" download="OBE-II.apk" style="display:none">📱 Descargar la app para Android</a><a id="lgIos" class="lgapk" href="#" style="display:none"> Instalar en el iPhone</a></form></div>
 <div id="app" class="hidden">
   <header><div><b id="hNom"></b><small id="hFecha"></small></div><div class="hr"><div id="hEst"></div><button id="hSalir" title="Cerrar sesión">Salir</button></div></header>
   <main id="v"></main>
@@ -27,5 +29,6 @@
 <script src="margen.js"></script>
 <script src="core.js"></script>
 <script src="campo.js"></script>
+<script src="instalar.js"></script>
 </body>
 </html>
