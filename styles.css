@@ -1036,3 +1036,5 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 .htop .hstat { min-width: 0; padding: 6px 9px; border-radius: 10px; } .htop .hstat b { font-size: 17px; } .htop .hstat span { font-size: 10.5px; white-space: nowrap; }
 .htop .htxt h2 { font-size: 24px; } .htop .hfecha { font-size: 12px; }
 @media (max-width: 1180px) { .htop .hero .hstats { flex-wrap: wrap; } }
+.clluv b.perd { color: #c0563a; } .clluv span small { font-weight: 400; color: var(--mute, #7a8aa3); margin-left: 4px; }
+.btn.sm.csug { background: #e9eef5; color: #556; border-color: #d5dde8; }
