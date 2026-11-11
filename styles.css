@@ -1198,3 +1198,13 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 #nav > button[data-view][style*="--mc"]:hover { background: color-mix(in srgb, var(--mc) 10%, transparent); }
 .tgrp .tgh { color: #8fa3c2; }
 #nav > button[data-view][style*="--mc"], .sect:not(.open):not(.act) { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--mc) 45%, transparent); margin-top: 3px; }
+/* edificio O&M · vista 3D */
+.s3d { position: relative; height: 380px; margin: 10px 0 6px; border-radius: 12px; background: linear-gradient(#f7f9fc, #eef2f7); overflow: hidden; }
+.s3d canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+.s3ctl { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; }
+.s3b { border: 1px solid var(--line); background: rgba(255,255,255,.85); color: var(--mute); font-size: 12px; padding: 4px 9px; border-radius: 7px; cursor: pointer; }
+.s3b:hover, .s3b.on { color: var(--ink); background: #fff; }
+.s3hint { position: absolute; left: 12px; bottom: 9px; font-size: 11.5px; color: var(--mute); pointer-events: none; }
+.s3tip { position: absolute; z-index: 2; pointer-events: none; background: #142033; color: #fff; font-size: 12px; line-height: 1.4; padding: 6px 9px; border-radius: 7px; max-width: 180px; }
+.s3seg button { padding: 4px 10px; font-size: 12.5px; }
+@media (max-width: 700px) { .s3d { height: 300px; } .s3hint { display: none; } }

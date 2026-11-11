@@ -92,6 +92,7 @@ function salaPlantaSVG(I, opts = {}) {
   return s + '</svg>';
 }
 // ---- vista ----
+const salaModo = () => { try { return localStorage.getItem('sala3d') || '3d'; } catch (_) { return '3d'; } };
 function vSala(el) {
   const ro = window.READONLY, I = salaInfo();
   actions([['Exportar Excel', 'btn', exportSala], ['Exportar PDF', 'btn pri', printSala]]);
@@ -101,9 +102,10 @@ function vSala(el) {
     <div class="card tile"><div>${Charts.ring(I.p, '#7a5af8', 'edificio')}</div><div><h3 style="margin-bottom:6px">Edificio de O&amp;M</h3>
       <div class="kpis k1" style="gap:6px">${kpi('Etapas terminadas', I.done, `/ ${SALA_ET.length}`, 0)}${kpi('Zapatas hormigonadas', I.nZH, `/ ${SALA_ZAP.length}`, 0)}</div>
       <div class="muted" style="margin-top:8px;font-size:12.5px">${I.curso.length ? `<b>En curso:</b> ${I.curso.map((x) => esc(x.e.n)).join(', ')}` : I.sig ? `<b>Próxima:</b> ${esc(I.sig.e.n)}` : '<b>Edificio terminado</b>'}${I.ini ? `<br>Inicio de obra ${fechaCorta(I.ini)}` : ''}</div></div></div>
-    <div class="card"><div style="display:flex;align-items:baseline;gap:8px"><h3 style="margin:0">Planta de fundaciones</h3><span class="muted" style="font-size:12px">12 zapatas · 8 vigas de fundación · plano OBEII-CI-PL-371 r2</span></div>
-      <div class="salaplanta">${salaPlantaSVG(I, { ro })}</div>
-      <div class="legend"><span><i style="background:#e9eef4"></i>Sin iniciar</span><span><i style="background:${SALA_COL.cur}"></i>Bases en ejecución (más intenso = más avanzada)</span><span><i style="background:${SALA_COL.ok}"></i>Zapata hormigonada / viga terminada</span>${ro ? '' : '<span class="muted">· tocá una zapata o una viga para cargar su avance</span>'}</div></div></div>`;
+    <div class="card"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="margin:0">Fundaciones</h3><span class="muted" style="font-size:12px">12 zapatas · 8 vigas · plano OBEII-CI-PL-371 r2</span><span style="flex:1"></span>
+      <div class="seg s3seg"><button data-sm="3d" class="${salaModo() === '3d' ? 'on' : ''}">3D</button><button data-sm="pl" class="${salaModo() === 'pl' ? 'on' : ''}">Planta</button></div></div>
+      ${salaModo() === '3d' ? sala3dHTML() : `<div class="salaplanta">${salaPlantaSVG(I, { ro })}</div>`}
+      <div class="legend"><span><i style="background:#e9eef4"></i>Sin iniciar</span><span><i style="background:${SALA_COL.cur}"></i>Bases en ejecución (más intenso = más avanzada)</span><span><i style="background:${SALA_COL.ok}"></i>Zapata hormigonada / viga terminada</span>${salaModo() === '3d' ? '<span><i style="background:#2f6fb0"></i>Puertas</span><span><i style="background:#8fd0f5"></i>Ventanas</span><span class="muted">· en contorno lo que falta construir</span>' : ro ? '' : '<span class="muted">· tocá una zapata o una viga para cargar su avance</span>'}</div></div></div>`;
   // etapas
   let g0 = '';
   h += `<div class="card" style="margin-bottom:14px"><h3>Etapas del edificio</h3><div class="tblwrap" style="max-height:none"><table class="tbl salatbl"><thead><tr><th>#</th><th>Etapa</th><th>Avance</th><th>Estado</th><th>Inicio</th><th>Fin</th>${ro ? '' : '<th></th>'}</tr></thead><tbody>`;
@@ -125,6 +127,8 @@ function vSala(el) {
   h += matriz(vEts, SALA_VIG, 'Encadenado inferior por viga de fundación', (g) => `${g.id}<small>${g.cs[0]}–${g.cs[g.cs.length - 1]}</small>`);
   if (!ro) h += `<p class="hint">En las tablas: un toque en <b>·</b> inicia la etapa con fecha de hoy, un toque en <b>▶</b> la finaliza hoy y un toque en <b>✓</b> abre la carga para corregir fechas, agregar una observación o quitar el registro. <b>Marcar todas…</b> carga la misma fecha a todas las zapatas o vigas juntas.</p>`;
   el.innerHTML = h; Charts.bindTips(el);
+  $$('[data-sm]', el).forEach((b) => { b.onclick = () => { try { localStorage.setItem('sala3d', b.dataset.sm); } catch (_) { /* sin storage */ } vSala(el); }; });
+  if (salaModo() === '3d') sala3dMontar(el, I);
   if (ro) return;
   $$('[data-sc]', el).forEach((b) => { b.onclick = () => { const [k, x] = b.dataset.sc.split('|'); salaToque(k, x); }; });
   $$('[data-sg]', el).forEach((b) => { b.onclick = () => salaEditGral(b.dataset.sg); });
