@@ -992,3 +992,31 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 .lmc b { font-size: 13px; } .lmc small { font-size: 10.5px; }
 .lmc.cur { border: 1px solid #f5a524; background: #fff6e5; color: #b7791f; } .lmc.ok { border: 1px solid #2f9e5b; background: #e9f7ef; color: #23784a; }
 .lmc:hover:not(:disabled) { border-color: var(--acc); } .lmc:disabled { cursor: default; }
+/* clima */
+.climaw { cursor: pointer; background: linear-gradient(160deg, #eaf4ff 0%, #ffffff 55%); }
+.climaw .cnow { display: grid; grid-template-columns: auto auto 1fr; gap: 12px; align-items: center; }
+.climaw .cico { font-size: 44px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.12)); }
+.climaw .ctemp { font-size: 34px; font-weight: 700; letter-spacing: -1px; display: grid; line-height: 1; }
+.climaw .ctemp small { font-size: 11px; font-weight: 500; color: var(--mute, #7a8aa3); letter-spacing: 0; margin-top: 4px; }
+.climaw .cdat h3 { margin: 0 0 2px; } .climaw .cdat > div { font-size: 12.5px; }
+.climaw .cprox { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 12px 0 8px; }
+.cmini { display: grid; justify-items: center; gap: 1px; background: rgba(255,255,255,.75); border: 1px solid #e3eaf3; border-radius: 10px; padding: 6px 2px; font-size: 12px; }
+.cmini i { font-style: normal; font-size: 20px; } .cmini small { color: var(--mute, #7a8aa3); } .cmini em { font-style: normal; color: #2f6fc2; font-size: 11px; font-weight: 600; }
+.clluv { display: grid; grid-template-columns: 1fr auto auto; grid-auto-rows: auto; gap: 2px 8px; align-items: baseline; padding: 8px 10px; border-radius: 10px; background: #f1f6fd; border: 1px solid #dde8f6; font-size: 12.5px; }
+.clluv span { grid-row: span 2; align-self: center; font-weight: 600; } .clluv b { font-size: 17px; color: #2f6fc2; text-align: right; } .clluv small { color: var(--mute, #7a8aa3); }
+.climaw .cfoot { font-size: 11px; margin-top: 6px; }
+.mbox.wide { width: min(1120px, 94vw); }
+.cext { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
+.cday { display: grid; justify-items: center; gap: 2px; padding: 8px 4px; border: 1px solid #e3eaf3; border-radius: 10px; background: #fbfdff; font-size: 12px; }
+.cday i { font-style: normal; font-size: 24px; } .cday small { color: var(--mute, #7a8aa3); } .cday .cmx { font-weight: 700; font-size: 14px; } .cday .cmn { color: var(--mute, #7a8aa3); }
+.cday .cpr { color: #2f6fc2; font-weight: 600; } .cday .cmm, .cday .cvi { font-size: 11px; color: #5b6b82; }
+.cday.lluv { background: #eaf3ff; border-color: #a9c8f0; }
+.chor { display: grid; grid-auto-flow: column; grid-auto-columns: 46px; gap: 4px; overflow-x: auto; padding-bottom: 6px; }
+.chor > div { display: grid; justify-items: center; font-size: 11.5px; padding: 4px 0; border-radius: 8px; background: #f6f9fc; }
+.chor i { font-style: normal; font-size: 17px; } .chor em { font-style: normal; color: #2f6fc2; font-size: 10.5px; }
+.climaw .chead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; } .climaw .chead h3 { margin: 0; } .climaw .chead span { font-size: 12px; }
+.climaw .cnow { grid-template-columns: auto auto minmax(0, 1fr); } .climaw .cdat { font-size: 12.5px; line-height: 1.45; min-width: 0; }
+.climaw:hover { box-shadow: 0 6px 18px rgba(47,111,194,.15); }
+.climaw .cnow { grid-template-columns: auto 1fr; } .climaw .cdat { grid-column: 1 / -1; }
+.clluv { grid-template-columns: 1fr 1fr; gap: 4px 10px; } .clluv span { grid-column: 1 / -1; grid-row: auto; }
+.clluv > div { display: flex; align-items: baseline; gap: 6px; } .clluv b { text-align: left; }

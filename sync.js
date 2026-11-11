@@ -7,7 +7,7 @@
   // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
   const PROTO = 2;
   // 'hc' catálogo y distribución de hincas, 'ht:' hincado por tracker, 'hr:' recepciones de hincas
-  const nuevo = (k) => k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:');
+  const nuevo = (k) => k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:');
   const conocido = (k) => k === 'cfg' || k === 'comp' || k === 'km' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
 
   // JSON con claves ordenadas: el orden interno de los campos no cuenta como cambio
@@ -31,6 +31,8 @@
     }
     // fibra óptica: criterio y un registro por zanja de MT
     if (S.fibra) { if (S.fibra.cfg) m.set('fc', S.fibra.cfg); Object.entries(S.fibra.z || {}).forEach(([id, v]) => { if (v) m.set('fo:' + id, v); }); }
+    // registro de lluvias: criterio ('lu') y un registro por día ('lu:fecha')
+    if (S.lluvia) { if (S.lluvia.cfg) m.set('lu', S.lluvia.cfg); Object.entries(S.lluvia.dias || {}).forEach(([f, v]) => { if (v) m.set('lu:' + f, v); }); }
     // línea aérea de MT: piquetes y etapas ('lc') y avance por etapa y piquete ('lv:')
     if (S.lmt) { if (S.lmt.cfg) m.set('lc', S.lmt.cfg); Object.entries(S.lmt.av || {}).forEach(([k, v]) => { if (v) m.set('lv:' + k, v); }); }
     // registros de versiones más nuevas: se guardan tal cual para no borrarlos
@@ -59,6 +61,11 @@
       const id = k.slice(3), i = H.recep.findIndex((x) => x.id === id);
       if (d) { if (i >= 0) H.recep.splice(i, 1); } else if (i >= 0) H.recep[i] = v; else H.recep.push(v);
       return;
+    }
+    if (k === 'lu' || k.startsWith('lu:')) {
+      const U = (S.lluvia = S.lluvia || {}); U.dias = U.dias || {};
+      if (k === 'lu') { if (!d && v) U.cfg = v; return; }
+      const f = k.slice(3); if (d) delete U.dias[f]; else U.dias[f] = v; return;
     }
     if (k === 'lc' || k.startsWith('lv:')) {
       const L = (S.lmt = S.lmt || {}); L.av = L.av || {};
@@ -162,7 +169,7 @@
   }
   // Cliente que se une por primera vez
   function reemplazarPorServidor(S) {
-    S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {}; S.cronoTareas = []; S.cronoMeta = null; S.partes = []; S.maquinas = []; S.maqHoras = []; S.maqEventos = []; S.fibra = { cfg: { cada: 50, adic: 0 }, z: {} }; S.lmt = { cfg: { piquetes: [], etapas: [] }, av: {} }; S.hincado = { catalogo: [], matriz: {}, avance: {}, recep: [] };
+    S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {}; S.cronoTareas = []; S.cronoMeta = null; S.partes = []; S.maquinas = []; S.maqHoras = []; S.maqEventos = []; S.fibra = { cfg: { cada: 50, adic: 0 }, z: {} }; S.lmt = { cfg: { piquetes: [], etapas: [] }, av: {} }; S.lluvia = { cfg: { desde: today(), umbral: 1 }, dias: {} }; S.hincado = { catalogo: [], matriz: {}, avance: {}, recep: [] };
     S.__sync = { snap: {}, meta: {}, pend: {}, rev: 0, peerRev: 0 };
   }
   function marcarTodoPendiente(S) {

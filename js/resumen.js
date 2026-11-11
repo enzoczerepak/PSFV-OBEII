@@ -38,7 +38,10 @@ function vResumen(el) {
   actions([['Exportar Excel', 'btn', exportExcel]]);
   el.innerHTML = heroHTML() + modulosHTML();
   $$('[data-go]', el).forEach((c) => { c.onclick = () => go(c.dataset.go); });
+  bindClima(); climaCarga();
 }
+// el clima se actualiza solo cada 30 minutos mientras el Inicio está abierto
+setInterval(() => { if (typeof view !== 'undefined' && view === 'resumen') climaCarga(true); }, 30 * 60e3);
 function vCables(el) {
   actions([['Exportar Excel', 'btn', exportExcel], ['Ir a zanjas', 'btn pri', () => go('zanjas')]]);
   const cnt = (cat) => { const cs = R.circuitos.filter((c) => c.cat === cat); return [cs.filter((c) => c.completo).length, cs.length, cs.filter((c) => c.estado === 'listo para tender').length]; };
