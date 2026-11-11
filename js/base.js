@@ -247,7 +247,7 @@ function go(v) {
   const gc = /^(BT|MT|PAT|LA)-/.exec(v); if (gc) { const g = $(`#nav .grp[data-cat="${gc[1]}"]`); if (g && !g.classList.contains('open')) grpToggle(gc[1], true); }
   if (v === 'hplano') { ui.pl = ui.pl || { capas: new Set(PL_CAPAS.map((c) => c[0])), color: 'disc', zcol: 'estado', vb: null, sel: null }; ui.pl.color = ui.pl.color === 'hinc' ? 'hinc' : 'disc'; view = 'plano'; navKey = 'hplano'; ui.sel.clear();
     $$('#nav button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === 'hplano')); $$('.sfBtn').forEach((b) => b.classList.remove('on'));
-    const sec = $('#nav [data-sect="hinc"]'); if (sec && !sec.classList.contains('open')) abrirSect(sec, true); $$('#nav .sect').forEach((x) => x.classList.toggle('act', x === sec)); pillUpd(true); render(true); return; }
+    const sec = $('#nav [data-sect="hinc"]'); if (sec && !sec.classList.contains('open')) abrirSect(sec, true); $$('#nav .sect').forEach((x) => x.classList.toggle('act', x === sec)); pillUpd(true); render(true); if (typeof movSync === 'function') movSync('hplano'); return; }
   view = v; ui.sel.clear(); navKey = MENU_ALIAS[v] || v;
   $$('.sfBtn').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
   $$('#nav button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === navKey));
@@ -256,6 +256,7 @@ function go(v) {
   $$('#nav .sect').forEach((x) => x.classList.toggle('act', x === sec));
   pillUpd(true);
   render(true);
+  if (typeof movSync === 'function') movSync(v);
 }
 function render(anim) {
   setTimeout(margenAlDia, 0);
