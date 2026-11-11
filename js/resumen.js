@@ -13,7 +13,7 @@ function patCard() {
 // Encabezado del inicio: cielo según la hora, el sol recorre su arco y los trackers lo siguen (±60°)
 function heroHTML() {
   const ahora = new Date(), h = ahora.getHours() + ahora.getMinutes() / 60;
-  // el cielo sigue el clima real de Oberá (widget del clima); sin datos, solo la hora
+  // el cielo sigue el clima real del parque (estación SMN Oberá) (widget del clima); sin datos, solo la hora
   const K = typeof climaCielo === 'function' ? climaCielo() : null, cond = K ? K.cond : 'despejado';
   const salida = (K && K.salida) || 6.5, puesta = (K && K.puesta) || 19.8, dia = h >= salida && h <= puesta, f = Math.max(0, Math.min(1, (h - salida) / (puesta - salida)));
   const fase = !dia ? 'noche' : f < 0.12 ? 'alba' : f > 0.88 ? 'ocaso' : 'dia';
