@@ -120,35 +120,51 @@ async function importarPdf(ctxCat, archivo) {
     await modal({ title: 'Importar PDF', sub: esc(f.path.split(/[\\/]/).pop()), body: `<p>${esc(avisos[0] || 'No encontré circuitos.')}</p><p class="hint">Si el PDF es una imagen escaneada no tiene texto para leer. En ese caso pasá los circuitos a la planilla modelo (botón "Plantilla Excel") e importala con "Importar Excel".</p>` });
     return;
   }
-  const ex = (r) => S.circuitos.find((c) => !c.vinculo && c.designacion === r.designacion && c.desde === r.desde);
+  // el circuito ya cargado: misma designación y origen; si no, misma designación cuando es única (en MT los nombres de origen cambian entre revisiones)
+  const ex = (r) => S.circuitos.find((c) => !c.vinculo && c.designacion === r.designacion && c.desde === r.desde)
+    || (() => { const m = S.circuitos.filter((c) => !c.vinculo && c.designacion === r.designacion); return m.length === 1 && filas.filter((x) => x.designacion === r.designacion).length === 1 ? m[0] : null; })();
+  const num2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
+  const cambia = (e, r) => num2(e.cantidad) !== num2(r.cantidad) || num2(e.lineal) !== num2(r.lineal) || String(e.formacion || '').replace(/\s/g, '') !== String(r.formacion || '').replace(/\s/g, '') || Number(e.fases || 3) !== Number(r.fases || 3);
+  const estado = (r) => { const e = ex(r); if (!e) return '<span class="tag ok">nuevo</span>';
+    const lc = Number(e.largoCorte) > 0 ? `<label class="lcq" title="Este circuito tiene un largo de corte cargado a mano (${fmt(e.largoCorte, 1)} m por conductor), que manda sobre la lista"><input type="checkbox" class="pLc" checked> quitar largo a mano (${fmt(e.largoCorte, 1)} m) → ${fmt((Number(r.cantidad) || 0) / (Number(r.fases) || 3), 1)} m</label>` : '';
+    return `${cambia(e, r) ? `<span class="tag" title="Antes: ${fmt(e.cantidad, 2)} m · ${esc(e.formacion)}">actualiza</span>` : '<span class="tag muted">sin cambios</span>'}${lc}`; };
   const fila = (r, i) => `<tr data-i="${i}"><td><input type="checkbox" class="pS" ${ctxCat && ctxCat !== r.cat ? '' : 'checked'}></td>
     <td><select class="pC"><option ${r.cat === 'BT' ? 'selected' : ''}>BT</option><option ${r.cat === 'MT' ? 'selected' : ''}>MT</option></select></td>
     <td><input class="pD" value="${esc(r.designacion)}"></td><td><input class="pDe" value="${esc(r.desde)}"></td><td><input class="pT" value="${esc(r.tablero)}"></td><td><input class="pH" value="${esc(r.hasta)}"></td>
     <td><input class="pL n" value="${r.lineal ?? ''}"></td><td><input class="pE n" value="${r.efectiva ?? ''}"></td><td><input class="pF" value="${esc(r.formacion)}"></td>
-    <td><input class="pFa n" value="${r.fases}"></td><td><input class="pQ n" value="${r.cantidad ?? ''}"></td><td class="muted">${r.pag}</td><td>${ex(r) ? '<span class="tag">actualiza</span>' : '<span class="tag ok">nuevo</span>'}</td></tr>`;
+    <td><input class="pFa n" value="${r.fases}"></td><td><input class="pQ n" value="${r.cantidad ?? ''}"></td><td class="muted">${r.pag}</td><td>${estado(r)}</td></tr>`;
   const nBT = filas.filter((r) => r.cat === 'BT').length, nMT = filas.length - nBT;
+  const nUp = filas.filter((r) => { const e = ex(r); return e && cambia(e, r); }).length, nNew = filas.filter((r) => !ex(r)).length, nLc = filas.filter((r) => { const e = ex(r); return e && Number(e.largoCorte) > 0; }).length;
   const res = await modal({
     title: 'Importar circuitos desde PDF', wide: true, sub: `${esc(f.path.split(/[\\/]/).pop())} · ${filas.length} circuitos encontrados (${nBT} BT · ${nMT} MT)`,
-    body: `<p class="hint">Revisá la tabla antes de importar: podés corregir cualquier celda, cambiar el tipo o destildar filas. Largo efectivo y cantidad (m totales = largo × conductores) son los que usa el plan de corte.</p>
+    body: `<div class="alert info" style="display:block;margin-bottom:8px"><b>${nNew}</b> circuitos nuevos · <b>${nUp}</b> con cambios · <b>${filas.length - nNew - nUp}</b> sin cambios${nLc ? ` · <b>${nLc}</b> con largo de corte cargado a mano` : ''}. Lo tendido no se toca.</div><p class="hint">Revisá la tabla antes de importar: podés corregir cualquier celda, cambiar el tipo o destildar filas. Largo efectivo y cantidad (m totales = largo × conductores) son los que usa el plan de corte.</p>
       <div class="pdfimp"><table class="tbl"><thead><tr><th><input type="checkbox" id="pAll" checked></th><th>Tipo</th><th>Designación</th><th>Desde</th><th>Tablero</th><th>Hasta</th><th>Lineal (m)</th><th>Efectiva (m)</th><th>Formación</th><th>Cond.</th><th>Cantidad (m)</th><th>Pág.</th><th></th></tr></thead>
       <tbody>${filas.map(fila).join('')}</tbody></table></div>`,
     buttons: [['Cancelar', 'btn', () => null], ['Importar seleccionados', 'btn pri', (box) => $$('tbody tr', box).filter((tr) => $('.pS', tr).checked).map((tr) => {
       const g = (c) => $(c, tr).value.trim(), n = (c) => { const v = parseFloat(g(c).replace(',', '.')); return isFinite(v) ? v : null; };
       const o = { cat: g('.pC'), designacion: g('.pD'), desde: g('.pDe'), hasta: g('.pH'), formacion: g('.pF'), fases: n('.pFa') || 3, lineal: n('.pL'), cantidad: n('.pQ') };
       if (g('.pT')) o.tablero = g('.pT'); if (n('.pE')) o.efectiva = n('.pE');
+      o._i = Number(tr.dataset.i); const lc = $('.pLc', tr); if (lc && lc.checked) o._sinLc = true;
       if (!o.cantidad && (o.efectiva || o.lineal)) o.cantidad = Math.round((o.efectiva || o.lineal) * o.fases * 100) / 100;
       return o;
     }).filter((o) => o.designacion && o.formacion && o.cantidad)]],
   });
   if (!res || !res.length) return;
   let a = 0, u = 0;
+  let lcq = 0;
   res.forEach((nc, k) => {
-    const e = S.circuitos.find((c) => !c.vinculo && c.designacion === nc.designacion && c.desde === nc.desde);
-    if (e) { Object.assign(e, nc); u++; }
+    const sinLc = nc._sinLc, fi = filas[nc._i]; delete nc._sinLc; delete nc._i;
+    const e = S.circuitos.find((c) => !c.vinculo && c.designacion === nc.designacion && c.desde === nc.desde) || (fi && ex(fi));
+    if (e) {
+      // coincidió solo por designación: se conservan los nombres de origen y destino ya cargados
+      if (e.desde !== nc.desde) { delete nc.desde; delete nc.hasta; delete nc.tablero; }
+      if (sinLc && e.largoCorte) { delete e.largoCorte; lcq++; }
+      Object.assign(e, nc); u++; }
     else { S.circuitos.push(Object.assign({ id: uid('c'), real: {}, zanja: 'no abierta', zanjaLargo: nc.lineal || null, _o: Date.now() + k }, nc)); a++; }
   });
   if (!S.fuente) S.fuente = 'Circuitos: ' + f.path.split(/[\\/]/).pop();
-  commit(`Importado del PDF · ${a} circuitos nuevos, ${u} actualizados`);
+  if (lcq) recalcularTodo('BT'), recalcularTodo('MT');
+  commit(`Importado del PDF · ${a} circuitos nuevos, ${u} actualizados${lcq ? ` · ${lcq} largo${lcq > 1 ? 's' : ''} a mano quitado${lcq > 1 ? 's' : ''}` : ''}`);
 }
 async function menuImportar(cat, soloBobinas) {
   const op = [];

@@ -52,24 +52,40 @@ async function climaCarga(forzar) {
       else if (!CLIMA || !CLIMA.d) CLIMA = { error: (o && o.error) || 'sin datos', ts: Date.now(), got: Date.now() };
     } catch (e) { if (!CLIMA || !CLIMA.d) CLIMA = { error: String(e.message || e), ts: Date.now(), got: Date.now() }; }
     climaPend = null;
-    const w = $('#climaW'); if (w) { w.outerHTML = climaWidgetHTML(); bindClima(); }
+    heroRefrescar();
     return CLIMA;
   })();
   return climaPend;
 }
-// ---- tarjeta del Inicio ----
+// ---- cielo del banner según el clima real ----
+// cond: despejado | parcial | nublado | niebla | llovizna | lluvia | tormenta
+function climaCielo() {
+  if (!CLIMA || !CLIMA.d || !CLIMA.d.current) return null;
+  const d = CLIMA.d, c = d.current, k = Number(c.weather_code);
+  const cond = k <= 1 ? 'despejado' : k === 2 ? 'parcial' : k === 3 ? 'nublado' : k === 45 || k === 48 ? 'niebla' : (k >= 51 && k <= 57) ? 'llovizna'
+    : k >= 95 ? 'tormenta' : (k >= 61 && k <= 67) || (k >= 80 && k <= 82) || (k >= 71 && k <= 77) || k === 85 || k === 86 ? 'lluvia' : 'nublado';
+  const i = Math.max(0, d.daily.time.indexOf(today())), hh = (t) => { if (!t) return null; const m = /T(\d\d):(\d\d)/.exec(t); return m ? Number(m[1]) + Number(m[2]) / 60 : null; };
+  return { cond, k, dia: !!c.is_day, rafaga: Number(c.wind_gusts_10m) || 0, viento: Number(c.wind_speed_10m) || 0, salida: hh(d.daily.sunrise && d.daily.sunrise[i]), puesta: hh(d.daily.sunset && d.daily.sunset[i]), lluviaAhora: Number(c.precipitation) || 0 };
+}
+function heroRefrescar() {
+  const h = document.querySelector('.hero.hmain'); if (!h || typeof heroHTML !== 'function') return;
+  h.outerHTML = heroHTML(); bindClima();
+}
+// ---- panel del clima (dentro del banner del Inicio) ----
 function climaWidgetHTML() {
   const C = lluCuenta();
   const pie = `<div class="clluv"><span>🌧️ Lluvia en la obra <small>desde ${fechaCorta(C.desde).slice(0, 5)}</small></span><div><b>${C.semana}</b><small>días esta semana</small></div><div><b>${C.obra}</b><small>días en total</small></div><div><b class="perd">${C.perdSem}</b><small>jornadas perdidas (sem.)</small></div><div><b class="perd">${C.perdObra}</b><small>jornadas perdidas</small></div></div>`;
-  if (!CLIMA || !CLIMA.d) return `<div class="card climaw" id="climaW" data-clima="1" title="Pronóstico extendido"><div class="mh"><div class="cico">🌡️</div><div><h3>Clima en Oberá</h3><div class="muted">${CLIMA && CLIMA.error ? 'Sin conexión para traer el pronóstico' : 'Cargando el pronóstico…'}</div></div></div>${pie}</div>`;
+  if (!CLIMA || !CLIMA.d) return `<div class="hclima" id="climaW" title="Pronóstico extendido"><div class="chead"><b>Clima en Oberá</b><span>pronóstico ›</span></div><div class="cnow"><div class="cico">🌡️</div><div class="cdat">${CLIMA && CLIMA.error ? 'Sin conexión para traer el pronóstico' : 'Cargando el pronóstico…'}</div></div>${pie}</div>`;
   const d = CLIMA.d, c = d.current, [ic, tx] = wmo(c.weather_code, !c.is_day), i0 = d.daily.time.indexOf(today());
   const di = i0 >= 0 ? i0 : 0, dd = d.daily;
   const prox = [1, 2, 3].map((k) => dd.time[di + k] ? `<div class="cmini"><span>${['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][new Date(dd.time[di + k] + 'T12:00').getDay()]}</span><i>${wmo(dd.weather_code[di + k])[0]}</i><b>${Math.round(dd.temperature_2m_max[di + k])}°</b><small>${Math.round(dd.temperature_2m_min[di + k])}°</small>${dd.precipitation_probability_max[di + k] >= 30 ? `<em>${dd.precipitation_probability_max[di + k]}%</em>` : ''}</div>` : '').join('');
-  return `<div class="card climaw" id="climaW" data-clima="1" title="Ver el pronóstico extendido"><div class="chead"><h3>Clima en Oberá</h3><span class="muted">pronóstico ›</span></div><div class="cnow"><div class="cico">${ic}</div><div class="ctemp">${Math.round(c.temperature_2m)}°<small>sensación ${Math.round(c.apparent_temperature)}°</small></div>
-      <div class="cdat"><div><b>${tx}</b></div><div class="muted">↑${Math.round(dd.temperature_2m_max[di])}° ↓${Math.round(dd.temperature_2m_min[di])}° · 💧 ${dd.precipitation_probability_max[di]}%</div><div class="muted">💨 ${Math.round(c.wind_speed_10m)} km/h ${dirV(c.wind_direction_10m)} · ${c.relative_humidity_2m}% hum.</div></div></div>
-    <div class="cprox">${prox}</div>${pie}<div class="muted cfoot">${CLIMA.offline ? 'Sin conexión: último pronóstico de ' + new Date(CLIMA.ts).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : 'Actualizado ' + new Date(CLIMA.ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} · tocá para el pronóstico extendido</div></div>`;
+  const act = CLIMA.offline ? 'sin conexión · pronóstico de ' + new Date(CLIMA.ts).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : 'actualizado ' + new Date(CLIMA.ts).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  return `<div class="hclima" id="climaW" title="Ver el pronóstico extendido"><div class="chead"><b>Clima en Oberá</b><span>pronóstico ›</span></div>
+    <div class="cnow"><div class="cico">${ic}</div><div class="ctemp">${Math.round(c.temperature_2m)}°<small>ST ${Math.round(c.apparent_temperature)}°</small></div>
+      <div class="cdat"><b>${tx}</b><div>↑${Math.round(dd.temperature_2m_max[di])}° ↓${Math.round(dd.temperature_2m_min[di])}° · 💧 ${dd.precipitation_probability_max[di]}%</div><div>💨 ${Math.round(c.wind_speed_10m)} km/h ${dirV(c.wind_direction_10m)}${c.wind_gusts_10m >= 30 ? ` · ráf. ${Math.round(c.wind_gusts_10m)}` : ''} · ${c.relative_humidity_2m}%</div></div></div>
+    <div class="cprox">${prox}</div>${pie}<div class="cfoot">${act}</div></div>`;
 }
-function bindClima() { const w = $('#climaW'); if (w) w.onclick = () => verClima(); }
+function bindClima() { const w = $('#climaW'); if (w) w.onclick = (e) => { e.stopPropagation(); verClima(); }; }
 // ---- pronóstico extendido y registro de lluvias ----
 async function verClima() {
   await climaCarga();

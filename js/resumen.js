@@ -13,30 +13,47 @@ function patCard() {
 // Encabezado del inicio: cielo según la hora, el sol recorre su arco y los trackers lo siguen (±60°)
 function heroHTML() {
   const ahora = new Date(), h = ahora.getHours() + ahora.getMinutes() / 60;
-  const salida = 6.5, puesta = 19.8, dia = h >= salida && h <= puesta, f = Math.max(0, Math.min(1, (h - salida) / (puesta - salida)));
+  // el cielo sigue el clima real de Oberá (widget del clima); sin datos, solo la hora
+  const K = typeof climaCielo === 'function' ? climaCielo() : null, cond = K ? K.cond : 'despejado';
+  const salida = (K && K.salida) || 6.5, puesta = (K && K.puesta) || 19.8, dia = h >= salida && h <= puesta, f = Math.max(0, Math.min(1, (h - salida) / (puesta - salida)));
   const fase = !dia ? 'noche' : f < 0.12 ? 'alba' : f > 0.88 ? 'ocaso' : 'dia';
   const W = 1000, sx = 80 + f * (W - 160), sy = 150 - Math.sin(f * Math.PI) * 115;
-  const ang = dia ? Math.max(-60, Math.min(60, (f - 0.5) * 150)) : 0; // los trackers apuntan al sol (este → oeste)
+  // trackers: siguen al sol; con ráfagas fuertes o tormenta van a posición de defensa
+  const defensa = K && (K.rafaga >= 50 || cond === 'tormenta');
+  const ang = dia && !defensa ? Math.max(-60, Math.min(60, (f - 0.5) * 150)) : 0;
   const filas = Array.from({ length: 14 }, (_, i) => i);
   const saludo = h < 5 ? 'Buenas noches' : h < 13 ? 'Buen día' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
   const ts = R.resumen.reduce((a, r) => a + r.tendido + (r.parcial || 0), 0), tr = R.resumen.reduce((a, r) => a + r.requerido, 0);
   const fi = STSL.map((x) => fundInfo(x)), fA = fi.length ? fi.reduce((a, i) => a + i.done, 0) / (fi.length * ETAPAS.length) : 0;
   const HI = window.PLANO && S.hincado ? hincInfo() : null;
   const mini = (t, v, c) => `<div class="hstat"><b style="color:${c}">${fmt(v * 100)}%</b><span>${t}</span></div>`;
-  return `<div class="hero h-${fase}"><svg class="hsky" viewBox="0 0 ${W} 190" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+  // nubes: cantidad y tono según el clima
+  const nN = { despejado: 2, parcial: 5, nublado: 10, niebla: 6, llovizna: 9, lluvia: 11, tormenta: 12 }[cond] || 2;
+  const grande = ['nublado', 'llovizna', 'lluvia', 'tormenta'].includes(cond) ? 1.55 : 1;
+  const nube = (i) => { const x = Math.round((i + 0.5) * (1100 / nN) - 80 + ((i * 37) % 40)), y = (grande > 1 ? 8 : 18) + ((i * 37) % 4) * (grande > 1 ? 11 : 13), s = (0.8 + ((i * 7) % 5) / 6) * grande;
+    return `<g class="hnube" style="animation-duration:${50 + (i % 4) * 14}s;animation-delay:-${(i * 9) % 50}s"><g transform="translate(${x} ${y}) scale(${s.toFixed(2)})"><ellipse cx="0" cy="8" rx="52" ry="13"/><ellipse cx="-18" cy="0" rx="24" ry="14"/><ellipse cx="14" cy="-3" rx="30" ry="18"/></g></g>`; };
+  const lluvia = ['llovizna', 'lluvia', 'tormenta'].includes(cond);
+  const nG = cond === 'llovizna' ? 40 : cond === 'lluvia' ? 90 : 120;
+  const gotas = lluvia ? `<g class="hlluvia ${cond}">${Array.from({ length: nG }, (_, i) => `<line x1="${(i * 113) % W}" y1="${-20 - ((i * 29) % 160)}" x2="${(i * 113) % W - 5}" y2="${-8 - ((i * 29) % 160)}" style="animation-delay:-${((i * 0.137) % 1).toFixed(2)}s"/>`).join('')}</g>` : '';
+  const rayo = cond === 'tormenta' ? '<rect class="hflash" x="0" y="0" width="1000" height="190"/><path class="hrayo" d="M640 30 l-18 40 h14 l-16 44 l38 -54 h-15 l14 -30z"/>' : '';
+  const niebla = cond === 'niebla' ? `<g class="hniebla">${[70, 105, 140].map((y, i) => `<rect x="-200" y="${y}" width="1400" height="26" rx="13" style="animation-delay:-${i * 8}s"/>`).join('')}</g>` : '';
+  const astro = dia ? `<g class="hsol" style="transform:translate(${sx.toFixed(0)}px,${sy.toFixed(0)}px)"><circle r="70" fill="url(#hglow)"/><circle r="17" class="hsold"/></g>`
+    : `<g class="hluna" style="transform:translate(${W - 160}px,46px)"><circle r="14"/><circle r="14" cx="7" cy="-4" class="hlunas"/></g>${cond === 'despejado' || cond === 'parcial' ? Array.from({ length: 22 }, (_, i) => `<circle class="hest" cx="${(i * 97) % W}" cy="${12 + ((i * 53) % 90)}" r="${i % 3 ? 1 : 1.6}" style="animation-delay:${(i % 7) * .4}s"/>`).join('') : ''}`;
+  const trk = !dia ? 'trackers en posición de reposo' : defensa ? `trackers en posición de defensa${K.rafaga >= 50 ? ` · ráfagas ${fmt(K.rafaga)} km/h` : ''}` : `trackers a ${ang >= 0 ? '+' : ''}${fmt(ang)}°`;
+  return `<div class="hero hmain h-${fase} w-${cond}"><svg class="hsky" viewBox="0 0 ${W} 190" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
       <defs><radialGradient id="hglow"><stop offset="0" stop-color="#fff4c2" stop-opacity=".95"/><stop offset=".35" stop-color="#ffd166" stop-opacity=".55"/><stop offset="1" stop-color="#ffd166" stop-opacity="0"/></radialGradient>
         <linearGradient id="hpan" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2f6aa8"/><stop offset="1" stop-color="#16365c"/></linearGradient></defs>
-      <g class="hnubes"><ellipse cx="180" cy="48" rx="46" ry="11"/><ellipse cx="215" cy="42" rx="30" ry="10"/><ellipse cx="640" cy="34" rx="40" ry="9"/><ellipse cx="672" cy="29" rx="26" ry="8"/></g>
-      ${dia ? `<g class="hsol" style="transform:translate(${sx.toFixed(0)}px,${sy.toFixed(0)}px)"><circle r="70" fill="url(#hglow)"/><circle r="17" class="hsold"/></g>` : `<g class="hluna" style="transform:translate(${W - 160}px,46px)"><circle r="14"/><circle r="14" cx="7" cy="-4" class="hlunas"/></g>${Array.from({ length: 22 }, (_, i) => `<circle class="hest" cx="${(i * 97) % W}" cy="${12 + ((i * 53) % 90)}" r="${i % 3 ? 1 : 1.6}" style="animation-delay:${(i % 7) * .4}s"/>`).join('')}`}
-      <path d="M0 160 Q250 140 500 152 T1000 148 V190 H0z" class="hcerro"/>
+      ${astro}<g class="hnubes">${Array.from({ length: nN }, (_, i) => nube(i)).join('')}</g>${rayo}${gotas}
+      <path d="M0 160 Q250 140 500 152 T1000 148 V190 H0z" class="hcerro"/>${niebla}
       ${filas.map((i) => { const x = 40 + i * 68; return `<g transform="translate(${x} 166)"><path d="M0 0v18" class="hposte"/><g class="htrk" style="transform:rotate(${ang.toFixed(1)}deg)"><rect x="-27" y="-4" width="54" height="7" rx="1.2" fill="url(#hpan)"/><path d="M-13.5 -4v7M0 -4v7M13.5 -4v7" class="hceld"/></g></g>`; }).join('')}
       <path d="M0 184h${W}" class="hsuelo"/></svg>
-    <div class="htxt"><div class="hsal">${saludo}</div><h2>${esc(S.nombre || ED.app)}</h2><div class="hfecha">${ahora.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}${dia ? ` · trackers a ${ang >= 0 ? '+' : ''}${fmt(ang)}°` : ' · trackers en posición de reposo'}</div></div>
-    <div class="hstats">${mini('tendido', tr ? ts / tr : 0, '#7fe0c4')}${(() => { const T = foTotales(); return T.tubo ? mini('fibra óptica', T.col / T.tubo, '#9fd3ff') : ''; })()}${mini('fundaciones', fA, '#ffd166')}${HI ? mini('hincado', HI.trk.length ? HI.nH / HI.trk.length : 0, '#c9b6ff') : ''}${(S.cronoTareas || []).length ? mini('cronograma', cronoCalc().P.pct / 100, '#9fd3ff') : ''}</div></div>`;
+    <div class="hizq"><div class="htxt"><div class="hsal">${saludo}</div><h2>${esc(S.nombre || ED.app)}</h2><div class="hfecha">${ahora.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · ${trk}</div></div>
+    <div class="hstats">${mini('tendido', tr ? ts / tr : 0, '#7fe0c4')}${(() => { const T = foTotales(); return T.tubo ? mini('fibra óptica', T.col / T.tubo, '#9fd3ff') : ''; })()}${mini('fundaciones', fA, '#ffd166')}${HI ? mini('hincado', HI.trk.length ? HI.nH / HI.trk.length : 0, '#c9b6ff') : ''}${(S.cronoTareas || []).length ? mini('cronograma', cronoCalc().P.pct / 100, '#9fd3ff') : ''}</div></div>
+    ${typeof climaWidgetHTML === 'function' ? climaWidgetHTML() : ''}</div>`;
 }
 function vResumen(el) {
   actions([['Exportar Excel', 'btn', exportExcel]]);
-  el.innerHTML = `<div class="htop">${heroHTML()}${climaWidgetHTML()}</div>` + modulosHTML();
+  el.innerHTML = heroHTML() + modulosHTML();
   $$('[data-go]', el).forEach((c) => { c.onclick = () => go(c.dataset.go); });
   bindClima(); climaCarga();
 }
