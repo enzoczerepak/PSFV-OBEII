@@ -1180,3 +1180,21 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 .pl-sala { cursor: pointer; } .pl-salab { fill: #f1edff; stroke: #5b45c9; stroke-width: .5; } .pl-salaf { fill: #7a5af8; opacity: .45; }
 .pl-salar { fill: none; stroke: #5b45c9; stroke-width: .18; } .pl-sala.pl-on .pl-salab { stroke-width: 1; stroke: #142033; }
 .pl-stst.pl-salat { font-size: 3.2px; }
+/* ---------- menú: cada frente con su color y su recuadro ---------- */
+#nav .ng { padding: 12px 12px 4px; color: #6f84a6; }
+#nav .ng:first-child { padding-top: 2px; }
+#nav > button[data-view] .ni { color: #b7c4d8; opacity: .95; }
+#nav button[data-view][style*="--mc"] .ni, .sect .ni { color: var(--mc); opacity: 1; }
+#navPill { border-left-color: var(--pc, var(--acc)); background: color-mix(in srgb, var(--pc, #f5a524) 14%, var(--side2)); }
+.sect { border-top: 0; margin: 3px 0 0; padding: 0; border-radius: 10px; box-shadow: inset 3px 0 0 transparent; transition: background .2s, box-shadow .2s; }
+.sect .secth .ni { color: var(--mc); }
+.sect:hover { background: rgba(255,255,255,.025); }
+.sect.open { background: color-mix(in srgb, var(--mc) 7%, rgba(255,255,255,.03)); box-shadow: inset 3px 0 0 var(--mc); }
+.sect.open .secth { color: #fff; }
+.sect.act:not(.open) .secth { background: color-mix(in srgb, var(--mc) 16%, transparent); box-shadow: inset 3px 0 0 var(--mc); }
+.sect .secti { padding-left: 10px; }
+.sect .secti > button[data-view] .ni { color: var(--mc); opacity: .9; }
+#nav > button[data-view][style*="--mc"] { border-radius: 10px; }
+#nav > button[data-view][style*="--mc"]:hover { background: color-mix(in srgb, var(--mc) 10%, transparent); }
+.tgrp .tgh { color: #8fa3c2; }
+#nav > button[data-view][style*="--mc"], .sect:not(.open):not(.act) { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--mc) 45%, transparent); margin-top: 3px; }

@@ -11,12 +11,15 @@ const MENU = [
 ];
 // vistas que no tienen botón propio: se marca la del menú que las contiene
 const MENU_ALIAS = { gantt: 'crono' };
+// color de cada frente de obra: ícono, recuadro de la sección y marca del apartado activo
+const MCOL = { cables: '#2fc4b2', fo: '#5ab8ff', lmt: '#8b9dff', fundaciones: '#f2b33d', sala: '#b294ff', hinc: '#ec7fd0', maqs: '#ff8f57' };
 const GRUPOS = [['BT', 'BT · 0,8 kV', [['plan', 'Plan de corte', 'corte'], ['circ', 'Circuitos', 'circuito']]], ['MT', 'MT · 33 kV', [['plan', 'Plan de corte', 'corte'], ['circ', 'Circuitos', 'circuito']]], ['PAT', 'PAT · Cu desnudo', [['plan', 'Plan de corte', 'corte'], ['circ', 'Tendidos', 'circuito']]]];
 function menuHTML() {
-  const btn = ([v, t, i, tg], tag) => `<button data-view="${v}">${ICO[i] || ''}<span>${t}</span>${tag ? `<em class="tg">${tag}</em>` : tg ? `<em class="tg pronto">${tg}</em>` : ''}</button>`;
+  const btn = ([v, t, i, tg], tag) => `<button data-view="${v}"${MCOL[v] ? ` style="--mc:${MCOL[v]}"` : ''}>${ICO[i] || ''}<span>${t}</span>${tag ? `<em class="tg">${tag}</em>` : tg ? `<em class="tg pronto">${tg}</em>` : ''}</button>`;
   const grupos = `<div class="tgrp"><div class="tgh">Tendidos BT, MT y PAT</div>${GRUPOS.map(([c, n, its]) => `<div class="grp g-${c}" data-cat="${c}"><button class="gh" type="button"><i></i><span class="ghn">${n}</span>${ICO.chev}</button>${its.map(([k, t, i]) => btn([c + '-' + k, t, i], c)).join('')}</div>`).join('')}</div>`;
-  return MENU.map((m) => (Array.isArray(m) ? btn(m)
-    : `<div class="sect" data-sect="${m.s}"><button class="secth" type="button">${ICO[m.ico]}<span>${m.t}</span>${ICO.chev}</button><div class="sectb"><div class="secti">${m.items.map((x) => btn(x)).join('')}${m.grupos ? grupos : ''}</div></div></div>`)).join('') + '<span id="navPill"></span>';
+  let iFr = MENU.findIndex((m) => !Array.isArray(m) || MCOL[m[0]]);
+  return '<div class="ng">General</div>' + MENU.map((m, i) => (i === iFr ? '<div class="ng">Frentes de obra</div>' : '') + (Array.isArray(m) ? btn(m)
+    : `<div class="sect" data-sect="${m.s}" style="--mc:${MCOL[m.s] || 'var(--acc)'}"><button class="secth" type="button">${ICO[m.ico]}<span>${m.t}</span>${ICO.chev}</button><div class="sectb"><div class="secti">${m.items.map((x) => btn(x)).join('')}${m.grupos ? grupos : ''}</div></div></div>`)).join('') + '<span id="navPill"></span>';
 }
 (function armarMenu() {
   const nav = document.getElementById('nav'); if (!nav) return;

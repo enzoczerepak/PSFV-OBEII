@@ -219,6 +219,7 @@ function pillUpd(scroll) {
   const pl = $('#navPill'), b = $(`#nav button[data-view="${navKey}"]`);
   const vis = b && (!b.closest('.sect') || b.closest('.sect').classList.contains('open'));
   if (!b || !vis || view === 'ajustes') { pl.style.opacity = 0; return; }
+  pl.style.setProperty('--pc', (getComputedStyle(b).getPropertyValue('--mc') || '').trim() || 'var(--acc)');
   pl.style.opacity = 1; pl.style.transform = `translateY(${b.offsetTop}px)`; pl.style.left = b.offsetLeft + 'px'; pl.style.width = b.offsetWidth + 'px'; pl.style.height = b.offsetHeight + 'px'; pl.style.right = 'auto';
   if (scroll && window.innerWidth > 860) b.scrollIntoView({ block: 'nearest' });
 }
