@@ -184,7 +184,7 @@ document.addEventListener('click', () => $$('.expdd.on').forEach((x) => x.classL
 const VIEWS = {
   lmt: ['Línea aérea de media tensión (LMT)', () => 'Parque → ET · conductor desnudo Prysalac: el cable no se corta, el avance se lleva por etapas en cada piquete y vano'],
   fo: ['Fibra óptica', () => 'Tubo PEAD de fibra sobre los cables de MT (zanja cerrada o cargada) y cámaras de inspección · comunicaciones entre CTs y sala de celdas'],
-  sala: ['Sala de operación y control', () => 'Construcción de la sala de celdas y operación · próximamente'],
+  sala: ['Edificio de operación y mantenimiento', () => 'Sala de celdas de MT, comunicaciones y control · avance de obra civil por etapa, zapata y viga de fundación'],
   maq: ['Horas de máquinas', () => 'Registro mensual con detalle diario por equipo: horómetro, horas trabajadas, paradas, mantenimientos y disponibilidad'],
   maqev: ['Paradas y mantenimientos', () => 'Horas de parada y de mantenimiento de cada equipo, con motivo y observaciones'],
   maqeq: ['Equipos', () => 'Máquinas de la obra: N° de interno, descripción, marca, modelo y horas acumuladas'],
@@ -264,7 +264,7 @@ function render(anim) {
   const [t, sub] = VIEWS[view];
   const vc = view.split('-')[0];
   setTimeout(badgePartes, 0);
-  $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'fo' ? 'Fibra óptica' : view === 'lmt' ? 'Línea aérea MT' : view === 'sala' ? 'Sala de operación y control' : ['hincado', 'htrk', 'hrec', 'hcat'].includes(view) ? 'Hincado' : MAQ_V.includes(view) ? 'Maquinaria de obra' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
+  $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'fo' ? 'Fibra óptica' : view === 'lmt' ? 'Línea aérea MT' : view === 'sala' ? 'Edificio O&M' : ['hincado', 'htrk', 'hrec', 'hcat'].includes(view) ? 'Hincado' : MAQ_V.includes(view) ? 'Maquinaria de obra' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
   $('#vTitle').innerHTML = (CATN[vc] && view.includes('-') ? `<span class="cchip c-${vc}">${CATL[vc]}</span>` : '') + esc(t); $('#vSub').innerHTML = sub();
   $('#projName').textContent = S.nombre;
   const el = $('#view'), sc = el.scrollTop;

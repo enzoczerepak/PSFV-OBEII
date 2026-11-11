@@ -7,7 +7,7 @@
   // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
   const PROTO = 2;
   // 'hc' catálogo y distribución de hincas, 'ht:' hincado por tracker, 'hr:' recepciones de hincas
-  const nuevo = (k) => k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:');
+  const nuevo = (k) => k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('sv:');
   const conocido = (k) => k === 'cfg' || k === 'comp' || k === 'km' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
 
   // JSON con claves ordenadas: el orden interno de los campos no cuenta como cambio
@@ -33,6 +33,8 @@
     if (S.fibra) { if (S.fibra.cfg) m.set('fc', S.fibra.cfg); Object.entries(S.fibra.z || {}).forEach(([id, v]) => { if (v) m.set('fo:' + id, v); }); }
     // registro de lluvias: criterio ('lu') y un registro por día ('lu:fecha')
     if (S.lluvia) { if (S.lluvia.cfg) m.set('lu', S.lluvia.cfg); Object.entries(S.lluvia.dias || {}).forEach(([f, v]) => { if (v) m.set('lu:' + f, v); }); }
+    // edificio de O&M: avance por etapa y zapata/viga ('sv:etapa|elemento')
+    if (S.sala) Object.entries(S.sala.av || {}).forEach(([k, v]) => { if (v) m.set('sv:' + k, v); });
     // línea aérea de MT: piquetes y etapas ('lc') y avance por etapa y piquete ('lv:')
     if (S.lmt) { if (S.lmt.cfg) m.set('lc', S.lmt.cfg); Object.entries(S.lmt.av || {}).forEach(([k, v]) => { if (v) m.set('lv:' + k, v); }); }
     // registros de versiones más nuevas: se guardan tal cual para no borrarlos
@@ -67,6 +69,7 @@
       if (k === 'lu') { if (!d && v) U.cfg = v; return; }
       const f = k.slice(3); if (d) delete U.dias[f]; else U.dias[f] = v; return;
     }
+    if (k.startsWith('sv:')) { S.sala = S.sala || {}; S.sala.av = S.sala.av || {}; const e = k.slice(3); if (d) delete S.sala.av[e]; else S.sala.av[e] = v; return; }
     if (k === 'lc' || k.startsWith('lv:')) {
       const L = (S.lmt = S.lmt || {}); L.av = L.av || {};
       if (k === 'lc') { if (!d && v) L.cfg = v; return; }
@@ -169,7 +172,7 @@
   }
   // Cliente que se une por primera vez
   function reemplazarPorServidor(S) {
-    S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {}; S.cronoTareas = []; S.cronoMeta = null; S.partes = []; S.maquinas = []; S.maqHoras = []; S.maqEventos = []; S.fibra = { cfg: { cada: 50, adic: 0 }, z: {} }; S.lmt = { cfg: { piquetes: [], etapas: [] }, av: {} }; S.lluvia = { cfg: { desde: today(), umbral: 1 }, dias: {} }; S.hincado = { catalogo: [], matriz: {}, avance: {}, recep: [] };
+    S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {}; S.cronoTareas = []; S.cronoMeta = null; S.partes = []; S.maquinas = []; S.maqHoras = []; S.maqEventos = []; S.fibra = { cfg: { cada: 50, adic: 0 }, z: {} }; S.lmt = { cfg: { piquetes: [], etapas: [] }, av: {} }; S.lluvia = { cfg: { desde: today(), umbral: 1 }, dias: {} }; S.sala = { cfg: {}, av: {} }; S.hincado = { catalogo: [], matriz: {}, avance: {}, recep: [] };
     S.__sync = { snap: {}, meta: {}, pend: {}, rev: 0, peerRev: 0 };
   }
   function marcarTodoPendiente(S) {

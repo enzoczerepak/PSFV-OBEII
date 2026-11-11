@@ -5,7 +5,7 @@ const MENU = [
   ['resumen', 'Inicio', 'inicio'], ['avance', 'Avance de obra', 'avance'], ['plano', 'Plano de obra', 'plano'], ['partes', 'Partes de campo', 'partes'],
   ['crono', 'Cronograma', 'crono'],
   { s: 'cables', t: 'Tendido de cables', ico: 'cable', grupos: true, items: [['cables', 'Resumen de tendido', 'barras'], ['diario', 'Tendido por fecha', 'dia'], ['zanjas', 'Zanjas', 'zanja'], ['bobinas', 'Bobinas', 'bobina'], ['propuesta', 'Propuesta de tendido', 'lista'], ['puntas', 'Puntas de cable', 'punta']] },
-  ['fo', 'Fibra óptica', 'fibra'], ['lmt', 'Línea aérea MT (LMT)', 'poste'], ['fundaciones', 'Fundaciones STS', 'sts'], ['sala', 'Sala de operación y control', 'pc', 'pronto'],
+  ['fo', 'Fibra óptica', 'fibra'], ['lmt', 'Línea aérea MT (LMT)', 'poste'], ['fundaciones', 'Fundaciones STS', 'sts'], ['sala', 'Edificio O&M (sala de celdas)', 'edificio'],
   { s: 'hinc', t: 'Hincado', ico: 'hinca', items: [['hincado', 'Avance de hincado', 'barras'], ['hplano', 'Plano de hincado', 'plano'], ['htrk', 'Distribución por tracker', 'trackers'], ['hrec', 'Recepción de hincas', 'camion'], ['hcat', 'Catálogo y distribución', 'libro']] },
   { s: 'maqs', t: 'Maquinaria de obra', ico: 'maquina', items: [['maq', 'Horas mensuales', 'dia'], ['maqev', 'Paradas y mantenimientos', 'llave'], ['maqeq', 'Equipos', 'camion']] },
 ];
@@ -60,7 +60,7 @@ function movSync(v) {
   const bar = document.getElementById('mbar'); if (!bar) return;
   const T = movTitulo(v);
   bar.querySelector('.mbt small').textContent = T.g || 'PSFV-OBE II';
-  bar.querySelector('.mbt b').innerHTML = (T.cat ? `<i class="c-${T.cat}">${T.cat}</i>` : '') + String(T.t).replace(/^(BT|MT|PAT) · /, '').replace(/[<>&]/g, '');
+  bar.querySelector('.mbt b').innerHTML = (T.cat ? `<i class="c-${T.cat}">${T.cat}</i>` : '') + String(T.t).replace(/^(BT|MT|PAT) · /, '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
   document.querySelectorAll('#mtabs button[data-v]').forEach((b) => b.classList.toggle('on', b.dataset.v === v || (b.dataset.v === 'BT-plan' && /-(plan|circ)$/.test(v))));
   document.querySelectorAll('#msheet [data-v]').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
 }

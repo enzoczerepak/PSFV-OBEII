@@ -137,12 +137,3 @@ function foAvanceHTML() {
 }
 
 // ======================= SALA DE OPERACIÓN Y CONTROL =======================
-function vSala(el) {
-  actions([]);
-  el.innerHTML = `<div class="card" style="max-width:760px;margin:30px auto;text-align:center;padding:40px 30px">
-    <div style="font-size:46px;line-height:1">🏗️</div>
-    <h2 style="margin:14px 0 6px">Construcción de la sala de operación y control</h2>
-    <p class="muted" style="margin:0 0 14px">Sala de celdas de media tensión y sala de operación</p>
-    <span class="pill p-prov" style="font-size:13px;padding:5px 14px">Próximamente</span>
-    <p class="muted" style="margin:18px 0 0;font-size:13px">En este apartado se va a llevar el avance de la obra civil y del montaje electromecánico de la sala.</p></div>`;
-}
