@@ -36,7 +36,7 @@ function heroHTML() {
 }
 function vResumen(el) {
   actions([['Exportar Excel', 'btn', exportExcel]]);
-  el.innerHTML = heroHTML() + modulosHTML();
+  el.innerHTML = `<div class="htop">${heroHTML()}${climaWidgetHTML()}</div>` + modulosHTML();
   $$('[data-go]', el).forEach((c) => { c.onclick = () => go(c.dataset.go); });
   bindClima(); climaCarga();
 }

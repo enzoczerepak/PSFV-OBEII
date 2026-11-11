@@ -1020,3 +1020,19 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 .climaw .cnow { grid-template-columns: auto 1fr; } .climaw .cdat { grid-column: 1 / -1; }
 .clluv { grid-template-columns: 1fr 1fr; gap: 4px 10px; } .clluv span { grid-column: 1 / -1; grid-row: auto; }
 .clluv > div { display: flex; align-items: baseline; gap: 6px; } .clluv b { text-align: left; }
+/* Inicio: banner + clima en la misma fila */
+.htop { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 14px; margin-bottom: 18px; align-items: stretch; }
+.htop .hero { margin-bottom: 0; min-height: 0; height: 100%; }
+.htop .hero .hstats { flex-wrap: wrap; justify-content: flex-end; max-width: 52%; }
+.htop .climaw { margin: 0; padding: 14px 16px; }
+.htop .climaw .chead { margin-bottom: 4px; }
+.htop .climaw .cnow { grid-template-columns: auto auto minmax(0, 1fr); gap: 10px; }
+.htop .climaw .cdat { grid-column: auto; }
+.htop .climaw .cico { font-size: 38px; } .htop .climaw .ctemp { font-size: 30px; }
+.htop .climaw .cprox { margin: 8px 0 6px; } .htop .cmini { grid-template-columns: auto auto auto auto; align-items: baseline; gap: 4px; padding: 4px 6px; }
+.htop .cmini i { font-size: 16px; } .htop .climaw .cfoot { margin-top: 4px; }
+@media (max-width: 1180px) { .htop { grid-template-columns: 1fr; } .htop .hero { min-height: 150px; } .htop .hero .hstats { max-width: none; } }
+.htop .hero { padding: 16px 18px; } .htop .hero .hstats { max-width: 62%; gap: 7px; flex-wrap: nowrap; }
+.htop .hstat { min-width: 0; padding: 6px 9px; border-radius: 10px; } .htop .hstat b { font-size: 17px; } .htop .hstat span { font-size: 10.5px; white-space: nowrap; }
+.htop .htxt h2 { font-size: 24px; } .htop .hfecha { font-size: 12px; }
+@media (max-width: 1180px) { .htop .hero .hstats { flex-wrap: wrap; } }
