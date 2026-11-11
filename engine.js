@@ -145,6 +145,12 @@
     // ---- zanjas y circuitos (los circuitos BT/MT pertenecen a una zanja; la PAT es una por zanja)
     const zlist = (state.zanjas || []).map((z) => Object.assign({}, z, { cat: catDe(z), largo: Number(z.largo) || 0,
       estado: ZANJA.includes(z.estado) ? z.estado : 'no abierta', miembros: [] }));
+    // zanjeo parcial: una zanja abierta puede tener solo parte de su largo excavado (avance, en m)
+    zlist.forEach((z) => {
+      const av = Number(z.avance);
+      z.abiertoM = z.estado === 'cerrada' ? z.largo : z.estado === 'abierta' ? (z.avance != null && z.avance !== '' && isFinite(av) ? r2(Math.max(0, Math.min(av, z.largo))) : z.largo) : 0;
+      z.parcial = z.estado === 'abierta' && z.abiertoM < z.largo - 0.01;
+    });
     const zMap = new Map(zlist.map((z) => [z.id, z]));
     const circuitos = (state.circuitos || []).map((c, i) => {
       const cat = catDe(c), seccion = parseSeccion(c.formacion);
@@ -267,8 +273,15 @@
       c.completo = es.length > 0 && es.every((e) => e === 'ejecutado');
       const ej = c.fz.map((f) => c.fasesInfo[f]).filter((x) => x && x.estado === 'ejecutado');
       c.realTot = r2(ej.reduce((a, x) => a + x.len, 0)); c.teoTot = r2(ej.reduce((a, x) => a + x.teorico, 0)); c.desvio = r2(c.realTot - c.teoTot);
+      // tendido parcial: metros de recorrido con cable ya tendido (sin registrar el corte todavía)
+      const linRef = Number(c.lineal) || c.zanjaLargo || 0, tm = Number(c.tendM) || 0;
+      c.linRef = linRef; c.tendFrac = 0; c.parcialM = 0;
+      if (!c.completo && tm > 0 && linRef > 0) {
+        c.tendFrac = Math.min(1, tm / linRef);
+        c.parcialM = r2(c.fz.reduce((a, f) => a + ((c.fasesInfo[f] || {}).estado === 'ejecutado' ? 0 : c.lenFase * c.tendFrac), 0));
+      }
       c.estado = c.completo ? 'tendido' : es.some((e) => e === 'falta') ? 'falta bobina'
-        : es.some((e) => e === 'ejecutado') ? 'tendido parcial' : c.listo ? 'listo para tender' : c.cat === 'LA' ? 'en espera de postes' : 'en espera de zanja';
+        : es.some((e) => e === 'ejecutado') || c.parcialM > 0 ? 'tendido parcial' : c.listo ? 'listo para tender' : c.cat === 'LA' ? 'en espera de postes' : 'en espera de zanja';
     });
     // PAT y cierre por zanja
     circuitos.forEach((c) => { if (c.vinculo && zMap.has(c.vinculo)) zMap.get(c.vinculo).pat = c; });
@@ -292,7 +305,7 @@
       return {
         key, cat, seccion: Number(s), bobinas: bs.length, stock: sum(bs, 'entrada'), requerido: req, balance: r2(sum(bs, 'entrada') - req),
         tendido: sum(ps.filter((x) => x.estado === 'ejecutado'), 'len'), tendidoTeo: sum(ps.filter((x) => x.estado === 'ejecutado'), 'teorico'), listo: sum(ps.filter((x) => x.estado === 'listo'), 'len'),
-        provisorio: sum(ps.filter((x) => x.estado === 'provisorio'), 'len'), faltante: sum(ps.filter((x) => x.estado === 'falta'), 'len'),
+        provisorio: sum(ps.filter((x) => x.estado === 'provisorio'), 'len'), parcial: r2(circuitos.filter((c) => c.key === key).reduce((a, c) => a + (c.parcialM || 0), 0)), faltante: sum(ps.filter((x) => x.estado === 'falta'), 'len'),
         tramosFalta: ps.filter((x) => x.estado === 'falta').length,
         usadas: bs.filter((b) => b.salidaTotal > 0).length, sinAbrir: bs.filter((b) => b.salidaTotal === 0).length, noSeUsa: bs.filter((b) => b.salidaTotal === 0).length,
         realSinAbrir: bs.filter((b) => b.estadoReal === 'sin abrir').length, realEnUso: bs.filter((b) => b.estadoReal === 'en uso').length, realTerminadas: bs.filter((b) => b.estadoReal === 'terminada').length,
@@ -310,8 +323,10 @@
     const zanjas = {};
     ['BT', 'MT'].forEach((cat) => {
       const zs = zlist.filter((z) => z.cat === cat);
-      const m = (st) => r2(zs.filter((z) => st.includes(z.estado)).reduce((a, z) => a + z.largo, 0));
+      const m = (st) => r2(zs.filter((z) => st.includes(z.estado)).reduce((a, z) => a + z.abiertoM, 0));
+      const par = zs.filter((z) => z.parcial);
       zanjas[cat] = { total: r2(zs.reduce((a, z) => a + z.largo, 0)), realizada: m(['abierta', 'cerrada']), abierta: m(['abierta']), cerrada: m(['cerrada']),
+        nParciales: par.length, parcialFalta: r2(par.reduce((a, z) => a + z.largo - z.abiertoM, 0)),
         n: zs.length, nAbiertas: zs.filter((z) => z.estado === 'abierta').length, nCerradas: zs.filter((z) => z.estado === 'cerrada').length,
         nParaCerrar: zs.filter((z) => z.estado === 'abierta' && z.listoCerrar).length, nCompartidas: zs.filter((z) => z.miembros.length > 1).length };
     });

@@ -2,7 +2,7 @@
 // ======================= RESUMEN =======================
 function zanjaCard(cat) {
   const z = R.zanjas[cat];
-  return `<div class="zrow"><div class="zl"><b>${cat === 'BT' ? 'Baja tensión' : 'Media tensión'}</b><span class="muted">${z.nAbiertas + z.nCerradas}/${z.n} zanjas · ${z.nCerradas} cerradas</span></div>
+  return `<div class="zrow"><div class="zl"><b>${cat === 'BT' ? 'Baja tensión' : 'Media tensión'}</b><span class="muted">${z.nAbiertas + z.nCerradas}/${z.n} zanjas · ${z.nCerradas} cerradas${z.nParciales ? ` · ${z.nParciales} abierta${z.nParciales > 1 ? 's' : ''} en parte (faltan ${fmt(z.parcialFalta)} m)` : ''}</span></div>
     <div class="bar"><div class="c-done" data-w="${pct(z.cerrada, z.total)}"></div><div class="c-acc" data-w="${pct(z.abierta, z.total)}"></div></div>
     <div class="zn"><b>${fmt(z.realizada)}</b> / ${fmt(z.total)} m</div></div>`;
 }
@@ -19,7 +19,7 @@ function heroHTML() {
   const ang = dia ? Math.max(-60, Math.min(60, (f - 0.5) * 150)) : 0; // los trackers apuntan al sol (este → oeste)
   const filas = Array.from({ length: 14 }, (_, i) => i);
   const saludo = h < 5 ? 'Buenas noches' : h < 13 ? 'Buen día' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
-  const ts = R.resumen.reduce((a, r) => a + r.tendido, 0), tr = R.resumen.reduce((a, r) => a + r.requerido, 0);
+  const ts = R.resumen.reduce((a, r) => a + r.tendido + (r.parcial || 0), 0), tr = R.resumen.reduce((a, r) => a + r.requerido, 0);
   const fi = STSL.map((x) => fundInfo(x)), fA = fi.length ? fi.reduce((a, i) => a + i.done, 0) / (fi.length * ETAPAS.length) : 0;
   const HI = window.PLANO && S.hincado ? hincInfo() : null;
   const mini = (t, v, c) => `<div class="hstat"><b style="color:${c}">${fmt(v * 100)}%</b><span>${t}</span></div>`;
@@ -55,34 +55,36 @@ function vCables(el) {
     const tot = Math.max(r.stock, r.requerido);
     const st = !r.bobinas ? '<span class="pill p-warn">sin bobinas</span>' : r.faltante > 0 ? pill('falta cable').replace('p-prov', 'p-bad') : '<span class="pill p-ok">stock suficiente</span>';
     h += `<div class="card sc" data-go="${r.cat}-plan"><div class="hero"><div class="sec">${r.seccion}<small> mm² · ${ctag(r.cat)}${CATN[r.cat]}</small></div><span style="margin-left:auto">${st}</span></div><div class="muted" style="margin:-8px 0 12px">${r.bobinas} bobinas · ${fmt(r.stock)} m en stock</div>
-      <div class="kpis k3">${kpi('Requerido', r.requerido)}${kpi('Tendido', r.tendido)}${kpi('Listo p/ cortar', r.listo)}${kpi('Balance stock', r.balance)}${kpi('Remanente útil previsto', r.remUtil)}${kpi('Descarte previsto', r.descarte)}</div>
+      <div class="kpis k3">${kpi('Requerido', r.requerido)}${kpi('Tendido', r.tendido)}${r.parcial ? kpi('En tendido parcial', r.parcial) : ''}${kpi('Listo p/ cortar', r.listo)}${kpi('Balance stock', r.balance)}${kpi('Remanente útil previsto', r.remUtil)}${kpi('Descarte previsto', r.descarte)}</div>
       <div class="muted" style="margin-top:6px">Bobinas: ${r.realSinAbrir} sin abrir · ${r.realEnUso} en uso · ${r.realTerminadas} terminadas${r.noSeUsa ? ` · ${r.noSeUsa} que el plan no usa` : ''}</div>
       ${r.tendidoTeo ? `<div class="muted" style="margin-top:8px">Tirado vs lista: <span class="dv ${r.desvio > 0.005 ? 'pos' : r.desvio < -0.005 ? 'neg' : ''}">${r.desvio > 0 ? '+' : ''}${fmt(r.desvio, 1)} m (${r.desvio > 0 ? '+' : ''}${fmt(r.desvioPct * 100, 1)} %)</span> sobre ${fmt(r.tendidoTeo)} m tendidos</div>` : ''}
-      <div class="bar"><div class="c-done" data-w="${pct(r.tendido, tot)}"></div><div class="c-ready" data-w="${pct(r.listo, tot)}"></div><div class="c-prov" data-w="${pct(r.provisorio, tot)}"></div><div class="c-bad" data-w="${pct(r.faltante, tot)}"></div><div class="c-rem" data-w="${pct(Math.max(0, r.balance), tot)}"></div></div></div>`;
+      <div class="bar"><div class="c-done" data-w="${pct(r.tendido, tot)}"></div><div class="c-par" data-w="${pct(r.parcial || 0, tot)}"></div><div class="c-ready" data-w="${pct(Math.max(0, r.listo - (r.parcial || 0)), tot)}"></div><div class="c-prov" data-w="${pct(r.provisorio, tot)}"></div><div class="c-bad" data-w="${pct(r.faltante, tot)}"></div><div class="c-rem" data-w="${pct(Math.max(0, r.balance), tot)}"></div></div></div>`;
   });
-  el.innerHTML = h + `</div><div class="legend"><span><i class="c-done"></i>Tendido</span><span><i class="c-ready"></i>Listo p/ cortar</span><span><i class="c-prov"></i>Provisorio</span><span><i class="c-bad"></i>Faltante</span><span><i class="c-rem"></i>Sobrante</span></div>`;
+  el.innerHTML = h + `</div><div class="legend"><span><i class="c-done"></i>Tendido</span><span><i class="c-par"></i>Tendido parcial</span><span><i class="c-ready"></i>Listo p/ cortar</span><span><i class="c-prov"></i>Provisorio</span><span><i class="c-bad"></i>Faltante</span><span><i class="c-rem"></i>Sobrante</span></div>`;
   $$('[data-go]', el).forEach((c) => { c.onclick = () => go(c.dataset.go); });
 }
 
 // ======================= AVANCE =======================
 const SERIE = { BT: '#00939a', MT: '#c97b12', PAT: '#6a5acd', LA: '#2f6fc2' };
-const ST = { tend: '#00797f', listo: '#7fc6c9', pend: '#dfe5ec' };
+const ST = { tend: '#00797f', par: '#3fb0a6', listo: '#a9dcdd', pend: '#dfe5ec' };
 function vAvance(el) {
   actions([['Exportar Excel', 'btn', exportExcel], ['Exportar PDF', 'btn pri', printAvance]]);
-  const sumCat = (cat) => { const rs = R.resumen.filter((r) => r.cat === cat); const f = (k) => rs.reduce((a, r) => a + r[k], 0); return { req: f('requerido'), tend: f('tendido'), listo: f('listo') }; };
+  const sumCat = (cat) => { const rs = R.resumen.filter((r) => r.cat === cat); const f = (k) => rs.reduce((a, r) => a + (r[k] || 0), 0); return { req: f('requerido'), tend: f('tendido'), par: f('parcial'), listo: f('listo') }; };
   const nC = (cat) => { const cs = R.circuitos.filter((c) => c.cat === cat); return [cs.filter((c) => c.completo).length, cs.length]; };
   let h = `<h2 class="sech">Tendido y aprovechamiento de cables</h2><div class="grid g3 stagger" style="margin-bottom:16px">`;
   catsUso().forEach((cat) => {
-    const t = sumCat(cat), [a, b] = nC(cat), p = t.req ? t.tend / t.req : 0;
+    const t = sumCat(cat), [a, b] = nC(cat), p = t.req ? (t.tend + t.par) / t.req : 0;
+    const zc = cat === 'BT' || cat === 'MT' ? R.zanjas[cat] : null;
     h += `<div class="card tile"><div>${Charts.ring(p, SERIE[cat], 'tendido')}</div><div><h3 style="margin-bottom:6px">${ctag(cat)}${CATN[cat]}</h3>
-      <div class="kpis k1" style="gap:6px">${kpi('Metros tendidos', t.tend, `/ ${fmt(t.req)} m`)}${kpi('Circuitos completos', a, `/ ${b}`)}</div>
-      <div class="muted" style="margin-top:6px">${fmt(t.listo)} m listos para cortar</div></div></div>`;
+      <div class="kpis k1" style="gap:6px">${kpi('Metros tendidos', t.tend + t.par, `/ ${fmt(t.req)} m`)}${kpi('Circuitos completos', a, `/ ${b}`)}</div>
+      ${t.par ? `<div class="avdet"><span><i style="background:${ST.tend}"></i>${fmt(t.tend)} m completos</span><span><i style="background:${ST.par}"></i>${fmt(t.par)} m en tendido parcial</span></div>` : ''}
+      <div class="muted" style="margin-top:6px">${fmt(Math.max(0, t.listo - t.par))} m listos para cortar${zc && zc.nParciales ? ` · zanja ${cat}: ${zc.nParciales} abierta${zc.nParciales > 1 ? 's' : ''} en parte` : ''}</div></div></div>`;
   });
   h += `</div><div class="grid g2 stagger">`;
   // por STS (BT)
-  const grupo = (cat, keyf) => { const m = new Map(); R.circuitos.filter((c) => c.cat === cat).forEach((c) => { const k = keyf(c); const o = m.get(k) || { tend: 0, listo: 0, pend: 0, n: 0, ok: 0 }; c.fz.forEach((f) => { const pz = c.fasesInfo[f]; if (!pz) return; if (pz.estado === 'ejecutado') o.tend += pz.len; else if (pz.estado === 'listo') o.listo += pz.len; else o.pend += pz.len; }); o.n++; if (c.completo) o.ok++; m.set(k, o); }); return [...m.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'es', { numeric: true })); };
-  const filas = (g) => g.map(([k, o]) => { const tot = o.tend + o.listo + o.pend; return { label: k, right: `${fmt(tot ? (o.tend / tot) * 100 : 0)}% · ${o.ok}/${o.n} circ.`, parts: [{ v: o.tend, color: ST.tend, name: 'Tendido' }, { v: o.listo, color: ST.listo, name: 'Listo para cortar' }, { v: o.pend, color: ST.pend, name: 'Pendiente' }] }; });
-  const leg = Charts.legend([[ST.tend, 'Tendido'], [ST.listo, 'Listo para cortar'], [ST.pend, 'Pendiente']]);
+  const grupo = (cat, keyf) => { const m = new Map(); R.circuitos.filter((c) => c.cat === cat).forEach((c) => { const k = keyf(c); const o = m.get(k) || { tend: 0, par: 0, listo: 0, pend: 0, n: 0, ok: 0 }; c.fz.forEach((f) => { const pz = c.fasesInfo[f]; if (!pz) return; if (pz.estado === 'ejecutado') { o.tend += pz.len; return; } const pp = pz.len * (c.tendFrac || 0); o.par += pp; if (pz.estado === 'listo') o.listo += pz.len - pp; else o.pend += pz.len - pp; }); o.n++; if (c.completo) o.ok++; m.set(k, o); }); return [...m.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'es', { numeric: true })); };
+  const filas = (g) => g.map(([k, o]) => { const tot = o.tend + o.par + o.listo + o.pend; return { label: k, right: `${fmt(tot ? ((o.tend + o.par) / tot) * 100 : 0)}% · ${o.ok}/${o.n} circ.`, parts: [{ v: o.tend, color: ST.tend, name: 'Tendido' }, { v: o.par, color: ST.par, name: 'Tendido parcial' }, { v: o.listo, color: ST.listo, name: 'Listo para cortar' }, { v: o.pend, color: ST.pend, name: 'Pendiente' }] }; });
+  const leg = Charts.legend([[ST.tend, 'Tendido'], [ST.par, 'Tendido parcial'], [ST.listo, 'Listo para cortar'], [ST.pend, 'Pendiente']]);
   h += `<div class="card"><h3>BT por STS</h3>${Charts.hbars(filas(grupo('BT', (c) => c.hasta)))}${leg}</div>`;
   h += `<div class="card"><h3>MT por circuito</h3>${Charts.hbars(filas(grupo('MT', (c) => c.designacion)), { labelW: 70 })}${leg}</div>`;
   // línea temporal
@@ -101,10 +103,11 @@ function vAvance(el) {
   h += `<div class="card"><h3>Tendido acumulado en el tiempo</h3>${nDias >= 1 ? Charts.line(series.filter((x) => x.pts.length)) + Charts.legend(series.filter((x) => x.pts.length).map((x) => [x.color, CATN[x.name]])) : ''}
     ${nDias < 2 ? `<p class="hint">La curva se completa a medida que se registran tendidos con fecha (en Tender).${series.some((x) => x.sin) ? ' Hay tendidos sin fecha: se suman al inicio.' : ''}</p>` : ''}</div>`;
   // zanjas y bobinas
-  const zf = ['BT', 'MT'].map((cat) => { const z = R.zanjas[cat]; return { label: CATN[cat], right: `${fmt(z.total ? (z.realizada / z.total) * 100 : 0)}% realizada`, parts: [{ v: z.cerrada, color: '#4b5567', name: 'Cerrada' }, { v: z.abierta, color: '#f5a524', name: 'Abierta' }, { v: Math.max(0, z.total - z.realizada), color: ST.pend, name: 'Sin abrir' }] }; });
+  const zf = ['BT', 'MT'].map((cat) => { const z = R.zanjas[cat]; return { label: CATN[cat], right: `${fmt(z.realizada)} / ${fmt(z.total)} m · ${fmt(z.total ? (z.realizada / z.total) * 100 : 0)}%`, parts: [{ v: z.cerrada, color: '#4b5567', name: 'Cerrada' }, { v: z.abierta, color: '#f5a524', name: 'Abierta' }, { v: Math.max(0, z.total - z.realizada), color: ST.pend, name: 'Sin abrir' }] }; });
   const bf = R.resumen.filter((r) => r.bobinas).map((r) => { const bs = R.bobinas.filter((b) => b.key === r.key); const term = bs.filter((b) => b.estadoReal === 'terminada').length, uso = bs.filter((b) => b.estadoReal === 'en uso').length, sin = bs.length - term - uso;
     return { label: `${CATS[r.cat].corto} ${r.seccion}`, right: `${term}/${bs.length} terminadas`, parts: [{ v: term, color: '#4b5567', name: 'Terminadas' }, { v: uso, color: ST.tend, name: 'En uso' }, { v: sin, color: ST.pend, name: 'Sin empezar' }] }; });
-  h += `<div class="card"><h3>Zanjas (metros)</h3>${Charts.hbars(zf, { labelW: 120 })}${Charts.legend([['#4b5567', 'Cerrada'], ['#f5a524', 'Abierta'], [ST.pend, 'Sin abrir']])}
+  const zpar = ['BT', 'MT'].filter((c) => R.zanjas[c].nParciales).map((c) => `${CATN[c]}: ${R.zanjas[c].nParciales} zanja${R.zanjas[c].nParciales > 1 ? 's' : ''} abierta${R.zanjas[c].nParciales > 1 ? 's' : ''} en parte, faltan ${fmt(R.zanjas[c].parcialFalta)} m`);
+  h += `<div class="card"><h3>Zanjas (metros)</h3>${Charts.hbars(zf, { labelW: 120, rightW: 160 })}${Charts.legend([['#4b5567', 'Cerrada'], ['#f5a524', 'Abierta (lo excavado)'], [ST.pend, 'Sin abrir']])}${zpar.length ? `<p class="hint" style="display:block;margin:6px 0 0">${zpar.join(' · ')}</p>` : ''}
     <h3 style="margin-top:18px">Bobinas</h3>${Charts.hbars(bf, { labelW: 80, unit: 'bobinas' })}${Charts.legend([['#4b5567', 'Terminadas'], [ST.tend, 'En uso'], [ST.pend, 'Sin empezar']])}</div>`;
   const ptRows = (() => { const cs = R.circuitos.filter((c) => c.cat !== 'PAT' && c.cat !== 'LA'); const out = []; const add = (label, fn) => { let t = 0, c = 0; cs.forEach((x) => { const r = fn(x); if (r) { t += r[1]; c += r[0]; } }); if (t) out.push({ label, right: `${c}/${t}`, parts: [{ v: c, color: '#4b5567', name: 'Colocadas' }, { v: t - c, color: ST.pend, name: 'Pendientes' }] }); };
     add('BT · lado inversor', (x) => x.cat === 'BT' && [puntasDe(x).o, puntasDe(x).n]); add('BT · lado STS', (x) => x.cat === 'BT' && [puntasDe(x).d, puntasDe(x).n]);

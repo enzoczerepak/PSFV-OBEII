@@ -88,8 +88,18 @@ function vZanjas(el) {
     $('.zl', tr).onchange = (e) => { const sz = S.zanjas.find((x) => x.id === z.id); sz.largo = Math.max(0, Number(e.target.value) || 0); sz.largoPlano = true; commit(`Zanja ${z.titulo}: ${fmt(sz.largo, 1)} m`); };
   });
 }
-const zSeg = (zid, est, okCerrar) => `<span class="zseg" data-id="${zid}">${Engine.ZANJA.map((z) => `<button data-z="${z}" class="${est === z ? 'on z' + z.replace(' ', '') : ''}" ${z === 'cerrada' && !okCerrar && est !== 'cerrada' ? 'title="Faltan tender circuitos de esta zanja"' : ''}>${z === 'no abierta' ? 'No' : z === 'abierta' ? 'Abierta' : 'Cerrada'}</button>`).join('')}</span>${!window.READONLY && R && parcialPosible(R.zlist.find((x) => x.id === zid)) ? `<button class="zpar" data-zp="${zid}" title="Cerrar el tramo con los circuitos ya tendidos; los pendientes pasan a zanja propia">Cierre parcial</button>` : ''}`;
+// botón de avance de una zanja abierta: muestra los metros abiertos y, si hay, el tendido parcial
+function zAvBtn(zid) {
+  const z = R && R.zlist.find((x) => x.id === zid); if (!z || z.estado !== 'abierta') return '';
+  const tp = z.miembros.filter((c) => !c.completo && c.parcialM > 0).length;
+  const txt = z.parcial ? `${fmt(z.abiertoM)}/${fmt(z.largo)} m` : 'toda abierta';
+  const tit = `Zanja abierta ${z.parcial ? `parcialmente: ${fmt(z.abiertoM, 1)} de ${fmt(z.largo, 1)} m` : 'en todo su largo'}${tp ? ` · ${tp} circuito${tp > 1 ? 's' : ''} con tendido parcial` : ''}`;
+  return window.READONLY ? `<span class="zav ro ${z.parcial ? 'par' : ''}" title="${tit}">${txt}${tp ? ' · tendido parcial' : ''}</span>`
+    : `<button class="zav ${z.parcial ? 'par' : ''} ${tp ? 'tp' : ''}" data-zav="${zid}" title="${tit} · tocá para cargar el avance">${ICO.zanja || ''}${txt}${tp ? ' <i>tendido parcial</i>' : ''}</button>`;
+}
+const zSeg = (zid, est, okCerrar) => `<span class="zseg" data-id="${zid}">${Engine.ZANJA.map((z) => `<button data-z="${z}" class="${est === z ? 'on z' + z.replace(' ', '') : ''}" ${z === 'cerrada' && !okCerrar && est !== 'cerrada' ? 'title="Faltan tender circuitos de esta zanja"' : ''}>${z === 'no abierta' ? 'No' : z === 'abierta' ? 'Abierta' : 'Cerrada'}</button>`).join('')}</span>${!window.READONLY && R && parcialPosible(R.zlist.find((x) => x.id === zid)) ? `<button class="zpar" data-zp="${zid}" title="Cerrar el tramo con los circuitos ya tendidos; los pendientes pasan a zanja propia">Cierre parcial</button>` : ''}${zAvBtn(zid)}`;
 function bindZSeg(el) {
+  $$('[data-zav]', el).forEach((b) => { b.onclick = (e) => { e.stopPropagation(); avanceZanja(b.dataset.zav); }; });
   $$('.zpar', el).forEach((b) => { b.onclick = (e) => { e.stopPropagation(); cierreParcial(b.dataset.zp); }; });
   $$('.zseg button', el).forEach((b) => { b.onclick = async (e) => { e.stopPropagation(); const tr = b.closest('tr[data-id]'); ui.flashKeep = tr ? [tr.dataset.id] : null; await setZanja([b.parentElement.dataset.id], b.dataset.z); }; });
 }
@@ -100,7 +110,7 @@ async function setZanja(zids, est) {
   const rz = zids.map((id) => R.zlist.find((x) => x.id === id)).filter(Boolean);
   if (est === 'cerrada') return cerrarZanjas(zids);
   if (est === 'no abierta') { const conT = rz.filter((z) => z.nReal > 0); if (conT.length) toast(`${conT.length} con cable ya tendido: siguen contando como listas`); }
-  zs.forEach((z) => { z.estado = est; if (est === 'cerrada' && !z.fechaCierre) z.fechaCierre = today(); if (est !== 'cerrada') delete z.fechaCierre; });
+  zs.forEach((z) => { z.estado = est; if (est === 'cerrada' && !z.fechaCierre) z.fechaCierre = today(); if (est !== 'cerrada') delete z.fechaCierre; if (est !== 'abierta') { delete z.avance; delete z.avanceF; } });
   ui.flash = ui.flashKeep || [...ui.sel, ...zids]; ui.flashKeep = null;
   ui.sel.clear();
   commit(zs.length === 1 ? `Zanja ${rz[0].titulo}: ${est}` : `${zs.length} zanjas: ${est}`);
@@ -280,4 +290,64 @@ function bindSel(el, list) {
   const all = $('#selAll', el);
   if (all) { all.checked = list.length > 0 && list.every((c) => ui.sel.has(c.id)); all.onchange = (e) => { list.forEach((c) => (e.target.checked ? ui.sel.add(c.id) : ui.sel.delete(c.id))); render(false); }; }
   $$('tbody tr .sel', el).forEach((cb) => { const id = cb.closest('tr').dataset.id; cb.onchange = (e) => { e.target.checked ? ui.sel.add(id) : ui.sel.delete(id); render(false); }; });
+}
+
+// ---- Zanjeo y tendido parcial ----
+// Una zanja abierta puede estar excavada solo en parte (avance, m) y sus circuitos tendidos en parte (tendM: m de recorrido
+// con cable ya tendido). Es solo avance de obra: el plan de corte no cambia y el corte se registra con "Tender" como siempre.
+async function avanceZanja(zid) {
+  if (window.READONLY) return;
+  const z = R.zlist.find((x) => x.id === zid), sz = S.zanjas.find((x) => x.id === zid); if (!z || !sz) return;
+  const pend = z.miembros.filter((c) => !c.completo), hechos = z.miembros.filter((c) => c.completo);
+  const fila = (c) => { const lr = c.linRef || z.largo, v = Number(S.circuitos.find((x) => x.id === c.id).tendM) || 0;
+    return `<div class="avc" data-cid="${c.id}"><div><b class="mono">${esc(c.designacion)}</b> <span class="muted">${esc(c.desde)} → ${esc(c.hasta)}</span><div class="muted">${c.fz.length} conductor${c.fz.length > 1 ? 'es' : ''} · recorrido ${fmt(lr, 1)} m${c.nReal ? ` · ${c.nReal} ya registrado${c.nReal > 1 ? 's' : ''}` : ''}</div></div>
+      <div class="avin"><input type="number" class="tm" step="0.5" min="0" max="${lr}" value="${v || ''}" placeholder="0"><span>/ ${fmt(lr, 1)} m</span></div>
+      <div class="avq"><button class="btn sm ghost" data-q="0">0</button><button class="btn sm ghost" data-q="z" title="Igual a lo abierto de la zanja">= zanja</button><button class="btn sm ghost" data-q="t" title="Todo el recorrido: registrar el tendido completo (bobina y metros)">Completo…</button></div>
+      <div class="avcab muted"></div></div>`; };
+  setTimeout(avUpd, 40);
+  const res = await modal({ title: `Avance · zanja ${esc(z.titulo)}`, wide: true, sub: `${z.cat} · ${fmt(z.largo, 1)} m · ${z.miembros.length} circuito${z.miembros.length > 1 ? 's' : ''}`,
+    body: `<h4 style="margin:2px 0 8px">Zanjeo</h4>
+      <div class="avz"><label>Zanja abierta hasta hoy (m)<input type="number" id="avZ" step="0.5" min="0" max="${z.largo}" value="${z.abiertoM}"></label>
+        <div class="avbar"><div id="avZb"></div></div><span id="avZt" class="muted"></span>
+        <button class="btn sm ghost" id="avZall">Toda (${fmt(z.largo, 1)} m)</button><label class="avf">Fecha<input type="date" id="avF" value="${sz.avanceF || today()}"></label></div>
+      <h4 style="margin:16px 0 4px">Tendido de cable en la zanja</h4>
+      ${pend.length ? `<p class="hint" style="margin:0 0 6px">Cargá cuántos metros del recorrido de cada circuito ya tienen el cable tendido. Si se tendió todo, usá <b>Completo…</b> para registrar el tendido con su bobina, como siempre.</p>${pend.map(fila).join('')}` : '<p class="muted">Todos los circuitos de esta zanja están tendidos.</p>'}
+      ${hechos.length ? `<div class="muted" style="margin-top:8px">Tendidos completos: ${hechos.map((c) => esc(c.designacion)).join(', ')}</div>` : ''}
+      <p class="hint">Es avance de obra: suma en el resumen de avance como zanja abierta y cable en tendido parcial. El plan de corte no cambia: los cortes de esta zanja siguen listos para cortar y se descuentan de la bobina cuando registrás el tendido completo.</p>`,
+    buttons: [['Cancelar', 'btn', () => null], ['Guardar avance', 'btn pri', (box) => {
+      const av = Math.max(0, Math.min(z.largo, Number($('#avZ', box).value) || 0));
+      const tm = $$('.avc', box).map((row) => ({ cid: row.dataset.cid, v: Math.max(0, Number($('.tm', row).value) || 0) }));
+      return { av, fecha: $('#avF', box).value || today(), tm };
+    }]] });
+  if (!res) return;
+  sz.avance = res.av >= z.largo - 0.01 ? undefined : res.av; if (sz.avance === undefined) delete sz.avance;
+  sz.avanceF = res.fecha;
+  let nT = 0;
+  res.tm.forEach(({ cid, v }) => { const c = S.circuitos.find((x) => x.id === cid); const rc = R.circuitos.find((x) => x.id === cid); const lr = rc.linRef || z.largo;
+    if (v > 0) { c.tendM = Math.round(Math.min(v, lr) * 100) / 100; c.tendF = res.fecha; nT++; } else { delete c.tendM; delete c.tendF; } });
+  ui.flash = [zid, ...res.tm.map((x) => x.cid)];
+  commit(`Zanja ${z.titulo}: ${res.av >= z.largo - 0.01 ? 'abierta completa' : `${fmt(res.av, 1)} de ${fmt(z.largo, 1)} m abiertos`}${nT ? ` · ${nT} circuito${nT > 1 ? 's' : ''} con tendido parcial` : ''}`);
+}
+document.addEventListener('input', (e) => { if (e.target.closest('#modal') && (e.target.id === 'avZ' || e.target.classList.contains('tm'))) avUpd(); });
+document.addEventListener('click', (e) => {
+  const box = e.target.closest('#modal'); if (!box || !$('#avZ', box)) return;
+  if (e.target.id === 'avZall') { $('#avZ', box).value = $('#avZ', box).max; avUpd(); return; }
+  const q = e.target.closest('[data-q]'); if (!q) return;
+  const row = q.closest('.avc'), inp = $('.tm', row);
+  if (q.dataset.q === '0') inp.value = '';
+  else if (q.dataset.q === 'z') inp.value = Math.min(Number($('#avZ', box).value) || 0, Number(inp.max) || 0);
+  else { $('#modal').classList.add('hidden'); setTimeout(() => tender(row.dataset.cid), 60); return; }
+  avUpd();
+});
+function avUpd() {
+  const box = $('#modal'), zi = $('#avZ', box); if (!zi) return;
+  const L = Number(zi.max) || 0, v = Math.max(0, Math.min(L, Number(zi.value) || 0));
+  $('#avZb', box).style.width = (L ? (v / L) * 100 : 0) + '%';
+  $('#avZt', box).textContent = L ? `${fmt((v / L) * 100)} % · faltan ${fmt(L - v, 1)} m` : '';
+  $$('.avc', box).forEach((row) => {
+    const rc = R.circuitos.find((c) => c.id === row.dataset.cid), inp = $('.tm', row), lr = Number(inp.max) || 0, t = Math.max(0, Number(inp.value) || 0);
+    const pend = rc.fz.filter((f) => (rc.fasesInfo[f] || {}).estado !== 'ejecutado').length, cab = lr ? Math.min(1, t / lr) * rc.lenFase * pend : 0;
+    inp.classList.toggle('bad', t > v + 0.01);
+    $('.avcab', row).innerHTML = t > 0 ? `≈ <b>${fmt(cab, 1)} m</b> de cable tendido (${fmt(lr ? Math.min(100, (t / lr) * 100) : 0)} %)${t > v + 0.01 ? ' · <span style="color:var(--bad)">más que la zanja abierta</span>' : ''}` : '';
+  });
 }

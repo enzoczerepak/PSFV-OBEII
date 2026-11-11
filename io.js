@@ -162,17 +162,17 @@
       b.asigListo, b.asigProv, b.cortesPend, b.remanente, Math.round(b.aprovech * 1000) / 10, b.estado, b.obs || '']));
     XLSX.utils.book_append_sheet(wb, sheet(bob, [6, 9, 12, 10, 12, 8, 11, 11, 13, 13, 11, 11, 18, 16, 14, 20, 14, 15, 24]), 'Bobinas');
 
-    const cir = [['Tipo', 'Designación', 'Desde', 'Hasta', 'Formación', 'Cantidad (m)', 'm por conductor', 'Largo zanja (m)', 'Zanja', 'Bobinas', 'Estado']];
+    const cir = [['Tipo', 'Designación', 'Desde', 'Hasta', 'Formación', 'Cantidad (m)', 'm por conductor', 'Largo zanja (m)', 'Zanja', 'Bobinas', 'Estado', 'Tendido parcial (m recorrido)', 'Tendido parcial (m cable)']];
     R.circuitos.forEach((c) => {
       const bs = c.fz.map((f) => { const p = c.fasesInfo[f]; return p ? (f === 'C' ? '' : f + ' ') + (p.bobina || (p.sinBobina ? 'sin bobina' : 'FALTA')) + (p.estado === 'ejecutado' ? ' ✓' : '') : ''; }).join(' | ');
-      cir.push([c.cat, c.designacion, c.desde, c.hasta, c.formacion, c.cantidad, c.lenFase, c.zanjaLargo, c.zanja, bs, c.estado]);
+      cir.push([c.cat, c.designacion, c.desde, c.hasta, c.formacion, c.cantidad, c.lenFase, c.zanjaLargo, c.zanja, bs, c.estado, c.parcialM ? Number(c.tendM) || 0 : '', c.parcialM || '']);
     });
-    XLSX.utils.book_append_sheet(wb, sheet(cir, [6, 16, 24, 24, 20, 12, 14, 14, 11, 50, 18]), 'Circuitos');
+    XLSX.utils.book_append_sheet(wb, sheet(cir, [6, 16, 24, 24, 20, 12, 14, 14, 11, 50, 18, 16, 16]), 'Circuitos');
 
-    const zan = [['Tipo', 'Zanja', 'Circuitos', 'Largo zanja (m)', 'Estado', 'Fecha cierre', 'Cable tendido', 'PAT tendida', 'Bobina PAT']];
-    R.zlist.forEach((z) => zan.push([z.cat, z.titulo, z.miembros.map((c) => c.designacion).join(' + '), z.largo, z.estado, z.fechaCierre || '', `${z.nReal}/${z.nCond}`,
+    const zan = [['Tipo', 'Zanja', 'Circuitos', 'Largo zanja (m)', 'Estado', 'Abierto (m)', 'Fecha cierre', 'Cable tendido', 'PAT tendida', 'Bobina PAT']];
+    R.zlist.forEach((z) => zan.push([z.cat, z.titulo, z.miembros.map((c) => c.designacion).join(' + '), z.largo, z.parcial ? 'abierta en parte' : z.estado, z.abiertoM, z.fechaCierre || '', `${z.nReal}/${z.nCond}`,
       z.pat && z.pat.completo ? 'Sí' : 'No', z.pat && z.pat.fasesInfo.C ? z.pat.fasesInfo.C.bobina || '' : '']));
-    XLSX.utils.book_append_sheet(wb, sheet(zan, [6, 30, 30, 14, 11, 12, 13, 11, 10]), 'Zanjas');
+    XLSX.utils.book_append_sheet(wb, sheet(zan, [6, 30, 30, 14, 15, 11, 12, 13, 11, 10]), 'Zanjas');
     ['BT', 'MT'].forEach((cat) => {
       const L = Engine.propuesta(state, cat); if (!L.length) return;
       const pr = [['Lote', 'Zona', 'Zanjas', 'Circuitos', 'Zanja a abrir (m)', 'Cable a tender (m)', 'Bobinas que empieza', 'Bobinas que termina', 'Bobinas en uso al terminar', '% acumulado']];
