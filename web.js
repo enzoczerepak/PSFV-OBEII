@@ -131,8 +131,11 @@ window.READONLY = true;
   const no = async () => null;
   window.api = {
     load: () => cargado, seed: async () => (await cargado).text, save: async () => true, open: no, saveAs: no, pickExcel: no,
-    saveBinary: async (data, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data])); a.download = name; document.body.appendChild(a); a.click(); a.remove(); return null; },
-    printPDF: async () => { window.print(); return null; }, openPath: no, showItem: no,
+    // en la app de Android los archivos y las impresiones pasan por el puente nativo (AndroidApp)
+    saveBinary: async (data, name) => {
+      if (window.AndroidApp && AndroidApp.guardar) { const b = new Blob([data]); const b64 = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.readAsDataURL(b); }); AndroidApp.guardar(b64, name, ''); return null; }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data])); a.download = name; document.body.appendChild(a); a.click(); a.remove(); return null; },
+    printPDF: async (o) => { if (window.AndroidApp && AndroidApp.imprimir) { const fin = new Promise((ok) => { window.__impFin = () => { window.__impFin = null; ok(null); }; }); AndroidApp.imprimir(String((typeof o === 'string' ? o : o && (o.name || o.nombre)) || document.title || 'OBE II').replace(/\.pdf$/i, '')); return fin; } window.print(); return null; }, openPath: no, showItem: no,
     info: async () => ({ version: 'visor web', userData: '' }), onOpenFile: () => {},
     netCfg: async () => ({ modo: 'local', ips: [], puerto: 0 }), netSetCfg: async () => ({ modo: 'local', ips: [] }), netClientes: async () => [], netSync: async () => ({ ok: false }),
     onNetReq: () => {}, netReply: () => {}, netServidores: async () => [], netObra: async () => true,

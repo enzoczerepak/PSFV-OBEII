@@ -1099,3 +1099,4 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
   #toasts { bottom: calc(72px + env(safe-area-inset-bottom)) !important; right: 12px; left: 12px; }
 }
 @media print { #mbar, #mtabs, #msheet { display: none !important; } }
+.lgapk { display: block; margin-top: 14px; text-align: center; padding: 11px; border-radius: 10px; background: #e8f5f5; color: #00797f; font-weight: 600; text-decoration: none; font-size: 14px; }

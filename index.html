@@ -13,7 +13,8 @@
 <label>Usuario<input type="text" id="lgU" autocomplete="username" required></label>
 <label>Contraseña<input type="password" id="lgP" autocomplete="current-password" required></label>
 <label class="lgchk"><input type="checkbox" id="lgR" checked> Recordarme en este equipo</label>
-<button class="btn pri" id="lgB" type="submit">Ingresar</button><div id="lgE" class="lgerr"></div></form></div>
+<button class="btn pri" id="lgB" type="submit">Ingresar</button><div id="lgE" class="lgerr"></div><a id="lgApk" class="lgapk" href="OBE-II.apk" download="OBE-II.apk">📱 Descargar la app para Android</a></form></div>
+<script>if (window.AndroidApp || !/Android/i.test(navigator.userAgent)) document.getElementById('lgApk').style.display = 'none';</script>
 <aside id="side">
   <div class="brand">
     <svg viewBox="0 0 40 40" class="logo" aria-hidden="true">
