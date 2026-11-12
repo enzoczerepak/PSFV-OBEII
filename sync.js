@@ -7,7 +7,7 @@
   // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
   const PROTO = 2;
   // 'hc' catálogo y distribución de hincas, 'ht:' hincado por tracker, 'hr:' recepciones de hincas
-  const nuevo = (k) => k === 'tb' || k.startsWith('te:') || k.startsWith('tn:') || k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('sv:');
+  const nuevo = (k) => k === 'tb' || k.startsWith('te:') || k.startsWith('tn:') || k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('la:') || k.startsWith('sv:');
   const conocido = (k) => k === 'cfg' || k === 'comp' || k === 'km' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
 
   // JSON con claves ordenadas: el orden interno de los campos no cuenta como cambio
@@ -32,7 +32,7 @@
     // fibra óptica: criterio y un registro por zanja de MT
     if (S.fibra) { if (S.fibra.cfg) m.set('fc', S.fibra.cfg); Object.entries(S.fibra.z || {}).forEach(([id, v]) => { if (v) m.set('fo:' + id, v); }); }
     // registro de lluvias: criterio ('lu') y un registro por día ('lu:fecha')
-    if (S.lluvia) { if (S.lluvia.cfg) m.set('lu', S.lluvia.cfg); Object.entries(S.lluvia.dias || {}).forEach(([f, v]) => { if (v) m.set('lu:' + f, v); }); }
+    if (S.lluvia) { if (S.lluvia.cfg) m.set('lu', S.lluvia.cfg); Object.entries(S.lluvia.dias || {}).forEach(([f, v]) => { if (v) m.set('lu:' + f, v); }); Object.entries(S.lluvia.auto || {}).forEach(([f, v]) => { if (v) m.set('la:' + f, v); }); }
     // edificio de O&M: avance por etapa y zapata/viga ('sv:etapa|elemento')
     if (S.sala) Object.entries(S.sala.av || {}).forEach(([k, v]) => { if (v) m.set('sv:' + k, v); });
     // línea aérea de MT: piquetes y etapas ('lc') y avance por etapa y piquete ('lv:')
@@ -66,6 +66,7 @@
       if (d) { if (i >= 0) H.recep.splice(i, 1); } else if (i >= 0) H.recep[i] = v; else H.recep.push(v);
       return;
     }
+    if (k.startsWith('la:')) { const U = (S.lluvia = S.lluvia || {}); U.auto = U.auto || {}; const f = k.slice(3); if (d) delete U.auto[f]; else U.auto[f] = v; return; }
     if (k === 'lu' || k.startsWith('lu:')) {
       const U = (S.lluvia = S.lluvia || {}); U.dias = U.dias || {};
       if (k === 'lu') { if (!d && v) U.cfg = v; return; }

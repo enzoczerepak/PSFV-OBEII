@@ -1,6 +1,7 @@
 /* PSFV-OBE II · Clima en el parque (pronóstico Open-Meteo, observación de la estación SMN Oberá) y registro de días de lluvia de la obra.
    Datos: S.lluvia = { cfg: { desde (AAAA-MM-DD), umbral (mm) }, dias: { fecha: { mm, man } } }
-   dias[f] = { mm (estimación de Open-Meteo, solo referencia), man (true/false: el día se marcó a mano como de lluvia o no), trab ('si' | 'parcial' | 'no': si se trabajó) }
+   dias[f] = { man (true/false: el día se marcó a mano como de lluvia o no), trab ('si' | 'parcial' | 'no': si se trabajó) }
+   auto[f] = { mm (estimación de Open-Meteo, solo referencia), smn (observaciones con lluvia de la estación SMN Oberá) } · solo lo escribe el servidor
    Un día es "de lluvia" si se marcó a mano; sin marca se sugiere con la estimación (≥ umbral mm). */
 const OBERA = { lat: -27.4857, lon: -55.0692, nombre: 'el parque (27°29′08″S 55°04′09″O)' };
 // estación meteorológica más cercana con datos abiertos: SMN Oberá (observación horaria, "tiempo presente")
@@ -18,11 +19,11 @@ const smnDir = (t) => SMN_DIR[String(t || '').toLowerCase().trim()] || t || '';
 const SMN_ICO = { despejado: '☀️', parcial: '⛅', nublado: '☁️', niebla: '🌫️', llovizna: '🌦️', lluvia: '🌧️', tormenta: '⛈️' };
 // registra en el día las observaciones de la estación con lluvia (sirven para sugerir el "¿Llovió?")
 function smnRegistrar(o) {
-  if (window.READONLY || !o || !o.fecha || o.offline || !smnLluvia(o.estado)) return;
+  if (!lluRegistra() || !o || !o.fecha || o.offline || !smnLluvia(o.estado)) return;
   const L = lluS(); if (o.fecha < L.cfg.desde) return;
-  const d = Object.assign({}, L.dias[o.fecha] || {}), obs = (d.smn || []).slice(), txt = `${o.hora} ${o.estado}`;
+  const a = Object.assign({}, L.auto[o.fecha] || {}), obs = (lluAuto(o.fecha).smn || []).slice(), txt = `${o.hora} ${o.estado}`;
   if (obs.includes(txt)) return;
-  obs.push(txt); d.smn = obs; L.dias[o.fecha] = d; commit();
+  obs.push(txt); a.smn = obs; L.auto[o.fecha] = a; commit();
 }
 async function smnCarga() {
   if (!window.api || !window.api.smn) return null;
@@ -42,28 +43,34 @@ const WMO = { 0: ['☀️', 'Despejado'], 1: ['🌤️', 'Mayormente despejado']
 const wmo = (c, noche) => { const w = WMO[c] || ['🌡️', '—']; return noche && (c === 0 || c === 1) ? ['🌙', w[1]] : w; };
 const DIRV = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
 const dirV = (g) => DIRV[Math.round(((g % 360) + 360) % 360 / 45) % 8];
-const lluS = () => { S.lluvia = S.lluvia || {}; S.lluvia.cfg = S.lluvia.cfg || { desde: '2026-11-10', umbral: 1 }; S.lluvia.dias = S.lluvia.dias || {}; return S.lluvia; };
-const esLluvia = (f) => { const L = lluS(), d = L.dias[f]; if (!d) return false; if (d.man === true) return true; if (d.man === false) return false; return (Number(d.mm) || 0) >= (Number(L.cfg.umbral) || 1) || !!(d.smn && d.smn.length); };
+const lluS = () => { S.lluvia = S.lluvia || {}; S.lluvia.cfg = S.lluvia.cfg || { desde: '2026-11-10', umbral: 1 }; S.lluvia.dias = S.lluvia.dias || {}; S.lluvia.auto = S.lluvia.auto || {}; return S.lluvia; };
+// lo automático (mm estimados y observaciones del SMN) va aparte de lo que se marca a mano, y cada uno se sincroniza por separado:
+// así una PC que refresca el clima nunca pisa el "¿Llovió?" / "¿Se trabajó?" que se cargó en otra. Los días viejos pueden tenerlo mezclado.
+const lluAuto = (f) => { const L = lluS(), a = L.auto[f], d = L.dias[f] || {}; return { mm: a && a.mm != null ? a.mm : d.mm, smn: (a && a.smn) || d.smn || null }; };
+const lluMan = (f) => { const d = lluS().dias[f] || {}; return { man: d.man, trab: d.trab }; };
+// el clima automático lo registra solo la PC servidor (o la única PC si no hay red)
+const lluRegistra = () => !window.READONLY && !(typeof NET !== 'undefined' && NET && NET.modo === 'cliente');
+const esLluvia = (f) => { const L = lluS(), m = lluMan(f); if (m.man === true) return true; if (m.man === false) return false; const a = lluAuto(f); return (Number(a.mm) || 0) >= (Number(L.cfg.umbral) || 1) || !!(a.smn && a.smn.length); };
 function lluCuenta() {
   const L = lluS(), hoy = today(), lun = lunesDe(hoy), dom = sumDias(lun, 6);
   const fs = []; for (let f = L.cfg.desde; f <= hoy; f = sumDias(f, 1)) fs.push(f);
   const lluv = fs.filter(esLluvia), tr = (f) => (L.dias[f] || {}).trab, sem = (f) => f >= lun && f <= dom;
   const perd = lluv.filter((f) => tr(f) === 'no'), parc = lluv.filter((f) => tr(f) === 'parcial');
   return { semana: lluv.filter(sem).length, obra: lluv.length, dias: fs.length, lista: lluv, desde: L.cfg.desde,
-    perdSem: perd.filter(sem).length, perdObra: perd.length, parcObra: parc.length, sinDato: lluv.filter((f) => !tr(f)).length,
-    mmObra: fs.reduce((a, f) => a + (Number((L.dias[f] || {}).mm) || 0), 0) };
+    perdSem: perd.filter(sem).length, perdObra: perd.length, parcObra: parc.length, parcSem: parc.filter(sem).length, sinDato: lluv.filter((f) => !tr(f)).length,
+    mmObra: fs.reduce((a, f) => a + (Number(lluAuto(f).mm) || 0), 0) };
 }
 // guarda los mm diarios desde el inicio del registro (solo días ya transcurridos); conserva las marcas manuales
 function lluActualizar(d) {
-  if (window.READONLY || !d || !d.daily) return;
+  if (!lluRegistra() || !d || !d.daily) return;
   const L = lluS(), hoy = today(); let cambio = false;
   d.daily.time.forEach((f, i) => {
     if (f < L.cfg.desde || f > hoy) return;
     // hoy: solo lo que ya llovió (horas transcurridas), no lo pronosticado para el resto del día
     let v = Number(d.daily.precipitation_sum[i]) || 0;
     if (f === hoy && d.hourly) { const hh = new Date().getHours(); v = d.hourly.time.reduce((a, t, k) => a + (t.slice(0, 10) === f && Number(t.slice(11, 13)) <= hh ? Number(d.hourly.precipitation[k]) || 0 : 0), 0); }
-    const mm = Math.round(v * 10) / 10, o = L.dias[f] || {};
-    if (o.mm !== mm) { L.dias[f] = Object.assign({}, o, { mm }); cambio = true; }
+    const mm = Math.round(v * 10) / 10, a = L.auto[f] || {};
+    if (a.mm !== mm || lluAuto(f).mm !== mm) { L.auto[f] = Object.assign({}, a, { mm }); cambio = true; }
   });
   if (cambio) commit();
 }
@@ -105,7 +112,7 @@ function heroRefrescar() {
 // ---- panel del clima (dentro del banner del Inicio) ----
 function climaWidgetHTML() {
   const C = lluCuenta();
-  const pie = `<div class="clluv"><span>🌧️ Lluvia en la obra <small>desde ${fechaCorta(C.desde).slice(0, 5)}</small></span><div><b>${C.semana}</b><small>días esta semana</small></div><div><b>${C.obra}</b><small>días en total</small></div><div><b class="perd">${C.perdSem}</b><small>jornadas perdidas (sem.)</small></div><div><b class="perd">${C.perdObra}</b><small>jornadas perdidas</small></div></div>`;
+  const pie = `<div class="clluv"><span>🌧️ Lluvia en la obra <small>desde ${fechaCorta(C.desde).slice(0, 5)}</small></span><div><b>${C.semana}</b><small>días esta semana</small></div><div><b>${C.obra}</b><small>días en total</small></div><div><b class="perd">${C.perdSem}</b><small>jornadas perdidas (sem.)${C.parcSem ? `<br>+ ${C.parcSem} parcial${C.parcSem > 1 ? 'es' : ''}` : ''}</small></div><div><b class="perd">${C.perdObra}</b><small>jornadas perdidas${C.parcObra ? `<br>+ ${C.parcObra} parcial${C.parcObra > 1 ? 'es' : ''}` : ''}</small></div></div>`;
   if (!CLIMA || !CLIMA.d) return `<div class="hclima" id="climaW" title="Pronóstico extendido"><div class="chead"><b>Clima en la obra</b><span>pronóstico ›</span></div><div class="cnow"><div class="cico">🌡️</div><div class="cdat">${CLIMA && CLIMA.error ? 'Sin conexión para traer el pronóstico' : 'Cargando el pronóstico…'}</div></div>${pie}</div>`;
   const d = CLIMA.d, c = d.current, sm = smnFresco(), sc = sm && smnCond(sm.estado);
   let [ic, tx] = wmo(c.weather_code, !c.is_day);
@@ -144,7 +151,7 @@ async function verClima() {
   cuerpo += `<h3 style="margin:18px 0 6px">Días de lluvia y jornadas de la obra</h3>
     <div class="kpis k4" style="margin-bottom:10px">${kpi('Días de lluvia esta semana', C.semana, 'días', 0)}${kpi('Días de lluvia desde el ' + fechaCorta(C.desde), C.obra, `de ${C.dias} días`, 0)}${kpi('Jornadas perdidas por lluvia', C.perdObra, `días${C.parcObra ? ` + ${C.parcObra} parcial${C.parcObra === 1 ? '' : 'es'}` : ''}`, 0)}${kpi('Jornadas perdidas esta semana', C.perdSem, 'días', 0)}</div>
     ${C.sinDato && !ro ? `<div class="alert" style="display:block;margin-bottom:8px">Hay ${C.sinDato} día${C.sinDato === 1 ? '' : 's'} de lluvia sin indicar si se trabajó.</div>` : ''}
-    <div class="tblwrap" style="max-height:320px"><table class="tbl"><thead><tr><th>Fecha</th><th>¿Llovió?</th><th>¿Se trabajó?</th><th title="Observaciones con lluvia de la estación SMN Oberá (se registran mientras el programa está abierto)">Estación SMN</th><th class="n" title="Estimación del servicio de clima para el parque, solo de referencia">Estimado (mm)</th></tr></thead><tbody>${fs.map((f) => { const o = L.dias[f] || {}, si = esLluvia(f), sug = o.man == null;
+    <div class="tblwrap" style="max-height:320px"><table class="tbl"><thead><tr><th>Fecha</th><th>¿Llovió?</th><th>¿Se trabajó?</th><th title="Observaciones con lluvia de la estación SMN Oberá (se registran mientras el programa está abierto)">Estación SMN</th><th class="n" title="Estimación del servicio de clima para el parque, solo de referencia">Estimado (mm)</th></tr></thead><tbody>${fs.map((f) => { const o = Object.assign({}, lluAuto(f), lluMan(f)), si = esLluvia(f), sug = o.man == null;
       return `<tr><td>${['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][new Date(f + 'T12:00').getDay()]} ${fechaCorta(f)}${f === today() ? ' <span class="muted">(hoy)</span>' : ''}</td>
         <td style="white-space:nowrap">${seg(f, 'man', '1', '🌧️ Sí', si, sug ? 'csug' : 'pri')} ${seg(f, 'man', '0', 'No', !si, sug ? 'csug' : 'pri')}${sug ? ' <small class="muted">sugerido</small>' : ''}</td>
         <td style="white-space:nowrap">${seg(f, 'trab', 'si', 'Sí', o.trab === 'si')} ${seg(f, 'trab', 'parcial', 'Parcial', o.trab === 'parcial')} ${seg(f, 'trab', 'no', 'No', o.trab === 'no', 'danger')}</td>
@@ -158,10 +165,14 @@ async function verClima() {
     $('#lluDesde', box).onchange = (e) => { if (e.target.value) { L.cfg.desde = e.target.value; commit('Registro de lluvias desde ' + fechaCorta(e.target.value)); cerrarModal(); climaCarga(true).then(() => verClima()); } };
     $('#lluUmb', box).onchange = (e) => { const v = Number(e.target.value); if (v > 0) { L.cfg.umbral = v; commit(`Día de lluvia: desde ${fmt(v, 1)} mm`); cerrarModal(); verClima(); } };
     $$('[data-c]', box).forEach((b) => { b.onclick = () => {
-      const f = b.dataset.f, o = Object.assign({}, L.dias[f] || {}), sc = box.querySelector('.mbody') || box, top = sc.scrollTop;
+      const f = b.dataset.f, o = lluMan(f), vie = L.dias[f] || {};
+      if ((vie.mm != null || vie.smn) && !L.auto[f]) L.auto[f] = Object.assign({}, vie.mm != null ? { mm: vie.mm } : {}, vie.smn ? { smn: vie.smn } : {});
+      const sc = box.querySelector('.mbody') || box, top = sc.scrollTop;
       if (b.dataset.c === 'man') o.man = b.dataset.v === '1'; else if (o.trab === b.dataset.v) delete o.trab; else o.trab = b.dataset.v;
       if (b.dataset.c === 'trab' && o.trab && o.trab !== 'si' && o.man == null) o.man = true;
-      L.dias[f] = o; commit(`${fechaCorta(f)}: ${esLluvia(f) ? 'día de lluvia' : 'sin lluvia'}${o.trab ? ' · se trabajó: ' + o.trab : ''}`);
+      if (o.man == null) delete o.man; if (!o.trab) delete o.trab;
+      if (Object.keys(o).length) L.dias[f] = o; else delete L.dias[f];
+      commit(`${fechaCorta(f)}: ${esLluvia(f) ? 'día de lluvia' : 'sin lluvia'}${o.trab ? ' · se trabajó: ' + o.trab : ''}`);
       cerrarModal(); verClima().then(() => {}); setTimeout(() => { const n = $('#modal .mbody') || $('#modal .mbox'); if (n) n.scrollTop = top; }, 60);
     }; });
   }
