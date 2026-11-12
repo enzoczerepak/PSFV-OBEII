@@ -7,7 +7,7 @@
   // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
   const PROTO = 2;
   // 'hc' catálogo y distribución de hincas, 'ht:' hincado por tracker, 'hr:' recepciones de hincas
-  const nuevo = (k) => k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('sv:');
+  const nuevo = (k) => k === 'tb' || k.startsWith('te:') || k.startsWith('tn:') || k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('sv:');
   const conocido = (k) => k === 'cfg' || k === 'comp' || k === 'km' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
 
   // JSON con claves ordenadas: el orden interno de los campos no cuenta como cambio
@@ -37,6 +37,8 @@
     if (S.sala) Object.entries(S.sala.av || {}).forEach(([k, v]) => { if (v) m.set('sv:' + k, v); });
     // línea aérea de MT: piquetes y etapas ('lc') y avance por etapa y piquete ('lv:')
     if (S.lmt) { if (S.lmt.cfg) m.set('lc', S.lmt.cfg); Object.entries(S.lmt.av || {}).forEach(([k, v]) => { if (v) m.set('lv:' + k, v); }); }
+    // trackers: BOM del fabricante ('tb'), entregas recibidas ('te:') y reclamos al fabricante ('tn:')
+    if (S.trackers) { if (S.trackers.bom) m.set('tb', S.trackers.bom); (S.trackers.ent || []).forEach((x) => m.set('te:' + x.id, x)); (S.trackers.recl || []).forEach((x) => m.set('tn:' + x.id, x)); }
     // registros de versiones más nuevas: se guardan tal cual para no borrarlos
     Object.entries(S.__otros || {}).forEach(([k, v]) => m.set(k, v));
     return m;
@@ -68,6 +70,13 @@
       const U = (S.lluvia = S.lluvia || {}); U.dias = U.dias || {};
       if (k === 'lu') { if (!d && v) U.cfg = v; return; }
       const f = k.slice(3); if (d) delete U.dias[f]; else U.dias[f] = v; return;
+    }
+    if (k === 'tb' || k.startsWith('te:') || k.startsWith('tn:')) {
+      const T = (S.trackers = S.trackers || {}); T.ent = T.ent || []; T.recl = T.recl || [];
+      if (k === 'tb') { if (!d && v) T.bom = v; return; }
+      const col = k.startsWith('te:') ? T.ent : T.recl, id = k.slice(3), i = col.findIndex((x) => x.id === id);
+      if (d) { if (i >= 0) col.splice(i, 1); } else if (i >= 0) col[i] = v; else col.push(v);
+      return;
     }
     if (k.startsWith('sv:')) { S.sala = S.sala || {}; S.sala.av = S.sala.av || {}; const e = k.slice(3); if (d) delete S.sala.av[e]; else S.sala.av[e] = v; return; }
     if (k === 'lc' || k.startsWith('lv:')) {
@@ -172,7 +181,7 @@
   }
   // Cliente que se une por primera vez
   function reemplazarPorServidor(S) {
-    S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {}; S.cronoTareas = []; S.cronoMeta = null; S.partes = []; S.maquinas = []; S.maqHoras = []; S.maqEventos = []; S.fibra = { cfg: { cada: 50, adic: 0 }, z: {} }; S.lmt = { cfg: { piquetes: [], etapas: [] }, av: {} }; S.lluvia = { cfg: { desde: today(), umbral: 1 }, dias: {} }; S.sala = { cfg: {}, av: {} }; S.hincado = { catalogo: [], matriz: {}, avance: {}, recep: [] };
+    S.trackers = { ent: [], recl: [] }; S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {}; S.cronoTareas = []; S.cronoMeta = null; S.partes = []; S.maquinas = []; S.maqHoras = []; S.maqEventos = []; S.fibra = { cfg: { cada: 50, adic: 0 }, z: {} }; S.lmt = { cfg: { piquetes: [], etapas: [] }, av: {} }; S.lluvia = { cfg: { desde: today(), umbral: 1 }, dias: {} }; S.sala = { cfg: {}, av: {} }; S.hincado = { catalogo: [], matriz: {}, avance: {}, recep: [] };
     S.__sync = { snap: {}, meta: {}, pend: {}, rev: 0, peerRev: 0 };
   }
   function marcarTodoPendiente(S) {
