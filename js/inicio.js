@@ -28,6 +28,7 @@ async function init() {
   await window.api.save(JSON.stringify(S));
   window.api.onNetReq(atenderRed);
   if (!window.READONLY && window.api.webCfg) WEB = await window.api.webCfg();
+  if (!window.READONLY) { setTimeout(ghChequear, 20000); setInterval(ghChequear, 6 * 3600e3); }
   window.api.netObra(S.nombre);
   setTimeout(async () => {
     if (NET.modo !== 'local') return;

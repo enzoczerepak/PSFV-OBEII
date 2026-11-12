@@ -196,12 +196,45 @@ function programarWeb() {
   if (window.READONLY || !webListo() || WEB.auto === false) return;
   clearTimeout(webTimer); webTimer = setTimeout(() => publicarWeb(false), 90000);
 }
+// aviso de token de GitHub vencido o por vencer y de publicación automática que falla (solo en la PC que publica)
+function ghAviso() {
+  if (window.READONLY || !WEB || !WEB.tieneToken) return null;
+  const f = (x) => new Date(x).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const efecto = 'el visor web y la app de campo no se actualizan y la PC no recibe los partes ni los cronogramas';
+  if (WEB.tokEstado === 'invalido' || WEB.errorSt === 401) return { n: 'error', t: `<b>El token de GitHub venció o no es válido</b> (desde ${f(WEB.tokEstadoF || WEB.errorF || Date.now())}): ${efecto}. Generá uno nuevo en GitHub y cargalo en Ajustes → Publicar en la web.` };
+  if (WEB.tokVence && WEB.tokVence !== 'sin') {
+    const d = Math.ceil((new Date(WEB.tokVence) - Date.now()) / 864e5);
+    if (d <= 0) return { n: 'error', t: `<b>El token de GitHub venció el ${f(WEB.tokVence)}</b>: ${efecto}. Generá uno nuevo y cargalo en Ajustes → Publicar en la web.` };
+    if (d <= 15) return { n: 'aviso', t: `<b>El token de GitHub vence el ${f(WEB.tokVence)}</b> (${d === 1 ? 'mañana' : `en ${d} días`}). Renovalo antes para que el visor web y la app de campo no se corten: en GitHub, <i>Regenerate token</i>, y pegalo en Ajustes → Publicar en la web.` };
+  }
+  if (WEB.error && WEB.auto !== false) return { n: 'error', t: `<b>La publicación automática en la web está fallando</b> (${f(WEB.errorF || Date.now())}): ${esc(WEB.error)}. Revisá la conexión a internet o la configuración en Ajustes → Publicar en la web.` };
+  return null;
+}
+function ghAvisoHTML() {
+  const a = ghAviso(); if (!a) return '';
+  return `<div class="alert ${a.n} ghav" style="margin-bottom:12px"><div style="flex:1">${a.t}</div>${view === 'ajustes' ? '' : '<button class="btn sm" data-ghav>Ir a Ajustes</button>'}</div>`;
+}
+document.addEventListener('click', (e) => { if (e.target.closest('[data-ghav]')) go('ajustes'); });
+function ghBanner() {
+  if (view !== 'resumen') return;
+  const hero = document.querySelector('.hero.hmain'); if (!hero) return;
+  const old = hero.parentNode.querySelector('.ghav'); if (old) old.remove();
+  const h = ghAvisoHTML(); if (h) hero.insertAdjacentHTML('beforebegin', h);
+}
+let ghUltErr = null;
+async function ghChequear() {
+  if (window.READONLY || !window.api.webCheck || !webListo()) return;
+  try { await window.api.webCheck(); WEB = await window.api.webCfg(); ghBanner(); } catch (_) { /* nada */ }
+}
 async function publicarWeb(manual) {
   clearTimeout(webTimer);
   const json = JSON.stringify(S, (k, v) => (k === '__sync' ? undefined : v));
   const r = await window.api.webPublicar(json);
   WEB = await window.api.webCfg();
   if (manual) toast(r.ok ? 'Datos publicados en la web' : 'No se pudo publicar: ' + r.error, { err: !r.ok, ms: 6000 });
+  else if (!r.ok && r.error !== ghUltErr) toast(r.status === 401 ? 'No se pudo publicar en la web: el token de GitHub venció o no es válido' : 'No se pudo publicar en la web: ' + r.error, { err: true, ms: 8000 });
+  ghUltErr = r.ok ? null : r.error;
+  ghBanner();
   if (view === 'ajustes') renderWeb();
   return r;
 }
@@ -212,7 +245,7 @@ async function renderWeb() {
   box.innerHTML = `<h3>Publicar en la web</h3>
     <p class="hint" style="margin-top:0">Publica una copia <b>cifrada</b> de la obra en un sitio web (GitHub Pages) para verla desde cualquier lugar, en modo solo lectura, con usuario y contraseña. Conviene configurarlo solo en la PC servidor.</p>
     ${webUrl() ? `<div class="alert ${WEB.error ? 'error' : WEB.ultimo ? 'ok' : 'info'}">${WEB.error ? 'Error al publicar: ' + esc(WEB.error) : WEB.ultimo ? 'Última publicación: ' + new Date(WEB.ultimo).toLocaleString('es-AR') : 'Todavía no se publicó en esta sesión'}
-      <br>Dirección del visor: <a href="#" id="wUrl">${esc(webUrl())}</a></div>` : ''}
+      <br>Dirección del visor: <a href="#" id="wUrl">${esc(webUrl())}</a>${WEB.tieneToken ? `<br>Token: ${WEB.tokEstado === 'invalido' ? '<b>vencido o inválido</b>' : WEB.tokVence === 'sin' ? 'sin vencimiento' : WEB.tokVence ? `vence el <b>${new Date(WEB.tokVence).toLocaleDateString('es-AR')}</b>` : 'vencimiento todavía sin consultar'}` : ''}</div>${ghAvisoHTML()}` : ''}
     <div class="form" style="margin-top:10px"><label>Usuario u organización de GitHub<input type="text" id="wOwner" value="${esc(WEB.owner || '')}" placeholder="ej. ingalfa-obras"></label>
       <label>Repositorio<input type="text" id="wRepo" value="${esc(WEB.repo || '')}" placeholder="ej. avance-obra"></label>
       <label class="full">Token de acceso de GitHub<input type="password" id="wTok" value="${esc(WEB.token || '')}" placeholder="github_pat_…"></label></div>
