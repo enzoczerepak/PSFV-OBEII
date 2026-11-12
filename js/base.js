@@ -187,6 +187,8 @@ const VIEWS = {
   trec: ['Recepción de materiales de trackers', () => 'Control de lo que llega a obra contra el Bill of Materials de Trina · recibido, dañado y faltante por código'],
   tent: ['Entregas de materiales de trackers', () => 'Remitos y packing lists recibidos: lo declarado, lo contado conforme y lo dañado en cada entrega'],
   trecl: ['Reclamos al fabricante', () => 'Faltantes, dañados y códigos fuera del BOM de cada entrega · reportes para Trina y seguimiento hasta la reposición'],
+  tarm: ['Armado de estructuras', () => 'Montaje de la estructura de los trackers: motores, vigas, correas y amortiguadores · próximamente'],
+  tpan: ['Instalación de paneles solares', () => 'Montaje de los módulos fotovoltaicos sobre los trackers · próximamente'],
   sala: ['Edificio de operación y mantenimiento', () => 'Sala de celdas de MT, comunicaciones y control · avance de obra civil por etapa, zapata y viga de fundación'],
   maq: ['Horas de máquinas', () => 'Registro mensual con detalle diario por equipo: horómetro, horas trabajadas, paradas, mantenimientos y disponibilidad'],
   maqev: ['Paradas y mantenimientos', () => 'Horas de parada y de mantenimiento de cada equipo, con motivo y observaciones'],
@@ -251,7 +253,7 @@ function go(v) {
   const gc = /^(BT|MT|PAT|LA)-/.exec(v); if (gc) { const g = $(`#nav .grp[data-cat="${gc[1]}"]`); if (g && !g.classList.contains('open')) grpToggle(gc[1], true); }
   if (v === 'hplano') { ui.pl = ui.pl || { capas: new Set(PL_CAPAS.map((c) => c[0])), color: 'disc', zcol: 'estado', vb: null, sel: null }; ui.pl.color = ui.pl.color === 'hinc' ? 'hinc' : 'disc'; view = 'plano'; navKey = 'hplano'; ui.sel.clear();
     $$('#nav button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === 'hplano')); $$('.sfBtn').forEach((b) => b.classList.remove('on'));
-    const sec = $('#nav [data-sect="hinc"]'); if (sec && !sec.classList.contains('open')) abrirSect(sec, true); $$('#nav .sect').forEach((x) => x.classList.toggle('act', x === sec)); pillUpd(true); render(true); if (typeof movSync === 'function') movSync('hplano'); return; }
+    const sec = $('#nav [data-sect="trk"]'); if (sec && !sec.classList.contains('open')) abrirSect(sec, true); $$('#nav .sect').forEach((x) => x.classList.toggle('act', x === sec)); pillUpd(true); render(true); if (typeof movSync === 'function') movSync('hplano'); return; }
   view = v; ui.sel.clear(); navKey = MENU_ALIAS[v] || v;
   $$('.sfBtn').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
   $$('#nav button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === navKey));
@@ -268,7 +270,7 @@ function render(anim) {
   const [t, sub] = VIEWS[view];
   const vc = view.split('-')[0];
   setTimeout(badgePartes, 0);
-  $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : ['trec', 'tent', 'trecl'].includes(view) ? 'Trackers' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'fo' ? 'Fibra óptica' : view === 'lmt' ? 'Línea aérea MT' : view === 'sala' ? 'Edificio O&M' : ['hincado', 'htrk', 'hrec', 'hcat'].includes(view) ? 'Hincado' : MAQ_V.includes(view) ? 'Maquinaria de obra' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
+  $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : ['trec', 'tent', 'trecl', 'tarm', 'tpan'].includes(view) ? 'Trackers' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'fo' ? 'Fibra óptica' : view === 'lmt' ? 'Línea aérea MT' : view === 'sala' ? 'Edificio O&M' : ['hincado', 'htrk', 'hrec', 'hcat'].includes(view) ? 'Trackers · Hincado' : MAQ_V.includes(view) ? 'Maquinaria de obra' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
   $('#vTitle').innerHTML = (CATN[vc] && view.includes('-') ? `<span class="cchip c-${vc}">${CATL[vc]}</span>` : '') + esc(t); $('#vSub').innerHTML = sub();
   $('#projName').textContent = S.nombre;
   const el = $('#view'), sc = el.scrollTop;
@@ -279,7 +281,7 @@ function render(anim) {
   const [cat, kind] = view.split('-');
   if (kind === 'plan') vPlan(el, cat);
   else if (kind === 'circ') vCircuitos(el, cat);
-  else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hrec: vHRec, hcat: vHCat, fo: vFibra, lmt: vLMT, sala: vSala, trec: vTrkRec, tent: vTrkEnt, trecl: vTrkRecl, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
+  else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hrec: vHRec, hcat: vHCat, fo: vFibra, lmt: vLMT, sala: vSala, trec: vTrkRec, tent: vTrkEnt, trecl: vTrkRecl, tarm: vPronto, tpan: vPronto, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
   if (anim) { void el.offsetWidth; el.classList.add('enter'); el.scrollTop = 0; countUp(el); }
   else {
     el.scrollTop = sc;

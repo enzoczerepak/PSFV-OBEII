@@ -375,3 +375,11 @@ function trkModHTML() {
   return `<div class="card mcard" data-go="trec" title="Ver recepción de materiales"><div class="mh"><div>${Charts.ring(I.p, '#3fb27f', 'recibido')}</div><div><h3>Materiales de trackers</h3><div class="muted">${fmt(I.pesoR / 1000, 1)} / ${fmt(I.pesoT / 1000, 1)} t recibidas · ${I.nOk}/${I.nItems} códigos completos${I.sinRecl.length ? `<br><b class="tneg">${I.sinRecl.length} diferencia${I.sinRecl.length > 1 ? 's' : ''} sin reclamar</b>` : ''}${I.abiertos.length ? `<br>${I.abiertos.length} reclamo${I.abiertos.length > 1 ? 's' : ''} abierto${I.abiertos.length > 1 ? 's' : ''}` : ''}</div></div></div>
     ${I.cats.slice(0, 5).map((x) => { const [n, c] = trkCat(x.c); return `<div class="mrow"><span>${esc(n)}</span><div class="sbt"><div style="width:${(x.p * 100).toFixed(1)}%;background:${c}"></div></div><b>${fmt(x.p * 100)}%</b></div>`; }).join('')}</div>`;
 }
+
+// apartados de Trackers todavía en preparación
+function vPronto(el) {
+  actions([]);
+  const t = view === 'tarm' ? ['Armado de estructuras', 'Avance por tracker del montaje de la estructura: motor (slewing drive), vigas de torsión, correas, rodamientos, amortiguadores y TCU, con el material recibido de cada código.']
+    : ['Instalación de paneles solares', 'Avance por tracker del montaje de los módulos (52 o 26 por tracker), con conexionado de strings y control de bulonería.'];
+  el.innerHTML = `<div class="card" style="padding:44px 24px;text-align:center"><span class="pill p-warn" style="text-transform:uppercase;letter-spacing:.4px">Pronto</span><h3 style="margin:14px 0 8px;font-size:18px">${t[0]}</h3><p class="muted" style="max-width:560px;margin:0 auto">${t[1]}</p></div>`;
+}
