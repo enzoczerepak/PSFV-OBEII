@@ -1235,3 +1235,21 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 #nav .sgh:first-child { margin-top: 2px; }
 @media (max-width: 760px) { #nav .sgh { display: none; } }
 .clluv b em { font-style: normal; font-size: .62em; margin-left: 2px; opacity: .8; }
+/* registro de lluvias: calendario */
+.hclima .clluv[data-llu] { cursor: pointer; transition: background .15s; } .hclima .clluv[data-llu]:hover { background: rgba(255,255,255,.22); }
+.hclima .clluv[data-llu] span::after { content: ' · ver registro ›'; font-weight: 400; opacity: .7; font-size: 10.5px; }
+.llucal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.llucal .lch { font-size: 11px; font-weight: 700; color: var(--mute); text-align: center; text-transform: uppercase; letter-spacing: .4px; padding-bottom: 2px; }
+.lcd { position: relative; height: 62px; border-radius: 9px; border: 1px solid var(--line); background: #fff; display: flex; flex-direction: column; align-items: flex-start; padding: 5px 7px; font: inherit; cursor: pointer; text-align: left; }
+.lcd span { font-weight: 700; font-size: 13px; color: var(--ink); } .lcd i { font-style: normal; font-size: 16px; line-height: 1; margin-top: 3px; } .lcd small { position: absolute; right: 6px; bottom: 4px; font-size: 10px; color: var(--mute); }
+.lcd.fuera { background: transparent; border-style: dashed; opacity: .4; cursor: default; }
+.lcd.e-perdida, .lcd.e-parcial, .lcd.e-trabajado { background: var(--c); border-color: var(--c); } .lcd.e-perdida span, .lcd.e-perdida small, .lcd.e-trabajado span, .lcd.e-trabajado small { color: #fff; }
+.lcd.e-sindato { background: #eef5fd; border: 2px dashed var(--c); } .lcd.e-noTrab { background: #f2f3f5; }
+.lcd.sug::after { content: ''; position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: #9aa7b8; box-shadow: 0 0 0 2px #fff; }
+.lcd.hoy { box-shadow: inset 0 0 0 2px #142033; } .lcd.sel { outline: 3px solid #142033; outline-offset: 1px; } .lcd:not(.fuera):hover { filter: brightness(.96); }
+.llucl { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; font-size: 12px; color: var(--mute); } .llucl span { display: inline-flex; align-items: center; gap: 6px; }
+.llucl i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid rgba(0,0,0,.08); } .llucl i.sugi { border-radius: 50%; width: 8px; height: 8px; background: #9aa7b8; }
+.lluday { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: #f4f7fb; border: 1px solid var(--line); }
+.lluday b { font-size: 14px; } .lluday span { display: inline-flex; align-items: center; gap: 4px; } .lluday small { flex-basis: 100%; }
+.llupill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; } .llupill::before { content: ''; width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+@media (max-width: 700px) { .lcd { height: 48px; padding: 4px; } .lcd i { font-size: 13px; } .lcd small { display: none; } }

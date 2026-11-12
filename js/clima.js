@@ -112,7 +112,7 @@ function heroRefrescar() {
 // ---- panel del clima (dentro del banner del Inicio) ----
 function climaWidgetHTML() {
   const C = lluCuenta();
-  const pie = `<div class="clluv"><span>🌧️ Lluvia en la obra <small>desde ${fechaCorta(C.desde).slice(0, 5)}</small></span><div><b>${C.semana}</b><small>días esta semana</small></div><div><b>${C.obra}</b><small>días en total</small></div><div><b class="perd">${C.perdSem}</b><small>jornadas perdidas (sem.)${C.parcSem ? `<br>+ ${C.parcSem} parcial${C.parcSem > 1 ? 'es' : ''}` : ''}</small></div><div><b class="perd">${C.perdObra}</b><small>jornadas perdidas${C.parcObra ? `<br>+ ${C.parcObra} parcial${C.parcObra > 1 ? 'es' : ''}` : ''}</small></div></div>`;
+  const pie = `<div class="clluv" data-llu title="Ver el registro de lluvias y jornadas"><span>🌧️ Lluvia en la obra <small>desde ${fechaCorta(C.desde).slice(0, 5)}</small></span><div><b>${C.semana}</b><small>días esta semana</small></div><div><b>${C.obra}</b><small>días en total</small></div><div><b class="perd">${C.perdSem}</b><small>jornadas perdidas (sem.)${C.parcSem ? `<br>+ ${C.parcSem} parcial${C.parcSem > 1 ? 'es' : ''}` : ''}</small></div><div><b class="perd">${C.perdObra}</b><small>jornadas perdidas${C.parcObra ? `<br>+ ${C.parcObra} parcial${C.parcObra > 1 ? 'es' : ''}` : ''}</small></div></div>`;
   if (!CLIMA || !CLIMA.d) return `<div class="hclima" id="climaW" title="Pronóstico extendido"><div class="chead"><b>Clima en la obra</b><span>pronóstico ›</span></div><div class="cnow"><div class="cico">🌡️</div><div class="cdat">${CLIMA && CLIMA.error ? 'Sin conexión para traer el pronóstico' : 'Cargando el pronóstico…'}</div></div>${pie}</div>`;
   const d = CLIMA.d, c = d.current, sm = smnFresco(), sc = sm && smnCond(sm.estado);
   let [ic, tx] = wmo(c.weather_code, !c.is_day);
@@ -128,7 +128,7 @@ function climaWidgetHTML() {
       <div class="cdat"><b>${tx}</b><div>↑${Math.round(dd.temperature_2m_max[di])}° ↓${Math.round(dd.temperature_2m_min[di])}° · 💧 ${dd.precipitation_probability_max[di]}%</div><div>💨 ${vA}${c.wind_gusts_10m >= 30 ? ` · ráf. ${Math.round(c.wind_gusts_10m)}` : ''} · ${hA}%</div></div></div>
     <div class="cprox">${prox}</div>${pie}<div class="cfoot">${act}</div></div>`;
 }
-function bindClima() { const w = $('#climaW'); if (w) w.onclick = (e) => { e.stopPropagation(); verClima(); }; }
+function bindClima() { const w = $('#climaW'); if (w) w.onclick = (e) => { e.stopPropagation(); if (e.target.closest('[data-llu]')) verLluvias(); else verClima(); }; }
 // ---- pronóstico extendido y registro de lluvias ----
 async function verClima() {
   await climaCarga();
@@ -148,7 +148,7 @@ async function verClima() {
   // registro de lluvias: por día, ¿llovió? y ¿se trabajó?
   const fs = []; for (let f = today(); f >= L.cfg.desde; f = sumDias(f, -1)) fs.push(f);
   const seg = (f, campo, val, txt, on, cls) => `<button class="btn sm ${on ? cls || 'pri' : 'ghost'}" data-f="${f}" data-c="${campo}" data-v="${val}" ${ro ? 'disabled' : ''}>${txt}</button>`;
-  cuerpo += `<h3 style="margin:18px 0 6px">Días de lluvia y jornadas de la obra</h3>
+  cuerpo += `<div style="display:flex;align-items:center;gap:10px;margin:18px 0 6px"><h3 style="margin:0">Días de lluvia y jornadas de la obra</h3><button class="btn sm" id="lluCal">📅 Ver calendario y resumen</button></div>
     <div class="kpis k4" style="margin-bottom:10px">${kpi('Días de lluvia esta semana', C.semana, 'días', 0)}${kpi('Días de lluvia desde el ' + fechaCorta(C.desde), C.obra, `de ${C.dias} días`, 0)}${kpi('Jornadas perdidas por lluvia', C.perdObra, `días${C.parcObra ? ` + ${C.parcObra} parcial${C.parcObra === 1 ? '' : 'es'}` : ''}`, 0)}${kpi('Jornadas perdidas esta semana', C.perdSem, 'días', 0)}</div>
     ${C.sinDato && !ro ? `<div class="alert" style="display:block;margin-bottom:8px">Hay ${C.sinDato} día${C.sinDato === 1 ? '' : 's'} de lluvia sin indicar si se trabajó.</div>` : ''}
     <div class="tblwrap" style="max-height:320px"><table class="tbl"><thead><tr><th>Fecha</th><th>¿Llovió?</th><th>¿Se trabajó?</th><th title="Observaciones con lluvia de la estación SMN Oberá (se registran mientras el programa está abierto)">Estación SMN</th><th class="n" title="Estimación del servicio de clima para el parque, solo de referencia">Estimado (mm)</th></tr></thead><tbody>${fs.map((f) => { const o = Object.assign({}, lluAuto(f), lluMan(f)), si = esLluvia(f), sug = o.man == null;
@@ -161,6 +161,7 @@ async function verClima() {
     <p class="hint">No hace falta pluviómetro: marcá cada día si llovió y si se pudo trabajar. Mientras no lo marques, el "¿Llovió?" se sugiere (en gris) si la estación SMN Oberá informó lluvia, llovizna o tormenta en alguna observación del día, o si la lluvia estimada para el parque supera el umbral. Las jornadas perdidas son los días de lluvia en que no se trabajó.</p>`;
   const pm = modal({ title: '🌦️ Clima en la obra · pronóstico extendido', wide: true, body: cuerpo, buttons: [['Actualizar', 'btn', () => 'upd'], ['Cerrar', 'btn pri', () => null]] });
   const box = $('#modal .mbox'); box.classList.add('wide');
+  const lc = $('#lluCal', box); if (lc) lc.onclick = () => { cerrarModal(); setTimeout(verLluvias, 60); };
   if (!ro) {
     $('#lluDesde', box).onchange = (e) => { if (e.target.value) { L.cfg.desde = e.target.value; commit('Registro de lluvias desde ' + fechaCorta(e.target.value)); cerrarModal(); climaCarga(true).then(() => verClima()); } };
     $('#lluUmb', box).onchange = (e) => { const v = Number(e.target.value); if (v > 0) { L.cfg.umbral = v; commit(`Día de lluvia: desde ${fmt(v, 1)} mm`); cerrarModal(); verClima(); } };
@@ -180,3 +181,97 @@ async function verClima() {
   if (r === 'upd') { await climaCarga(true); verClima(); }
 }
 function cerrarModal() { const b = [...document.querySelectorAll('#modal .mfoot button')].find((x) => x.textContent === 'Cerrar'); if (b) b.click(); }
+
+// ---------- registro de lluvias: calendario y lista de días de lluvia y jornadas perdidas ----------
+const LLU_UI = { mes: null, modo: 'cal', sel: null };
+const LLU_MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const LLU_DSEM = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+// estado de un día para el calendario: perdida (llovió y no se trabajó), parcial, trabajado (llovió y se trabajó), sindato (llovió sin decir si se trabajó), seco
+function lluEstado(f) {
+  const m = lluMan(f), ll = esLluvia(f);
+  if (!ll) return { k: m.trab === 'no' ? 'noTrab' : 'seco', ll, sug: false, m };
+  const sug = m.man == null;
+  return { k: m.trab === 'no' ? 'perdida' : m.trab === 'parcial' ? 'parcial' : m.trab === 'si' ? 'trabajado' : 'sindato', ll, sug, m };
+}
+const LLU_EST = { perdida: ['Jornada perdida', '#d9573f'], parcial: ['Trabajo parcial', '#f0a23b'], trabajado: ['Llovió, se trabajó', '#3d86d6'], sindato: ['Llovió, falta indicar si se trabajó', '#9cc2ec'], seco: ['Sin lluvia', '#e9eef4'], noTrab: ['Sin lluvia, no se trabajó', '#c9ced6'] };
+function verLluvias() {
+  const L = lluS(); LLU_UI.mes = LLU_UI.mes || today().slice(0, 7); LLU_UI.sel = null;
+  modal({ title: '🌧️ Registro de lluvias y jornadas', sub: `Desde el ${fechaCorta(L.cfg.desde)} · se guarda con los datos de la obra y se ve en todas las PCs y en el visor`, wide: true,
+    body: '<div id="lluBox"></div>', buttons: [['Exportar Excel', 'btn', () => { lluExcel(); return false; }], ['PDF', 'btn', () => { lluPdf(); return false; }], ['Cerrar', 'btn pri', () => null]] });
+  setTimeout(lluRender, 10);
+}
+function lluRender() {
+  const box = $('#lluBox'); if (!box) return;
+  const L = lluS(), C = lluCuenta(), hoy = today(), ro = window.READONLY;
+  const [y, mo] = LLU_UI.mes.split('-').map(Number), ini = `${LLU_UI.mes}-01`, nDias = new Date(y, mo, 0).getDate();
+  const fsMes = Array.from({ length: nDias }, (_, i) => `${LLU_UI.mes}-${String(i + 1).padStart(2, '0')}`).filter((f) => f >= L.cfg.desde && f <= hoy);
+  const cMes = { ll: fsMes.filter(esLluvia).length, perd: fsMes.filter((f) => lluEstado(f).k === 'perdida').length, parc: fsMes.filter((f) => lluEstado(f).k === 'parcial').length };
+  const prev = sumDias(ini, -1).slice(0, 7), next = sumDias(`${LLU_UI.mes}-${nDias}`, 1).slice(0, 7);
+  let h = `<div class="kpis k4" style="margin-bottom:12px">${kpi('Días de lluvia', C.obra, `de ${C.dias} días de obra`, 0)}${kpi('Jornadas perdidas', C.perdObra, 'días sin trabajar por lluvia', 0)}${kpi('Jornadas parciales', C.parcObra, 'días con trabajo parcial', 0)}${kpi('Esta semana', C.semana, `días de lluvia · ${C.perdSem} perdida${C.perdSem === 1 ? '' : 's'}`, 0)}</div>
+    ${C.sinDato && !ro ? `<div class="alert aviso" style="display:block;margin-bottom:10px">Hay ${C.sinDato} día${C.sinDato === 1 ? '' : 's'} de lluvia sin indicar si se trabajó: tocalos en el calendario para completarlos.</div>` : ''}
+    <div class="tools" style="margin-bottom:8px"><div class="seg" id="lluModo"><button data-v="cal" class="${LLU_UI.modo === 'cal' ? 'on' : ''}">Calendario</button><button data-v="lista" class="${LLU_UI.modo === 'lista' ? 'on' : ''}">Lista</button></div>`;
+  if (LLU_UI.modo === 'cal') {
+    h += `<span class="sp"></span><button class="btn sm ghost" data-mes="${prev}" ${prev < L.cfg.desde.slice(0, 7) ? 'disabled' : ''}>‹</button><b style="min-width:150px;text-align:center">${LLU_MES[mo - 1]} ${y}</b><button class="btn sm ghost" data-mes="${next}" ${next > hoy.slice(0, 7) ? 'disabled' : ''}>›</button></div>
+      <div class="llucal">${['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d) => `<div class="lch">${d}</div>`).join('')}`;
+    const off = (new Date(y, mo - 1, 1).getDay() + 6) % 7; for (let i = 0; i < off; i++) h += '<div></div>';
+    for (let d = 1; d <= nDias; d++) {
+      const f = `${LLU_UI.mes}-${String(d).padStart(2, '0')}`, fuera = f < L.cfg.desde || f > hoy;
+      if (fuera) { h += `<div class="lcd fuera"><span>${d}</span></div>`; continue; }
+      const e = lluEstado(f), [tx, col] = LLU_EST[e.k], a = lluAuto(f);
+      h += `<button class="lcd e-${e.k} ${e.sug ? 'sug' : ''} ${LLU_UI.sel === f ? 'sel' : ''} ${f === hoy ? 'hoy' : ''}" data-f="${f}" title="${fechaCorta(f)} · ${tx}${e.sug ? ' (sugerido)' : ''}${a.mm ? ` · ${fmt(a.mm, 1)} mm est.` : ''}" style="--c:${col}"><span>${d}</span><i>${e.ll ? (e.k === 'perdida' ? '⛔' : e.k === 'parcial' ? '◐' : '🌧️') : e.k === 'noTrab' ? '·' : ''}</i>${a.mm ? `<small>${fmt(a.mm, 1)}</small>` : ''}</button>`;
+    }
+    h += `</div><div class="llucl">${['perdida', 'parcial', 'trabajado', 'sindato', 'seco'].map((k) => `<span><i style="background:${LLU_EST[k][1]}"></i>${LLU_EST[k][0]}</span>`).join('')}<span><i class="sugi"></i>Sugerido por el clima (sin confirmar)</span></div>
+      <div class="muted" style="margin:6px 0 0;font-size:12.5px">${LLU_MES[mo - 1]}: ${cMes.ll} día${cMes.ll === 1 ? '' : 's'} de lluvia · ${cMes.perd} jornada${cMes.perd === 1 ? '' : 's'} perdida${cMes.perd === 1 ? '' : 's'} · ${cMes.parc} parcial${cMes.parc === 1 ? '' : 'es'}</div>`;
+    if (LLU_UI.sel) {
+      const f = LLU_UI.sel, e = lluEstado(f), a = lluAuto(f);
+      const b = (c, v, t, on, cls) => `<button class="btn sm ${on ? cls || 'pri' : 'ghost'}" data-c="${c}" data-v="${v}" ${ro ? 'disabled' : ''}>${t}</button>`;
+      h += `<div class="lluday"><b>${LLU_DSEM[new Date(f + 'T12:00').getDay()]} ${fechaCorta(f)}</b>
+        <span>¿Llovió? ${b('man', '1', '🌧️ Sí', e.ll, e.sug ? 'csug' : 'pri')} ${b('man', '0', 'No', !e.ll, e.sug ? 'csug' : 'pri')}${e.sug ? ' <small class="muted">sugerido</small>' : ''}</span>
+        <span>¿Se trabajó? ${b('trab', 'si', 'Sí', e.m.trab === 'si')} ${b('trab', 'parcial', 'Parcial', e.m.trab === 'parcial')} ${b('trab', 'no', 'No', e.m.trab === 'no', 'danger')}</span>
+        <small class="muted">${a.mm != null ? `${fmt(a.mm, 1)} mm estimados` : ''}${a.smn && a.smn.length ? ` · SMN: ${esc(a.smn.join(' · '))}` : ''}</small></div>`;
+    }
+  } else {
+    const fs = []; for (let f = hoy; f >= L.cfg.desde; f = sumDias(f, -1)) { const e = lluEstado(f); if (e.ll || e.k === 'noTrab') fs.push([f, e]); }
+    h += `</div><div class="tblwrap" style="max-height:52vh"><table class="tbl"><thead><tr><th>Fecha</th><th>Estado</th><th>¿Llovió?</th><th>¿Se trabajó?</th><th class="n">mm est.</th><th>Estación SMN</th></tr></thead><tbody>
+      ${fs.map(([f, e]) => { const a = lluAuto(f); return `<tr class="trow" data-f="${f}"><td>${LLU_DSEM[new Date(f + 'T12:00').getDay()]} ${fechaCorta(f)}</td><td><span class="llupill" style="--c:${LLU_EST[e.k][1]}">${LLU_EST[e.k][0]}</span></td>
+        <td>${e.ll ? 'Sí' : 'No'}${e.sug ? ' <small class="muted">(sugerido)</small>' : ''}</td><td>${{ si: 'Sí', parcial: 'Parcial', no: 'No' }[e.m.trab] || '<span class="muted">sin indicar</span>'}</td><td class="n">${a.mm != null ? fmt(a.mm, 1) : '–'}</td><td class="muted" style="font-size:12px">${a.smn ? esc(a.smn.slice(0, 2).join(' · ')) : '–'}</td></tr>`; }).join('') || '<tr><td colspan="6" class="muted" style="padding:16px">Sin días de lluvia registrados.</td></tr>'}</tbody></table></div>
+      <p class="hint">Tocá un día para corregirlo en el calendario.</p>`;
+  }
+  box.innerHTML = h;
+  $$('#lluModo button', box).forEach((x) => { x.onclick = () => { LLU_UI.modo = x.dataset.v; lluRender(); }; });
+  $$('[data-mes]', box).forEach((x) => { x.onclick = () => { LLU_UI.mes = x.dataset.mes; LLU_UI.sel = null; lluRender(); }; });
+  $$('.lcd[data-f]', box).forEach((x) => { x.onclick = () => { LLU_UI.sel = LLU_UI.sel === x.dataset.f ? null : x.dataset.f; lluRender(); }; });
+  $$('tr.trow[data-f]', box).forEach((x) => { x.onclick = () => { LLU_UI.modo = 'cal'; LLU_UI.mes = x.dataset.f.slice(0, 7); LLU_UI.sel = x.dataset.f; lluRender(); }; });
+  if (!ro) $$('.lluday [data-c]', box).forEach((x) => { x.onclick = () => { lluMarcar(LLU_UI.sel, x.dataset.c, x.dataset.v); lluRender(); }; });
+}
+// marca a mano un día (lo mismo que la tabla del pronóstico extendido)
+function lluMarcar(f, campo, val) {
+  const L = lluS(), o = lluMan(f), vie = L.dias[f] || {};
+  if ((vie.mm != null || vie.smn) && !L.auto[f]) L.auto[f] = Object.assign({}, vie.mm != null ? { mm: vie.mm } : {}, vie.smn ? { smn: vie.smn } : {});
+  if (campo === 'man') o.man = val === '1'; else if (o.trab === val) delete o.trab; else o.trab = val;
+  if (campo === 'trab' && o.trab && o.trab !== 'si' && o.man == null) o.man = true;
+  if (o.man == null) delete o.man; if (!o.trab) delete o.trab;
+  if (Object.keys(o).length) L.dias[f] = o; else delete L.dias[f];
+  commit(`${fechaCorta(f)}: ${esLluvia(f) ? 'día de lluvia' : 'sin lluvia'}${o.trab ? ' · se trabajó: ' + o.trab : ''}`);
+  if (typeof view !== 'undefined' && view === 'resumen' && typeof heroRefrescar === 'function') heroRefrescar();
+}
+function lluFilas() {
+  const L = lluS(), fs = []; for (let f = L.cfg.desde; f <= today(); f = sumDias(f, 1)) fs.push(f);
+  return fs.map((f) => { const e = lluEstado(f), a = lluAuto(f); return { f, e, a }; });
+}
+async function lluExcel() {
+  const C = lluCuenta(), wb = XLSX.utils.book_new();
+  const a = [['Registro de lluvias y jornadas', S.nombre], ['Desde', C.desde, 'Días de obra', C.dias], ['Días de lluvia', C.obra, 'Jornadas perdidas', C.perdObra, 'Jornadas parciales', C.parcObra], [],
+    ['Fecha', 'Día', '¿Llovió?', 'Confirmado a mano', '¿Se trabajó?', 'Estado', 'mm estimados', 'Estación SMN Oberá']];
+  lluFilas().forEach(({ f, e, a: au }) => a.push([f, LLU_DSEM[new Date(f + 'T12:00').getDay()], e.ll ? 'Sí' : 'No', e.m.man == null ? 'No (sugerido)' : 'Sí', { si: 'Sí', parcial: 'Parcial', no: 'No' }[e.m.trab] || '', LLU_EST[e.k][0], au.mm != null ? au.mm : '', au.smn ? au.smn.join(' · ') : '']));
+  const w = XLSX.utils.aoa_to_sheet(a); w['!cols'] = [12, 6, 9, 16, 12, 30, 12, 40].map((x) => ({ wch: x })); XLSX.utils.book_append_sheet(wb, w, 'Lluvias');
+  const p = await window.api.saveBinary(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), `Registro de lluvias ${today()}.xlsx`, 'xlsx', 'Excel');
+  if (p) toast('Registro de lluvias exportado', { action: ['Abrir', () => window.api.openPath(p)] });
+}
+function lluPdf() {
+  const C = lluCuenta(), fs = lluFilas().filter((x) => x.e.ll || x.e.k === 'noTrab').reverse();
+  printHTML(prHead('Registro de lluvias y jornadas', `Desde el ${fechaCorta(C.desde)} · ${C.dias} días de obra`) +
+    `<div class="kpis k4" style="margin:8px 0 12px">${kpi('Días de lluvia', C.obra, '', 0)}${kpi('Jornadas perdidas', C.perdObra, '', 0)}${kpi('Jornadas parciales', C.parcObra, '', 0)}${kpi('Lluvia estimada', C.mmObra, 'mm', 1)}</div>
+    <table class="tbl"><thead><tr><th>Fecha</th><th>Estado</th><th>¿Llovió?</th><th>¿Se trabajó?</th><th class="n">mm est.</th><th>Estación SMN</th></tr></thead><tbody>
+    ${fs.map(({ f, e, a }) => `<tr><td>${LLU_DSEM[new Date(f + 'T12:00').getDay()]} ${fechaCorta(f)}</td><td>${LLU_EST[e.k][0]}</td><td>${e.ll ? 'Sí' : 'No'}${e.sug ? ' (sugerido)' : ''}</td><td>${{ si: 'Sí', parcial: 'Parcial', no: 'No' }[e.m.trab] || 'sin indicar'}</td><td class="n">${a.mm != null ? fmt(a.mm, 1) : '–'}</td><td>${a.smn ? esc(a.smn.join(' · ')) : '–'}</td></tr>`).join('') || '<tr><td colspan="6">Sin días de lluvia.</td></tr>'}</tbody></table>`, `Registro de lluvias ${today()}.pdf`);
+}
