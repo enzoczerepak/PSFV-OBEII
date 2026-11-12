@@ -119,13 +119,17 @@ function vSala(el) {
   });
   h += `</tbody></table></div><p class="hint">Cada etapa pesa lo mismo en el avance del edificio (${SALA_ET.length} etapas). Las de bases avanzan por zapata y las del encadenado inferior por viga; el resto se carga con un % de avance hasta darla por terminada.</p></div>`;
   // matrices por zapata y por viga
-  const matriz = (ets, els, tit, lbl) => `<div class="card tblcard" style="margin-bottom:14px"><h3>${tit}</h3><div class="tblwrap"><table class="tbl ftbl salamx"><thead><tr><th>Etapa</th>${els.map((e) => `<th class="fc">${lbl(e)}</th>`).join('')}</tr></thead><tbody>
+  const tipoDe = (els) => (els === SALA_ZAP ? 'zap' : 'viga');
+  const selBar = (tipo, els) => { if (ro) return ''; const sel = salaSel[tipo], n = sel.size;
+    return `<div class="salasel" data-tipo="${tipo}"><span class="muted">Elegí ${tipo === 'zap' ? 'zapatas' : 'vigas'}:</span>${els.map((x) => `<button class="ssel ${sel.has(x.id) ? 'on' : ''}" data-ss="${tipo}|${x.id}">${x.id}</button>`).join('')}
+      <button class="btn sm ghost" data-sa="${tipo}|all">${n === els.length ? 'Ninguna' : 'Todas'}</button><button class="btn sm ${n ? 'pri' : 'dis'}" data-sm2="${tipo}" ${n ? '' : 'disabled'}>Cargar avance${n ? ` (${n})` : ''}</button></div>`; };
+  const matriz = (ets, els, tit, lbl) => `<div class="card tblcard" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">${tit}</h3>${selBar(tipoDe(els), els)}</div><div class="tblwrap"><table class="tbl ftbl salamx"><thead><tr><th>Etapa</th>${els.map((e) => `<th class="fc ${!ro ? 'shd' : ''} ${salaSel[tipoDe(els)].has(e.id) ? 'on' : ''}" ${ro ? '' : `data-ss="${tipoDe(els)}|${e.id}" title="Tocá para elegir ${e.id} y cargar varias juntas"`}>${lbl(e)}</th>`).join('')}</tr></thead><tbody>
     ${ets.map((e) => `<tr><td><b>${esc(e.n)}</b></td>${els.map((x) => { const v = salaAv(e.k, x.id), est = v.ok ? 'ok' : v.ini ? 'cur' : '';
       const tit2 = `${x.id} · ${e.n}${v.ini ? ' · inicio ' + fechaCorta(v.ini) : ''}${v.ok && v.fin ? ' · fin ' + fechaCorta(v.fin) : ''}${v.obs ? ' · ' + v.obs : ''}`;
       return `<td class="fc"><button class="smx ${est}" ${ro ? 'disabled' : ''} data-sc="${e.k}|${x.id}" title="${esc(tit2)}${ro ? '' : est === 'ok' ? ' · tocá para corregir' : est === 'cur' ? ' · tocá para finalizar hoy' : ' · tocá para iniciar hoy'}">${v.ok ? `✓<small>${fechaCorta(v.fin || v.ini).slice(0, 5)}</small>` : v.ini ? `▶<small>${fechaCorta(v.ini).slice(0, 5)}</small>` : '·'}</button></td>`; }).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   h += matriz(zEts, SALA_ZAP, 'Bases por zapata', (z) => `${z.id}<small>${z.t}</small>`);
   h += matriz(vEts, SALA_VIG, 'Encadenado inferior por viga de fundación', (g) => `${g.id}<small>${g.cs[0]}–${g.cs[g.cs.length - 1]}</small>`);
-  if (!ro) h += `<p class="hint">En las tablas: un toque en <b>·</b> inicia la etapa con fecha de hoy, un toque en <b>▶</b> la finaliza hoy y un toque en <b>✓</b> abre la carga para corregir fechas, agregar una observación o quitar el registro. <b>Marcar todas…</b> carga la misma fecha a todas las zapatas o vigas juntas.</p>`;
+  if (!ro) h += `<p class="hint">En las tablas: un toque en <b>·</b> inicia la etapa con fecha de hoy, un toque en <b>▶</b> la finaliza hoy y un toque en <b>✓</b> abre la carga para corregir fechas, agregar una observación o quitar el registro. <b>Marcar todas…</b> carga la misma fecha a todas las zapatas o vigas juntas. Para trabajar varias a la vez, elegilas arriba de cada tabla (o tocando su encabezado) y usá <b>Cargar avance</b>: cambiás varias etapas de todas las elegidas en un solo paso.</p>`;
   el.innerHTML = h; Charts.bindTips(el);
   $$('[data-sm]', el).forEach((b) => { b.onclick = () => { try { localStorage.setItem('sala3d', b.dataset.sm); } catch (_) { /* sin storage */ } vSala(el); }; });
   if (salaModo() === '3d') sala3dMontar(el, I);
@@ -133,6 +137,9 @@ function vSala(el) {
   $$('[data-sc]', el).forEach((b) => { b.onclick = () => { const [k, x] = b.dataset.sc.split('|'); salaToque(k, x); }; });
   $$('[data-sg]', el).forEach((b) => { b.onclick = () => salaEditGral(b.dataset.sg); });
   $$('[data-st]', el).forEach((b) => { b.onclick = () => salaTodas(b.dataset.st); });
+  $$('[data-ss]', el).forEach((b) => { b.onclick = () => { const [t, x] = b.dataset.ss.split('|'), S2 = salaSel[t]; if (S2.has(x)) S2.delete(x); else S2.add(x); vSala(el); }; });
+  $$('[data-sa]', el).forEach((b) => { b.onclick = () => { const t = b.dataset.sa.split('|')[0], ids = (t === 'zap' ? SALA_ZAP : SALA_VIG).map((q) => q.id); salaSel[t] = salaSel[t].size === ids.length ? new Set() : new Set(ids); vSala(el); }; });
+  $$('[data-sm2]', el).forEach((b) => { b.onclick = () => salaEditVarios(b.dataset.sm2, [...salaSel[b.dataset.sm2]]); });
   $$('[data-sz]', el).forEach((g) => { g.onclick = () => salaEditElem('zap', g.dataset.sz); });
   $$('[data-sv]', el).forEach((g) => { g.onclick = () => salaEditElem('viga', g.dataset.sv); });
 }
@@ -192,6 +199,31 @@ async function salaTodas(k) {
   if (!res) return;
   res.els.forEach((x) => salaAplicar(k, x, res, false));
   commit(`${e.n}: ${res.els.length} ${e.a === 'zap' ? 'zapatas' : 'vigas'} ${res.est === 'ok' ? 'terminadas' : 'en curso'} · edificio ${fmt(salaInfo().p * 100)} %`);
+}
+// selección de varias zapatas o vigas para cargar su avance juntas (se trabajan a la vez)
+const salaSel = { zap: new Set(), viga: new Set() };
+async function salaEditVarios(tipo, xs) {
+  if (window.READONLY || !xs.length) return;
+  const orden = (tipo === 'zap' ? SALA_ZAP : SALA_VIG).map((q) => q.id); xs = orden.filter((x) => xs.includes(x));
+  if (xs.length === 1) return salaEditElem(tipo, xs[0]);
+  const ets = SALA_ET.filter((e) => e.a === tipo);
+  const resu = (k) => { const n = { ok: 0, cur: 0, pend: 0 }; xs.forEach((x) => { const v = salaAv(k, x); n[v.ok ? 'ok' : v.ini ? 'cur' : 'pend']++; });
+    return [n.ok && `<span class="smx ok sm">✓ ${n.ok}</span>`, n.cur && `<span class="smx cur sm">▶ ${n.cur}</span>`, n.pend && `<span class="smx sm">· ${n.pend}</span>`].filter(Boolean).join(' '); };
+  const res = await modal({ title: `${tipo === 'zap' ? 'Zapatas' : 'Vigas de fundación'} ${xs.join(', ')}`, sub: `Cargar avance de ${xs.length} ${tipo === 'zap' ? 'zapatas' : 'vigas'} juntas`, wide: true,
+    body: `<table class="tbl salaed"><thead><tr><th>Etapa</th><th>Ahora</th><th>Nuevo estado</th><th>Inicio</th><th>Fin</th></tr></thead><tbody>${ets.map((e) => `<tr data-k="${e.k}"><td><b>${esc(e.n)}</b></td><td style="white-space:nowrap">${resu(e.k)}</td>
+      <td><select name="est"><option value="=">Sin cambios</option><option value="">Pendiente</option><option value="cur">En curso</option><option value="ok">Terminada</option></select></td>
+      <td><input type="date" name="ini" value="${xs.map((x) => salaAv(e.k, x).ini).filter(Boolean).sort()[0] || today()}"></td><td><input type="date" name="fin" value="${today()}"></td></tr>`).join('')}</tbody></table>
+      <p class="hint" style="display:block">Solo se cambian las etapas donde elijas un estado nuevo, y se aplica igual a ${xs.join(', ')}. Si una ya tenía fecha de inicio, se la respeta al pasarla a terminada.</p>`,
+    buttons: [['Cancelar', 'btn', () => null], ['Aplicar', 'btn pri', (box) => {
+      const r = $$('tbody tr', box).map((tr) => ({ k: tr.dataset.k, est: $('[name=est]', tr).value, ini: $('[name=ini]', tr).value || today(), fin: $('[name=fin]', tr).value || today() })).filter((x) => x.est !== '=');
+      if (!r.length) { toast('Elegí el nuevo estado de al menos una etapa', { err: true }); return false; }
+      r.forEach((x) => { if (x.est === 'ok' && x.fin < x.ini) x.ini = x.fin; });
+      return r; }]] });
+  if (!res) return;
+  res.forEach((r) => xs.forEach((x) => { const v = salaAv(r.k, x);
+    salaAplicar(r.k, x, { est: r.est, ini: r.est === 'ok' && v.ini && v.ini <= r.fin ? v.ini : r.est === 'cur' && v.ini && !v.ok ? v.ini : r.ini, fin: r.fin, obs: v.obs || '' }, false); }));
+  salaSel[tipo] = new Set();
+  commit(`${tipo === 'zap' ? 'Zapatas' : 'Vigas'} ${xs.join(', ')}: ${res.map((r) => `${SALA_ETN[r.k].n} ${r.est === 'ok' ? 'terminada' : r.est === 'cur' ? 'en curso' : 'pendiente'}`).join(' · ')} · edificio ${fmt(salaInfo().p * 100)} %`);
 }
 // todas las etapas de una zapata o una viga juntas (desde la planta)
 async function salaEditElem(tipo, x) {
