@@ -1253,3 +1253,14 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 .lluday b { font-size: 14px; } .lluday span { display: inline-flex; align-items: center; gap: 4px; } .lluday small { flex-basis: 100%; }
 .llupill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; } .llupill::before { content: ''; width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
 @media (max-width: 700px) { .lcd { height: 48px; padding: 4px; } .lcd i { font-size: 13px; } .lcd small { display: none; } }
+/* maquinaria: contador de paradas y mantenimientos */
+.tmr { font-variant-numeric: tabular-nums; font-weight: 700; }
+.evcur { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.evc { border-left: 4px solid var(--warn); padding: 14px 16px; } .evc.parada { border-left-color: var(--bad); }
+.evch { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; white-space: nowrap; }
+.evcm { margin-top: 8px; font-size: 14px; } .evcmot { font-size: 12.5px; margin-top: 2px; }
+.evct { margin: 8px 0 10px; } .evct .tmr { font-size: 30px; letter-spacing: .5px; color: var(--ink); }
+.evcb { display: flex; gap: 6px; } .evcb .btn.pri { flex: 1; }
+.evcban { margin-bottom: 12px; } .evcban .tmr { margin-left: 2px; }
+.evdur { padding: 10px 12px; border-radius: 9px; background: #f4f7fb; font-size: 14px; }
+tr.evrun td { background: #fff8ec; }

@@ -103,7 +103,7 @@ const datoDia = (maq, f) => { const r = regDe(maq, lunesDe(f)) || {}; return { v
 function vMaq(el) {
   const ym = (ui.maqMes = ui.maqMes || today().slice(0, 7));
   const ro = window.READONLY;
-  actions([...(ro ? [] : [['Registrar horas', 'btn pri', () => registrarHoras(null, null)], ['+ Parada / mantenimiento', 'btn acc', () => editEvento(null)], ['+ Equipo', 'btn', () => editMaquina(null)]]),
+  actions([...(ro ? [] : [['Registrar horas', 'btn pri', () => registrarHoras(null, null)], ['▶ Iniciar parada / mant.', 'btn acc', () => iniciarEvento(null)], ['+ Cargar parada a mano', 'btn', () => editEvento(null)], ['+ Equipo', 'btn', () => editMaquina(null)]]),
     ['Exportar Excel', 'btn', exportMaq], ['PDF del mes', 'btn', () => printMaqMes(ym)]]);
   const ms = maqL().filter((m) => m.activa !== false || tieneMes(m.id, ym)).sort(maqOrd);
   const tot = { t: 0, p: 0, m: 0 };
@@ -114,6 +114,7 @@ function vMaq(el) {
     <span class="muted">${ms.length} equipo${ms.length === 1 ? '' : 's'}</span></div>
     <div class="kpis k4" style="margin-bottom:14px">${kpi('Horas trabajadas en el mes', tot.t, 'h', 1)}${kpi('Horas de parada', tot.p, 'h', 1)}${kpi('Horas de mantenimiento', tot.m, 'h', 1)}
       <div class="kpi"><span>Disponibilidad</span><b>${dg == null ? '–' : fmt(dg * 100)}<small>${dg == null ? '' : '%'}</small></b></div></div>`;
+  h += evCursoHTML();
   const avis = maqL().filter((m) => m.activa !== false).map((m) => [m, servicio(m)]).filter(([, x]) => x && !x.sinBase && x.nivel !== 'ok').sort((a, b) => a[1].faltan - b[1].faltan);
   if (avis.length) h += `<div class="alerts" style="margin-bottom:12px">${avis.map(([m, x]) => `<div class="alert ${x.nivel === 'venc' ? 'error' : 'aviso'}" style="display:block"><b>${esc(m.interno)} · ${esc(m.descripcion)}</b>: ${x.faltan <= 0 ? `service vencido hace ${fmt(-x.faltan, 1)} h` : `faltan ${fmt(x.faltan, 1)} h para el service`} (cada ${fmt(x.N)} h${x.prox != null && !m.sinHoro ? `, a los ${fmt(x.prox, 1)} h de horómetro` : ''})</div>`).join('')}</div>`;
   if (!maqL().length) {
@@ -127,7 +128,7 @@ function vMaq(el) {
   ms.forEach((m) => {
     const L = lecturas(m.id), t = horasMes(m.id, ym, L), p = evMes(m.id, ym, 'parada'), mm = evMes(m.id, ym, 'mantenimiento'), d = dispo(t, p + mm);
     const evD = {}; maqE().filter((e) => e.maq === m.id && e.fecha.startsWith(ym)).forEach((e) => { (evD[e.fecha] = evD[e.fecha] || []).push(e); });
-    h += `<tr data-id="${m.id}"><td class="mono fx1"><b>${esc(m.interno)}</b></td><td class="fx2">${esc(m.descripcion)}<div class="muted" style="font-size:11px">${esc([m.marca, m.modelo].filter(Boolean).join(' '))}${m.sinHoro ? ' · sin horómetro' : ''}</div></td>
+    h += `<tr data-id="${m.id}"><td class="mono fx1"><b>${esc(m.interno)}</b></td><td class="fx2">${esc(m.descripcion)}${evDeMaq(m.id) ? ` <span class="pill ${MAQ_TIPO[evDeMaq(m.id).tipo][1]}" title="${MAQ_TIPO[evDeMaq(m.id).tipo][0]} en curso">⏱ ${tmrHTML(evDeMaq(m.id))}</span>` : ''}<div class="muted" style="font-size:11px">${esc([m.marca, m.modelo].filter(Boolean).join(' '))}${m.sinHoro ? ' · sin horómetro' : ''}</div></td>
       <td class="n fx3"><b>${fmt(t, 1)}</b></td><td class="fx4">${servHTML(m, true)}</td>
       <td class="n fx5">${p ? `<b style="color:var(--bad)">${fmt(p, 1)}</b>` : '–'}</td><td class="n fx6">${mm ? `<b style="color:var(--warn)">${fmt(mm, 1)}</b>` : '–'}</td>
       <td class="n fx7">${d == null ? '–' : `<span class="pill ${d >= 0.85 ? 'p-done' : d >= 0.6 ? 'p-prov' : 'p-bad'}">${fmt(d * 100)}%</span>`}</td>
@@ -139,18 +140,18 @@ function vMaq(el) {
         const ant = horoAntes(m.id, f, L), hd = horasDia(m.id, f, L);
         return `<td class="n ${cls}"><button class="dcel ${vacio(x.v) ? 'vac' : ''} ${x.per ? 'per' : ''}" data-d="${f}" ${ro || f > hoy ? 'disabled' : ''} title="${fechaCorta(f)}${vacio(x.v) ? ' · sin registro' : ` · horómetro ${fmt(Number(x.v), 1)} (inicio ${ant != null ? fmt(ant, 1) : '?'}) → ${fmt(hd, 1)} h${x.per ? ' · período desde ' + fechaCorta(x.per) : ''}`}${evT ? ' · ' + evT : ''}">${vacio(x.v) ? '·' : `<b>${ant == null ? '?' : fmt(hd, 1)}</b><small>${x.per ? 'per.' : fmt(Number(x.v), 1)}</small>`}${evI}</button></td>`;
       }).join('')}
-      <td style="white-space:nowrap">${ro ? '' : `<button class="btn sm acc" data-a="ev" title="Registrar parada o mantenimiento">Parada / mant.</button> <button class="btn sm ghost" data-a="ed" title="Editar equipo">✎</button>`}</td></tr>`;
+      <td style="white-space:nowrap">${ro ? '' : `${evDeMaq(m.id) ? '<button class="btn sm pri" data-a="ev" title="Finalizar la parada o el mantenimiento en curso">■ Finalizar</button>' : '<button class="btn sm acc" data-a="ev" title="Iniciar el contador de una parada o un mantenimiento">▶ Parada / mant.</button>'} <button class="btn sm ghost" data-a="ed" title="Editar equipo">✎</button>`}</td></tr>`;
   });
   h += `</tbody></table></div><p class="hint">Cada casillero es una jornada: arriba las horas del día y abajo el horómetro al terminar (el inicio de cada jornada es el fin de la anterior). Se carga con <b>Registrar horas</b> o tocando el día. Si un día no se carga, esas horas se suman a la próxima lectura. Puntito rojo = parada, naranja = mantenimiento (pasá el mouse para ver el detalle). Sábados y domingos sombreados. Disponibilidad = trabajadas / (trabajadas + paradas + mantenimiento).</p>`;
   el.innerHTML = h;
-  bindMes();
+  bindMes(); bindEvCurso(el);
   // ubicar el día de hoy a la vista
   const wrap = $('.maqwrap', el), th = $('th.hoy', el); if (wrap && th) wrap.scrollLeft = Math.max(0, th.offsetLeft - 590 - (wrap.clientWidth - 590) / 2);
   if (ro) return;
   $$('tbody tr', el).forEach((tr) => {
     const id = tr.dataset.id;
     $$('.dcel', tr).forEach((b) => { b.onclick = () => registrarHoras(id, b.dataset.d); });
-    const b1 = tr.querySelector('[data-a=ev]'); if (b1) b1.onclick = () => editEvento(null, id, null);
+    const b1 = tr.querySelector('[data-a=ev]'); if (b1) b1.onclick = () => iniciarEvento(id);
     const b2 = tr.querySelector('[data-a=ed]'); if (b2) b2.onclick = () => editMaquina(id);
   });
 }
@@ -312,16 +313,16 @@ async function editMaquina(id) {
 // ======================= PARADAS Y MANTENIMIENTOS =======================
 function vMaqEv(el) {
   const ro = window.READONLY;
-  actions([...(ro ? [] : [['+ Parada / mantenimiento', 'btn pri', () => editEvento(null)]]), ['Exportar Excel', 'btn', exportMaq]]);
+  actions([...(ro ? [] : [['▶ Iniciar parada / mantenimiento', 'btn pri', () => iniciarEvento(null)], ['+ Cargar a mano', 'btn', () => editEvento(null)]]), ['Exportar Excel', 'btn', exportMaq]]);
   const fm = ui.evMaq || 'all', ft = ui.evTipo || 'all', fmes = ui.evMes || 'all';
   const meses = [...new Set(maqE().map((e) => e.fecha.slice(0, 7)))].sort().reverse();
   const list = maqE().filter((e) => (fm === 'all' || e.maq === fm) && (ft === 'all' || e.tipo === ft) && (fmes === 'all' || e.fecha.startsWith(fmes)))
     .sort((a, b) => b.fecha.localeCompare(a.fecha) || maqOrd(maqDe(a.maq) || {}, maqDe(b.maq) || {}));
   const hs = (t) => list.filter((e) => e.tipo === t).reduce((a, e) => a + (Number(e.horas) || 0), 0);
   // motivos más frecuentes (por horas)
-  const mot = {}; list.forEach((e) => { const k = `${MAQ_TIPO[e.tipo][0]} · ${e.motivo}`; mot[k] = (mot[k] || 0) + (Number(e.horas) || 0); });
+  const mot = {}; list.filter((e) => !e.enCurso).forEach((e) => { const k = `${MAQ_TIPO[e.tipo][0]} · ${e.motivo}`; mot[k] = (mot[k] || 0) + (Number(e.horas) || 0); });
   const top = Object.entries(mot).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  let h = `<div class="tools"><select id="fEM"><option value="all">Todos los equipos</option>${maqL().slice().sort(maqOrd).map((m) => `<option value="${m.id}">${esc(maqNom(m))}</option>`).join('')}</select>
+  let h = `${evCursoHTML()}<div class="tools"><select id="fEM"><option value="all">Todos los equipos</option>${maqL().slice().sort(maqOrd).map((m) => `<option value="${m.id}">${esc(maqNom(m))}</option>`).join('')}</select>
     <div class="seg" id="fET"><button data-v="all">Todo</button><button data-v="parada">Paradas</button><button data-v="mantenimiento">Mantenimientos</button></div>
     <select id="fEMes"><option value="all">Todos los meses</option>${meses.map((x) => `<option value="${x}">${MESES[Number(x.slice(5, 7)) - 1]} ${x.slice(0, 4)}</option>`).join('')}</select><span class="sp"></span>
     <span class="muted">${list.length} registro${list.length === 1 ? '' : 's'}</span></div>
@@ -330,8 +331,8 @@ function vMaqEv(el) {
     <div class="tblwrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Interno</th><th>Equipo</th><th>Tipo</th><th class="n">Horas</th><th class="n">Horómetro</th><th>Motivo</th><th>Observaciones</th><th></th></tr></thead><tbody>`;
   list.forEach((e) => {
     const m = maqDe(e.maq) || {};
-    h += `<tr data-id="${e.id}"><td>${fechaCorta(e.fecha)}</td><td class="mono"><b>${esc(m.interno || '?')}</b></td><td>${esc(m.descripcion || '')}</td><td><span class="pill ${MAQ_TIPO[e.tipo][1]}">${MAQ_TIPO[e.tipo][0]}</span></td>
-      <td class="n">${fmt(e.horas, 1)}</td><td class="n">${vacio(e.horo) ? '<span class="muted">–</span>' : `<b>${fmt(Number(e.horo), 1)}</b>`}</td><td>${esc(e.motivo || '')}${e.reinicia ? ' <span class="pill p-ready" title="Reinicia el contador del mantenimiento programado">service</span>' : ''}</td><td>${esc(e.obs || '')}</td><td>${ro ? '' : '<button class="btn sm ghost" data-a="ed">✎</button>'}</td></tr>`;
+    h += `<tr data-id="${e.id}" class="${e.enCurso ? 'evrun' : ''}"><td>${fechaCorta(e.fecha)}${e.inicio ? `<small class="muted" style="display:block">${hhmm(e.inicio)} → ${e.enCurso ? 'en curso' : (e.fin.slice(0, 10) !== e.inicio.slice(0, 10) ? fechaCorta(e.fin.slice(0, 10)).slice(0, 5) + ' ' : '') + hhmm(e.fin)}</small>` : ''}</td><td class="mono"><b>${esc(m.interno || '?')}</b></td><td>${esc(m.descripcion || '')}</td><td><span class="pill ${MAQ_TIPO[e.tipo][1]}">${MAQ_TIPO[e.tipo][0]}</span></td>
+      <td class="n">${e.enCurso ? tmrHTML(e) : fmt(e.horas, e.inicio ? 2 : 1)}</td><td class="n">${vacio(e.horo) ? '<span class="muted">–</span>' : `<b>${fmt(Number(e.horo), 1)}</b>`}</td><td>${esc(e.motivo || '')}${e.reinicia ? ' <span class="pill p-ready" title="Reinicia el contador del mantenimiento programado">service</span>' : ''}</td><td>${esc(e.obs || '')}</td><td>${ro ? '' : '<button class="btn sm ghost" data-a="ed">✎</button>'}</td></tr>`;
   });
   h += `</tbody></table>${list.length ? '' : '<div class="empty"><b>Sin paradas ni mantenimientos registrados</b></div>'}</div>`;
   el.innerHTML = h;
@@ -339,12 +340,14 @@ function vMaqEv(el) {
   $('#fEM').onchange = (ev) => { ui.evMaq = ev.target.value; render(false); };
   $('#fEMes').onchange = (ev) => { ui.evMes = ev.target.value; render(false); };
   segBind('#fET', ft, (v) => { ui.evTipo = v; render(false); });
-  if (!ro) $$('[data-a=ed]', el).forEach((b) => { b.onclick = () => editEvento(b.closest('tr').dataset.id); });
+  bindEvCurso(el);
+  if (!ro) $$('[data-a=ed]', el).forEach((b) => { b.onclick = () => { const id = b.closest('tr').dataset.id, e = maqE().find((x) => x.id === id); if (e && e.enCurso) finalizarEvento(id); else editEvento(id); }; });
 }
 async function editEvento(id, maq, sem) {
   if (window.READONLY) return;
   if (!maqL().length) { toast('Primero cargá los equipos', { err: true }); return; }
   const nuevo = !id;
+  if (id && (maqE().find((x) => x.id === id) || {}).enCurso) return finalizarEvento(id);
   const e = nuevo ? { id: uid('e'), maq: maq || '', tipo: 'parada', fecha: sem && !enSemana(today(), sem) ? sem : today(), horas: '', motivo: '', obs: '' } : maqE().find((x) => x.id === id);
   const pm = modal({
     title: nuevo ? 'Registrar parada o mantenimiento' : 'Editar registro',
@@ -423,9 +426,9 @@ async function exportMaq() {
   });
   a4.sort((x, y) => (x[0] === 'Fecha' ? -1 : y[0] === 'Fecha' ? 1 : y[0].localeCompare(x[0]) || String(x[1]).localeCompare(String(y[1]), 'es', { numeric: true })));
   sh(a4, [12, 10, 26, 17, 15, 17, 28], 'Horómetro por jornada');
-  const a3 = [['Fecha', 'Mes', 'Interno', 'Equipo', 'Tipo', 'Horas', 'Horómetro', 'Motivo', 'Service programado', 'Observaciones']];
-  maqE().slice().sort((a, b) => b.fecha.localeCompare(a.fecha)).forEach((e) => { const m = maqDe(e.maq) || {}; a3.push([e.fecha, mesTxt(e.fecha.slice(0, 7)), m.interno || '', m.descripcion || '', MAQ_TIPO[e.tipo][0], r1(Number(e.horas) || 0), vacio(e.horo) ? '' : Number(e.horo), e.motivo || '', e.reinicia ? 'Sí' : '', e.obs || '']); });
-  sh(a3, [12, 14, 10, 26, 15, 8, 11, 28, 17, 40], 'Paradas y mantenimientos');
+  const a3 = [['Fecha', 'Mes', 'Interno', 'Equipo', 'Tipo', 'Inicio', 'Fin', 'Horas', 'Horómetro', 'Motivo', 'Service programado', 'Observaciones']];
+  maqE().slice().sort((a, b) => b.fecha.localeCompare(a.fecha)).forEach((e) => { const m = maqDe(e.maq) || {}; a3.push([e.fecha, mesTxt(e.fecha.slice(0, 7)), m.interno || '', m.descripcion || '', MAQ_TIPO[e.tipo][0], e.inicio ? e.inicio.replace('T', ' ') : '', e.enCurso ? 'en curso' : e.fin ? e.fin.replace('T', ' ') : '', e.inicio && !e.enCurso ? Math.round((Number(e.horas) || 0) * 100) / 100 : r1(Number(e.horas) || 0), vacio(e.horo) ? '' : Number(e.horo), e.motivo || '', e.reinicia ? 'Sí' : '', e.obs || '']); });
+  sh(a3, [12, 14, 10, 26, 15, 17, 17, 8, 11, 28, 17, 40], 'Paradas y mantenimientos');
   const p = await window.api.saveBinary(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), `Maquinaria de obra ${today()}.xlsx`, 'xlsx', 'Excel');
   if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
 }
@@ -449,4 +452,90 @@ function printMaqMes(ym) {
   const evs = maqE().filter((e) => e.fecha.startsWith(ym)).sort((a, b) => a.fecha.localeCompare(b.fecha));
   if (evs.length) h += `<div class="card"><h3>Paradas y mantenimientos del mes</h3><table class="tbl stk"><thead><tr><th>Fecha</th><th>Interno</th><th>Equipo</th><th>Tipo</th><th class="n">Horas</th><th class="n">Horómetro</th><th>Motivo</th><th>Observaciones</th></tr></thead><tbody>${evs.map((e) => { const m = maqDe(e.maq) || {}; return `<tr><td>${fechaCorta(e.fecha)}</td><td><b>${esc(m.interno || '')}</b></td><td>${esc(m.descripcion || '')}</td><td>${MAQ_TIPO[e.tipo][0]}${e.reinicia ? ' (service)' : ''}</td><td class="n">${fmt(e.horas, 1)}</td><td class="n">${vacio(e.horo) ? '' : fmt(Number(e.horo), 1)}</td><td>${esc(e.motivo || '')}</td><td style="white-space:normal">${esc(e.obs || '')}</td></tr>`; }).join('')}</tbody></table></div>`;
   printHTML(h, `Maquinaria ${mesTxt(ym)}.pdf`, true);
+}
+
+// ======================= CONTADOR DE PARADAS Y MANTENIMIENTOS =======================
+// Se inicia con la hora del reloj (o la que se indique) y al finalizar se calculan las horas que demandó.
+// En curso: {…evento, inicio: 'AAAA-MM-DDTHH:MM', enCurso: true, horas: 0}; al finalizar se agrega fin y horas = fin − inicio.
+const evCurso = () => maqE().filter((e) => e.enCurso);
+const evDeMaq = (maq) => evCurso().find((e) => e.maq === maq);
+const ahoraLocal = () => { const d = new Date(); d.setSeconds(0, 0); return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16); };
+const horasEntre = (a, b) => Math.max(0, (new Date(b) - new Date(a)) / 36e5);
+const hhmm = (s) => (s ? String(s).slice(11, 16) : '');
+const durTxt = (h) => { const m = Math.round(h * 60); return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`; };
+const tmrHTML = (e) => `<span class="tmr" data-ini="${esc(e.inicio)}">${tmrFmt(e.inicio)}</span>`;
+function tmrFmt(ini) { const s = Math.max(0, Math.floor((Date.now() - new Date(ini).getTime()) / 1000)); return `${String(Math.floor(s / 3600)).padStart(2, '0')}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
+setInterval(() => { document.querySelectorAll('.tmr[data-ini]').forEach((x) => { x.textContent = tmrFmt(x.dataset.ini); }); }, 1000);
+// tarjetas de lo que está en curso (Maquinaria, Paradas y mantenimientos e Inicio)
+function evCursoHTML(compacto) {
+  const es = evCurso().sort((a, b) => String(a.inicio).localeCompare(String(b.inicio))); if (!es.length) return '';
+  const ro = window.READONLY;
+  if (compacto) return `<div class="alert aviso evcban"><div style="flex:1"><b>⏱ ${es.length === 1 ? 'Un equipo detenido' : `${es.length} equipos detenidos`} ahora:</b> ${es.map((e) => { const m = maqDe(e.maq) || {}; return `${esc(m.interno || '?')} (${MAQ_TIPO[e.tipo][0].toLowerCase()}) ${tmrHTML(e)}`; }).join(' · ')}</div><button class="btn sm" data-evgo>Ver</button></div>`;
+  return `<div class="evcur">${es.map((e) => { const m = maqDe(e.maq) || {};
+    return `<div class="card evc ${e.tipo}" data-id="${e.id}"><div class="evch"><span class="pill ${MAQ_TIPO[e.tipo][1]}">${MAQ_TIPO[e.tipo][0]} en curso</span><span class="muted">desde ${hhmm(e.inicio)}${e.inicio.slice(0, 10) !== today() ? ` del ${fechaCorta(e.inicio.slice(0, 10))}` : ''}</span></div>
+      <div class="evcm"><b class="mono">${esc(m.interno || '?')}</b> ${esc(m.descripcion || '')}</div><div class="evcmot">${esc(e.motivo || '')}${e.obs ? ` · <span class="muted">${esc(e.obs)}</span>` : ''}</div>
+      <div class="evct">${tmrHTML(e)}</div>${ro ? '' : `<div class="evcb"><button class="btn pri" data-a="fin">■ Finalizar</button><button class="btn ghost" data-a="edc">✎</button></div>`}</div>`; }).join('')}</div>`;
+}
+function bindEvCurso(el) {
+  $$('[data-evgo]', el).forEach((b) => { b.onclick = () => go('maqev'); });
+  if (window.READONLY) return;
+  $$('.evc[data-id]', el).forEach((c) => { const id = c.dataset.id;
+    const f = $('[data-a=fin]', c); if (f) f.onclick = () => finalizarEvento(id);
+    const d = $('[data-a=edc]', c); if (d) d.onclick = () => iniciarEvento(null, id); });
+}
+async function iniciarEvento(maq, idEd) {
+  if (window.READONLY) return;
+  if (!maqL().length) { toast('Primero cargá los equipos', { err: true }); return; }
+  const e0 = idEd ? maqE().find((x) => x.id === idEd) : null;
+  if (!e0 && maq && evDeMaq(maq)) return finalizarEvento(evDeMaq(maq).id);
+  const libres = maqL().filter((m) => m.activa !== false && (!evDeMaq(m.id) || (e0 && e0.maq === m.id))).sort(maqOrd);
+  if (!libres.length) { toast('Todos los equipos ya tienen una parada o mantenimiento en curso', { err: true }); return; }
+  const e = e0 || { maq: maq || '', tipo: 'mantenimiento', inicio: ahoraLocal(), motivo: '', obs: '' };
+  const pm = modal({ title: e0 ? 'Editar parada / mantenimiento en curso' : '▶ Iniciar parada o mantenimiento', sub: 'El contador arranca a la hora de inicio y al finalizar se calculan las horas',
+    body: `<div class="form"><label class="full">Equipo<select name="maq"><option value="">— elegí el equipo —</option>${libres.map((m) => `<option value="${m.id}" ${m.id === e.maq ? 'selected' : ''}>${esc(maqNom(m))}</option>`).join('')}</select></label>
+      <label>Tipo<select name="tipo"><option value="mantenimiento" ${e.tipo === 'mantenimiento' ? 'selected' : ''}>Mantenimiento</option><option value="parada" ${e.tipo === 'parada' ? 'selected' : ''}>Parada</option></select></label>
+      <label>Inicio<span style="display:flex;gap:6px"><input type="datetime-local" name="inicio" value="${esc(e.inicio)}" max="${ahoraLocal()}" style="flex:1"><button class="btn sm ghost" type="button" id="evAhora" title="Tomar la hora del reloj">🕒 Ahora</button></span></label>
+      <label>Motivo<input type="text" name="motivo" list="evMot2" value="${esc(e.motivo || '')}"><datalist id="evMot2"></datalist></label>
+      <label>Observaciones<input type="text" name="obs" value="${esc(e.obs || '')}" placeholder="quién, qué se hace…"></label></div>`,
+    buttons: [...(e0 ? [['Descartar', 'btn danger', () => 'del']] : []), ['Cancelar', 'btn', () => null], [e0 ? 'Guardar' : '▶ Iniciar', 'btn pri', (box) => {
+      const g = (n) => $(`[name=${n}]`, box).value.trim();
+      if (!g('maq') || !g('inicio') || !g('motivo')) { toast('Completá equipo, inicio y motivo', { err: true }); return false; }
+      if (new Date(g('inicio')) > new Date(Date.now() + 6e4)) { toast('El inicio no puede ser posterior a la hora actual', { err: true }); return false; }
+      return { maq: g('maq'), tipo: g('tipo'), inicio: g('inicio'), motivo: g('motivo'), obs: g('obs') }; }]] });
+  { const box = $('#modal .mbox'), t = $('[name=tipo]', box), dl = $('#evMot2', box), upd = () => { dl.innerHTML = MAQ_MOT[t.value].map((x) => `<option value="${x}">`).join(''); };
+    t.onchange = upd; upd(); $('#evAhora', box).onclick = () => { $('[name=inicio]', box).value = ahoraLocal(); }; }
+  const res = await pm;
+  if (res === 'del') { if (await confirmar('Descartar', 'Se descarta esta parada / mantenimiento en curso sin registrar horas.', 'Descartar', 'btn danger')) { S.maqEventos = maqE().filter((x) => x !== e0); commit('Parada / mantenimiento descartado'); } return; }
+  if (!res) return;
+  const m = maqDe(res.maq);
+  if (e0) { Object.assign(e0, res, { fecha: res.inicio.slice(0, 10) }); commit(`${MAQ_TIPO[res.tipo][0]} en curso de ${m.interno}: desde ${hhmm(res.inicio)}`); return; }
+  maqE().push(Object.assign({ id: uid('e'), _o: Date.now(), fecha: res.inicio.slice(0, 10), horas: 0, enCurso: true }, res));
+  commit(`${MAQ_TIPO[res.tipo][0]} de ${m.interno} iniciado a las ${hhmm(res.inicio)}`);
+}
+async function finalizarEvento(id) {
+  if (window.READONLY) return;
+  const e = maqE().find((x) => x.id === id); if (!e) return;
+  const m = maqDe(e.maq) || {}, conH = !m.sinHoro, svc = e.tipo === 'mantenimiento' && Number(m.mantCada) > 0;
+  const pm = modal({ title: `■ Finalizar ${MAQ_TIPO[e.tipo][0].toLowerCase()} · ${m.interno || ''}`, sub: `${esc(m.descripcion || '')} · ${esc(e.motivo || '')} · inició ${fechaCorta(e.inicio.slice(0, 10))} ${hhmm(e.inicio)}`,
+    body: `<div class="form"><label>Inicio<input type="datetime-local" name="inicio" value="${esc(e.inicio)}"></label>
+      <label>Fin<span style="display:flex;gap:6px"><input type="datetime-local" name="fin" value="${ahoraLocal()}" style="flex:1"><button class="btn sm ghost" type="button" id="evAhora2" title="Tomar la hora del reloj">🕒 Ahora</button></span></label>
+      <div class="full evdur" id="evDur"></div>
+      ${conH ? `<label>${e.tipo === 'mantenimiento' ? 'Horómetro al hacer el mantenimiento' : 'Horómetro (opcional)'}<input type="number" step="0.1" min="0" name="horo" value="${numIn(e.horo)}"></label>` : ''}
+      ${svc ? `<label style="display:flex;gap:8px;align-items:center;flex-direction:row;font-weight:500;align-self:end"><input type="checkbox" name="reinicia" style="width:auto;margin:0" ${e.reinicia ? 'checked' : ''}> Es el <b>service programado</b> (reinicia el contador)</label>` : ''}
+      <label class="full">Observaciones<input type="text" name="obs" value="${esc(e.obs || '')}" placeholder="qué se hizo, repuestos…"></label></div>`,
+    buttons: [['Cancelar', 'btn', () => null], ['Finalizar y registrar', 'btn pri', (box) => {
+      const g = (n) => { const x = $(`[name=${n}]`, box); return x ? x.value.trim() : ''; };
+      const h = horasEntre(g('inicio'), g('fin'));
+      if (!g('inicio') || !g('fin') || !(new Date(g('fin')) > new Date(g('inicio')))) { toast('El fin tiene que ser posterior al inicio', { err: true }); return false; }
+      if (e.tipo === 'mantenimiento' && conH && g('horo') === '') { toast('Cargá el horómetro al que se hizo el mantenimiento', { err: true }); return false; }
+      return { inicio: g('inicio'), fin: g('fin'), horas: Math.round(h * 100) / 100, horo: g('horo'), obs: g('obs'), reinicia: !!($('[name=reinicia]', box) || {}).checked }; }]] });
+  { const box = $('#modal .mbox'), i = $('[name=inicio]', box), f = $('[name=fin]', box), d = $('#evDur', box);
+    const upd = () => { const ok = i.value && f.value && new Date(f.value) > new Date(i.value), h = ok ? horasEntre(i.value, f.value) : 0;
+      d.innerHTML = ok ? `Horas demandadas: <b>${fmt(h, 2)} h</b> <span class="muted">(${durTxt(h)}${i.value.slice(0, 10) !== f.value.slice(0, 10) ? ', abarca más de un día' : ''})</span>` : '<span class="tneg">El fin tiene que ser posterior al inicio</span>'; };
+    i.oninput = upd; f.oninput = upd; $('#evAhora2', box).onclick = () => { f.value = ahoraLocal(); upd(); }; upd(); }
+  const res = await pm; if (!res) return;
+  Object.assign(e, { inicio: res.inicio, fin: res.fin, fecha: res.inicio.slice(0, 10), horas: res.horas, obs: res.obs }); delete e.enCurso;
+  if (res.horo !== '' && conH) e.horo = Number(res.horo); else delete e.horo;
+  if (res.reinicia) e.reinicia = true; else delete e.reinicia;
+  commit(`${MAQ_TIPO[e.tipo][0]} de ${m.interno}: ${fmt(e.horas, 2)} h (${hhmm(e.inicio)} a ${hhmm(e.fin)})`);
 }
