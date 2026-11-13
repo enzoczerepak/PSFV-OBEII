@@ -101,6 +101,7 @@ const datoDia = (maq, f) => { const r = regDe(maq, lunesDe(f)) || {}; return { v
 
 // ======================= HORAS MENSUALES (registro diario) =======================
 function vMaq(el) {
+  setTimeout(maqMigrJor, 0);
   const ym = (ui.maqMes = ui.maqMes || today().slice(0, 7));
   const ro = window.READONLY;
   actions([...(ro ? [] : [['Registrar horas', 'btn pri', () => registrarHoras(null, null)], ['▶ Iniciar parada / mant.', 'btn acc', () => iniciarEvento(null)], ['+ Cargar parada a mano', 'btn', () => editEvento(null)], ['+ Equipo', 'btn', () => editMaquina(null)]]),
@@ -312,7 +313,7 @@ async function editMaquina(id) {
 
 // ======================= PARADAS Y MANTENIMIENTOS =======================
 function vMaqEv(el) {
-  const ro = window.READONLY;
+  const ro = window.READONLY; setTimeout(maqMigrJor, 0);
   actions([...(ro ? [] : [['▶ Iniciar parada / mantenimiento', 'btn pri', () => iniciarEvento(null)], ['+ Cargar a mano', 'btn', () => editEvento(null)]]), ['Exportar Excel', 'btn', exportMaq]]);
   const fm = ui.evMaq || 'all', ft = ui.evTipo || 'all', fmes = ui.evMes || 'all';
   const meses = [...new Set(maqE().map((e) => e.fecha.slice(0, 7)))].sort().reverse();
@@ -325,14 +326,14 @@ function vMaqEv(el) {
   let h = `${evCursoHTML()}<div class="tools"><select id="fEM"><option value="all">Todos los equipos</option>${maqL().slice().sort(maqOrd).map((m) => `<option value="${m.id}">${esc(maqNom(m))}</option>`).join('')}</select>
     <div class="seg" id="fET"><button data-v="all">Todo</button><button data-v="parada">Paradas</button><button data-v="mantenimiento">Mantenimientos</button></div>
     <select id="fEMes"><option value="all">Todos los meses</option>${meses.map((x) => `<option value="${x}">${MESES[Number(x.slice(5, 7)) - 1]} ${x.slice(0, 4)}</option>`).join('')}</select><span class="sp"></span>
-    <span class="muted">${list.length} registro${list.length === 1 ? '' : 's'}</span></div>
-    <div class="grid g3" style="margin-bottom:14px;align-items:start"><div class="card"><div class="kpis k1">${kpi('Horas de parada', hs('parada'), 'h', 1)}</div></div><div class="card"><div class="kpis k1">${kpi('Horas de mantenimiento', hs('mantenimiento'), 'h', 1)}</div></div>
+    <button class="btn sm ghost" id="evJor" title="Las horas con contador cuentan solo dentro de la jornada de obra" ${ro ? 'disabled' : ''}>🕕 Jornada ${jorTxt()}</button><span class="muted">${list.length} registro${list.length === 1 ? '' : 's'}</span></div>
+    <div class="grid g3" style="margin-bottom:14px;align-items:start"><div class="card"><div class="kpis k1">${kpi('Horas de parada (en jornada)', hs('parada'), 'h', 1)}</div></div><div class="card"><div class="kpis k1">${kpi('Horas de mantenimiento (en jornada)', hs('mantenimiento'), 'h', 1)}</div></div>
     <div class="card"><h3>Principales motivos (horas)</h3>${top.length ? top.map(([k, v]) => `<div class="zrow"><span>${esc(k)}</span><b>${fmt(v, 1)} h</b></div>`).join('') : '<span class="muted">Sin registros</span>'}</div></div>
     <div class="tblwrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Interno</th><th>Equipo</th><th>Tipo</th><th class="n">Horas</th><th class="n">Horómetro</th><th>Motivo</th><th>Observaciones</th><th></th></tr></thead><tbody>`;
   list.forEach((e) => {
     const m = maqDe(e.maq) || {};
     h += `<tr data-id="${e.id}" class="${e.enCurso ? 'evrun' : ''}"><td>${fechaCorta(e.fecha)}${e.inicio ? `<small class="muted" style="display:block">${hhmm(e.inicio)} → ${e.enCurso ? 'en curso' : (e.fin.slice(0, 10) !== e.inicio.slice(0, 10) ? fechaCorta(e.fin.slice(0, 10)).slice(0, 5) + ' ' : '') + hhmm(e.fin)}</small>` : ''}</td><td class="mono"><b>${esc(m.interno || '?')}</b></td><td>${esc(m.descripcion || '')}</td><td><span class="pill ${MAQ_TIPO[e.tipo][1]}">${MAQ_TIPO[e.tipo][0]}</span></td>
-      <td class="n">${e.enCurso ? tmrHTML(e) : fmt(e.horas, e.inicio ? 2 : 1)}</td><td class="n">${vacio(e.horo) ? '<span class="muted">–</span>' : `<b>${fmt(Number(e.horo), 1)}</b>`}</td><td>${esc(e.motivo || '')}${e.reinicia ? ' <span class="pill p-ready" title="Reinicia el contador del mantenimiento programado">service</span>' : ''}</td><td>${esc(e.obs || '')}</td><td>${ro ? '' : '<button class="btn sm ghost" data-a="ed">✎</button>'}</td></tr>`;
+      <td class="n">${e.enCurso ? tmrHTML(e) : fmt(e.horas, e.inicio ? 2 : 1)}${!e.enCurso && e.horasRel != null && e.horasRel - e.horas > 0.009 ? `<small class="muted" style="display:block" title="Tiempo total de reloj; solo cuentan las horas dentro de la jornada de obra (${jorTxt(e.jor)})">reloj ${fmt(e.horasRel, 1)}</small>` : ''}</td><td class="n">${vacio(e.horo) ? '<span class="muted">–</span>' : `<b>${fmt(Number(e.horo), 1)}</b>`}</td><td>${esc(e.motivo || '')}${e.reinicia ? ' <span class="pill p-ready" title="Reinicia el contador del mantenimiento programado">service</span>' : ''}</td><td>${esc(e.obs || '')}</td><td>${ro ? '' : '<button class="btn sm ghost" data-a="ed">✎</button>'}</td></tr>`;
   });
   h += `</tbody></table>${list.length ? '' : '<div class="empty"><b>Sin paradas ni mantenimientos registrados</b></div>'}</div>`;
   el.innerHTML = h;
@@ -340,7 +341,7 @@ function vMaqEv(el) {
   $('#fEM').onchange = (ev) => { ui.evMaq = ev.target.value; render(false); };
   $('#fEMes').onchange = (ev) => { ui.evMes = ev.target.value; render(false); };
   segBind('#fET', ft, (v) => { ui.evTipo = v; render(false); });
-  bindEvCurso(el);
+  bindEvCurso(el); const bj = $('#evJor', el); if (bj && !ro) bj.onclick = editJornada;
   if (!ro) $$('[data-a=ed]', el).forEach((b) => { b.onclick = () => { const id = b.closest('tr').dataset.id, e = maqE().find((x) => x.id === id); if (e && e.enCurso) finalizarEvento(id); else editEvento(id); }; });
 }
 async function editEvento(id, maq, sem) {
@@ -426,9 +427,9 @@ async function exportMaq() {
   });
   a4.sort((x, y) => (x[0] === 'Fecha' ? -1 : y[0] === 'Fecha' ? 1 : y[0].localeCompare(x[0]) || String(x[1]).localeCompare(String(y[1]), 'es', { numeric: true })));
   sh(a4, [12, 10, 26, 17, 15, 17, 28], 'Horómetro por jornada');
-  const a3 = [['Fecha', 'Mes', 'Interno', 'Equipo', 'Tipo', 'Inicio', 'Fin', 'Horas', 'Horómetro', 'Motivo', 'Service programado', 'Observaciones']];
-  maqE().slice().sort((a, b) => b.fecha.localeCompare(a.fecha)).forEach((e) => { const m = maqDe(e.maq) || {}; a3.push([e.fecha, mesTxt(e.fecha.slice(0, 7)), m.interno || '', m.descripcion || '', MAQ_TIPO[e.tipo][0], e.inicio ? e.inicio.replace('T', ' ') : '', e.enCurso ? 'en curso' : e.fin ? e.fin.replace('T', ' ') : '', e.inicio && !e.enCurso ? Math.round((Number(e.horas) || 0) * 100) / 100 : r1(Number(e.horas) || 0), vacio(e.horo) ? '' : Number(e.horo), e.motivo || '', e.reinicia ? 'Sí' : '', e.obs || '']); });
-  sh(a3, [12, 14, 10, 26, 15, 17, 17, 8, 11, 28, 17, 40], 'Paradas y mantenimientos');
+  const a3 = [['Fecha', 'Mes', 'Interno', 'Equipo', 'Tipo', 'Inicio', 'Fin', 'Horas (en jornada)', 'Horas de reloj', 'Jornada', 'Horómetro', 'Motivo', 'Service programado', 'Observaciones']];
+  maqE().slice().sort((a, b) => b.fecha.localeCompare(a.fecha)).forEach((e) => { const m = maqDe(e.maq) || {}; a3.push([e.fecha, mesTxt(e.fecha.slice(0, 7)), m.interno || '', m.descripcion || '', MAQ_TIPO[e.tipo][0], e.inicio ? e.inicio.replace('T', ' ') : '', e.enCurso ? 'en curso' : e.fin ? e.fin.replace('T', ' ') : '', e.inicio && !e.enCurso ? Math.round((Number(e.horas) || 0) * 100) / 100 : r1(Number(e.horas) || 0), e.horasRel != null ? e.horasRel : '', e.jor ? jorTxt(e.jor) : '', vacio(e.horo) ? '' : Number(e.horo), e.motivo || '', e.reinicia ? 'Sí' : '', e.obs || '']); });
+  sh(a3, [12, 14, 10, 26, 15, 17, 17, 10, 10, 14, 11, 28, 17, 40], 'Paradas y mantenimientos');
   const p = await window.api.saveBinary(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), `Maquinaria de obra ${today()}.xlsx`, 'xlsx', 'Excel');
   if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
 }
@@ -457,6 +458,31 @@ function printMaqMes(ym) {
 // ======================= CONTADOR DE PARADAS Y MANTENIMIENTOS =======================
 // Se inicia con la hora del reloj (o la que se indique) y al finalizar se calculan las horas que demandó.
 // En curso: {…evento, inicio: 'AAAA-MM-DDTHH:MM', enCurso: true, horas: 0}; al finalizar se agrega fin y horas = fin − inicio.
+// jornada de obra: solo esas horas cuentan como parada efectiva (las de noche no se trabaja igual)
+const jorObra = () => { const j = (S.params && S.params.jornada) || {}; return { ini: j.ini || '06:00', fin: j.fin || '19:00' }; };
+const jorTxt = (j) => `${(j || jorObra()).ini} a ${(j || jorObra()).fin}`;
+function horasJornada(a, b, j) {
+  j = j || jorObra(); const t0 = new Date(a).getTime(), t1 = new Date(b).getTime(); if (!(t1 > t0)) return 0;
+  let tot = 0, d = a.slice(0, 10);
+  for (let k = 0; k < 400 && d <= b.slice(0, 10); k++, d = sumDias(d, 1)) {
+    const j0 = new Date(`${d}T${j.ini}`).getTime(), j1 = new Date(`${d}T${j.fin}`).getTime();
+    tot += Math.max(0, Math.min(t1, j1) - Math.max(t0, j0));
+  }
+  return tot / 36e5;
+}
+// lo registrado antes con hora de inicio y fin pasa a contar solo las horas de jornada (se guarda la jornada usada)
+function maqMigrJor() {
+  if (window.READONLY) return; let n = 0;
+  maqE().forEach((e) => { if (e.inicio && e.fin && !e.enCurso && e.horasRel == null) { e.horasRel = Math.round(horasEntre(e.inicio, e.fin) * 100) / 100; e.jor = jorObra(); e.horas = Math.round(horasJornada(e.inicio, e.fin, e.jor) * 100) / 100; n++; } });
+  if (n) commit(`${n} parada${n > 1 ? 's' : ''} / mantenimiento${n > 1 ? 's' : ''} recalculado${n > 1 ? 's' : ''} con la jornada de obra (${jorTxt()})`);
+}
+async function editJornada() {
+  if (window.READONLY) return; const j = jorObra();
+  const r = await modal({ title: 'Jornada de obra', sub: 'Las horas de parada y mantenimiento con contador cuentan solo dentro de este horario',
+    body: `<div class="form"><label>Inicio<input type="time" name="ini" value="${j.ini}"></label><label>Fin<input type="time" name="fin" value="${j.fin}"></label></div><p class="hint" style="display:block">Se aplica a lo que se finalice de ahora en adelante; lo ya registrado conserva la jornada con la que se calculó.</p>`,
+    buttons: [['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (box) => { const a = $('[name=ini]', box).value, b = $('[name=fin]', box).value; if (!a || !b || b <= a) { toast('El fin de la jornada tiene que ser posterior al inicio', { err: true }); return false; } return { ini: a, fin: b }; }]] });
+  if (!r) return; S.params.jornada = r; commit(`Jornada de obra: ${jorTxt(r)}`);
+}
 const evCurso = () => maqE().filter((e) => e.enCurso);
 const evDeMaq = (maq) => evCurso().find((e) => e.maq === maq);
 const ahoraLocal = () => { const d = new Date(); d.setSeconds(0, 0); return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16); };
@@ -465,7 +491,9 @@ const hhmm = (s) => (s ? String(s).slice(11, 16) : '');
 const durTxt = (h) => { const m = Math.round(h * 60); return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`; };
 const tmrHTML = (e) => `<span class="tmr" data-ini="${esc(e.inicio)}">${tmrFmt(e.inicio)}</span>`;
 function tmrFmt(ini) { const s = Math.max(0, Math.floor((Date.now() - new Date(ini).getTime()) / 1000)); return `${String(Math.floor(s / 3600)).padStart(2, '0')}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
-setInterval(() => { document.querySelectorAll('.tmr[data-ini]').forEach((x) => { x.textContent = tmrFmt(x.dataset.ini); }); }, 1000);
+const jorVivo = (ini) => { const h = horasJornada(ini, ahoraSeg()); const m = Math.floor(h * 60); return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+const ahoraSeg = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 19); };
+setInterval(() => { document.querySelectorAll('.tmr[data-ini]').forEach((x) => { x.textContent = tmrFmt(x.dataset.ini); }); document.querySelectorAll('.tjor[data-ini]').forEach((x) => { x.textContent = jorVivo(x.dataset.ini); }); }, 1000);
 // tarjetas de lo que está en curso (Maquinaria, Paradas y mantenimientos e Inicio)
 function evCursoHTML(compacto) {
   const es = evCurso().sort((a, b) => String(a.inicio).localeCompare(String(b.inicio))); if (!es.length) return '';
@@ -474,7 +502,7 @@ function evCursoHTML(compacto) {
   return `<div class="evcur">${es.map((e) => { const m = maqDe(e.maq) || {};
     return `<div class="card evc ${e.tipo}" data-id="${e.id}"><div class="evch"><span class="pill ${MAQ_TIPO[e.tipo][1]}">${MAQ_TIPO[e.tipo][0]} en curso</span><span class="muted">desde ${hhmm(e.inicio)}${e.inicio.slice(0, 10) !== today() ? ` del ${fechaCorta(e.inicio.slice(0, 10))}` : ''}</span></div>
       <div class="evcm"><b class="mono">${esc(m.interno || '?')}</b> ${esc(m.descripcion || '')}</div><div class="evcmot">${esc(e.motivo || '')}${e.obs ? ` · <span class="muted">${esc(e.obs)}</span>` : ''}</div>
-      <div class="evct">${tmrHTML(e)}</div>${ro ? '' : `<div class="evcb"><button class="btn pri" data-a="fin">■ Finalizar</button><button class="btn ghost" data-a="edc">✎</button></div>`}</div>`; }).join('')}</div>`;
+      <div class="evct">${tmrHTML(e)}<div class="evcj">en jornada de obra (${jorTxt()}): <b class="tjor" data-ini="${esc(e.inicio)}">${jorVivo(e.inicio)}</b> h</div></div>${ro ? '' : `<div class="evcb"><button class="btn pri" data-a="fin">■ Finalizar</button><button class="btn ghost" data-a="edc">✎</button></div>`}</div>`; }).join('')}</div>`;
 }
 function bindEvCurso(el) {
   $$('[data-evgo]', el).forEach((b) => { b.onclick = () => go('maqev'); });
@@ -528,14 +556,16 @@ async function finalizarEvento(id) {
       const h = horasEntre(g('inicio'), g('fin'));
       if (!g('inicio') || !g('fin') || !(new Date(g('fin')) > new Date(g('inicio')))) { toast('El fin tiene que ser posterior al inicio', { err: true }); return false; }
       if (e.tipo === 'mantenimiento' && conH && g('horo') === '') { toast('Cargá el horómetro al que se hizo el mantenimiento', { err: true }); return false; }
-      return { inicio: g('inicio'), fin: g('fin'), horas: Math.round(h * 100) / 100, horo: g('horo'), obs: g('obs'), reinicia: !!($('[name=reinicia]', box) || {}).checked }; }]] });
+      const jo = jorObra();
+      return { inicio: g('inicio'), fin: g('fin'), horas: Math.round(horasJornada(g('inicio'), g('fin'), jo) * 100) / 100, horasRel: Math.round(h * 100) / 100, jor: jo, horo: g('horo'), obs: g('obs'), reinicia: !!($('[name=reinicia]', box) || {}).checked }; }]] });
   { const box = $('#modal .mbox'), i = $('[name=inicio]', box), f = $('[name=fin]', box), d = $('#evDur', box);
     const upd = () => { const ok = i.value && f.value && new Date(f.value) > new Date(i.value), h = ok ? horasEntre(i.value, f.value) : 0;
-      d.innerHTML = ok ? `Horas demandadas: <b>${fmt(h, 2)} h</b> <span class="muted">(${durTxt(h)}${i.value.slice(0, 10) !== f.value.slice(0, 10) ? ', abarca más de un día' : ''})</span>` : '<span class="tneg">El fin tiene que ser posterior al inicio</span>'; };
+      const hj = ok ? horasJornada(i.value, f.value) : 0;
+      d.innerHTML = ok ? `Horas de ${e.tipo} en la jornada de obra (${jorTxt()}): <b>${fmt(hj, 2)} h</b> <span class="muted">(${durTxt(hj)})</span><br><span class="muted">Tiempo total de reloj: ${fmt(h, 2)} h (${durTxt(h)})${i.value.slice(0, 10) !== f.value.slice(0, 10) ? ' · abarca más de un día' : ''}${h - hj > 0.009 ? ` · ${fmt(h - hj, 2)} h fuera de jornada no se cuentan` : ''}</span>` : '<span class="tneg">El fin tiene que ser posterior al inicio</span>'; };
     i.oninput = upd; f.oninput = upd; $('#evAhora2', box).onclick = () => { f.value = ahoraLocal(); upd(); }; upd(); }
   const res = await pm; if (!res) return;
-  Object.assign(e, { inicio: res.inicio, fin: res.fin, fecha: res.inicio.slice(0, 10), horas: res.horas, obs: res.obs }); delete e.enCurso;
+  Object.assign(e, { inicio: res.inicio, fin: res.fin, fecha: res.inicio.slice(0, 10), horas: res.horas, horasRel: res.horasRel, jor: res.jor, obs: res.obs }); delete e.enCurso;
   if (res.horo !== '' && conH) e.horo = Number(res.horo); else delete e.horo;
   if (res.reinicia) e.reinicia = true; else delete e.reinicia;
-  commit(`${MAQ_TIPO[e.tipo][0]} de ${m.interno}: ${fmt(e.horas, 2)} h (${hhmm(e.inicio)} a ${hhmm(e.fin)})`);
+  commit(`${MAQ_TIPO[e.tipo][0]} de ${m.interno}: ${fmt(e.horas, 2)} h en jornada${e.horasRel - e.horas > 0.009 ? ` (${fmt(e.horasRel, 2)} h de reloj)` : ''} · ${hhmm(e.inicio)} a ${hhmm(e.fin)}`);
 }

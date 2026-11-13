@@ -1264,3 +1264,4 @@ body.ayuda #view .hint { display: block; animation: fadeIn .25s; }
 .evcban { margin-bottom: 12px; } .evcban .tmr { margin-left: 2px; }
 .evdur { padding: 10px 12px; border-radius: 9px; background: #f4f7fb; font-size: 14px; }
 tr.evrun td { background: #fff8ec; }
+.evcj { font-size: 12px; color: var(--mute); margin-top: 2px; } .evcj b { color: var(--ink); font-variant-numeric: tabular-nums; }
