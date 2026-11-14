@@ -44,7 +44,7 @@ async function init() {
   marca();
   go('resumen');
   if (!window.VISOR) updIniciar();
-  if (!window.VISOR) setTimeout(() => usrEntrar(false), 400);
+  if (!window.VISOR) setTimeout(async () => { if (usersOn()) usrEntrar(false); else await updObligatoria(); }, 400);
   if (ED.blank && !S.parque && !window.VISOR) setTimeout(() => asistenteParque(true), 400);
 }
 function recargar(text) { const st = JSON.parse(text); S = normalizar(st); Sync.ordenar(S); R = Engine.calcular(S); render(false); toast('Datos actualizados'); }

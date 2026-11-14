@@ -37,27 +37,35 @@ function usrPie() {
   el.innerHTML = USR ? `<span title="${esc(ROLES[USR.rol] ? ROLES[USR.rol][0] : '')}">👤 ${esc(USR.nombre)}</span> <button class="lnk" id="usrCambiar">cambiar</button>` : '<button class="lnk" id="usrCambiar">👤 Entrar</button>';
   $('#usrCambiar').onclick = () => usrEntrar(true);
 }
+// Cada vez que se abre el programa hay que entrar (la sesión no sobrevive al cierre). Esta PC recuerda el usuario
+// y, si se tilda, el PIN: entrar es un toque. Antes de entrar se exige instalar la versión nueva si hay una lista.
+const usrRec = () => { try { return JSON.parse(localStorage.getItem('obeii-usr') || 'null') || {}; } catch (_) { return {}; } };
 async function usrEntrar(forzar) {
   usrPedido = true;
   if (window.VISOR || !usersOn()) { USR = null; usrPie(); return; }
-  if (!forzar) {
-    try { const r = JSON.parse(localStorage.getItem('obeii-usr') || 'null'); const u = r && usrL().find((x) => x.id === r.id && x.pin === r.pin); if (u) { USR = u; aplicarPermiso(); usrPie(); return; } } catch (_) { /* nada */ }
-  }
+  if (typeof updObligatoria === 'function' && (await updObligatoria())) return;
+  const rec = usrRec(), recU = usrL().find((x) => x.id === rec.id), recPin = recU && rec.pin && rec.pin === recU.pin;
   const us = usrL().slice().sort((a, b) => a.nombre.localeCompare(b.nombre));
   const pm = modal({ title: '👤 ¿Quién está usando el programa?', sub: 'Elegí tu usuario e ingresá tu PIN. Lo que cargues queda registrado con tu nombre.',
-    body: `<div class="form"><label class="full">Usuario<select id="uS">${us.map((u) => `<option value="${u.id}" ${USR && USR.id === u.id ? 'selected' : ''}>${esc(u.nombre)} · ${ROLES[u.rol][0]}</option>`).join('')}</select></label>
-      <label class="full">PIN<input type="password" inputmode="numeric" id="uP" autocomplete="off"></label>
-      <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="uR" style="width:auto;margin:0" checked> Recordarme en esta PC</label></div>`,
+    body: `<div class="form"><label class="full">Usuario<select id="uS">${us.map((u) => `<option value="${u.id}" ${(USR ? USR.id === u.id : rec.id === u.id) ? 'selected' : ''}>${esc(u.nombre)} · ${ROLES[u.rol][0]}</option>`).join('')}</select></label>
+      <label class="full">PIN<input type="password" inputmode="numeric" id="uP" autocomplete="off" placeholder="${recPin ? '•••• recordado: tocá Entrar' : ''}"></label>
+      <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="uR" style="width:auto;margin:0" ${recPin || !rec.id ? 'checked' : ''}> Recordar mi PIN en esta PC</label>
+      <p class="hint" style="margin:0">La sesión se cierra al cerrar el programa: cada vez que se abre hay que entrar.</p></div>`,
     buttons: [['Entrar solo a consultar', 'btn', () => 'ro'], ['Entrar', 'btn pri', (box) => {
       const u = usrL().find((x) => x.id === $('#uS', box).value);
-      if (!u || box.dataset.h !== u.pin || box.dataset.hu !== u.id) { toast('PIN incorrecto', { err: true }); return false; }
+      const okRec = !$('#uP', box).value && rec.id === (u && u.id) && rec.pin && u && rec.pin === u.pin;
+      if (!u || (!okRec && (box.dataset.h !== u.pin || box.dataset.hu !== u.id))) { toast('PIN incorrecto', { err: true }); return false; }
       return { u, rec: $('#uR', box).checked }; }]] });
   { const box = $('#modal .mbox'), p = $('#uP', box), sel = $('#uS', box);
     const calc = async () => { const id = sel.value, h = await pinHash(id, p.value.trim()); if (sel.value === id) { box.dataset.h = h; box.dataset.hu = id; } };
-    p.oninput = calc; sel.onchange = calc; p.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); calc().then(() => $$('.mfoot .btn.pri', box)[0].click()); } }; setTimeout(() => p.focus(), 50); }
+    const ph = () => { const r2 = usrRec(), uu = usrL().find((x) => x.id === sel.value); p.placeholder = r2.id === sel.value && r2.pin && uu && r2.pin === uu.pin ? '•••• recordado: tocá Entrar' : ''; };
+    p.oninput = calc; sel.onchange = () => { calc(); ph(); }; p.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); calc().then(() => $$('.mfoot .btn.pri', box)[0].click()); } };
+    box.onkeydown = (e) => { if (e.key === 'Enter' && e.target !== p) { e.preventDefault(); $$('.mfoot .btn.pri', box)[0].click(); } };
+    setTimeout(() => p.focus(), 50); }
   const res = await pm;
-  if (res && res.u) { USR = res.u; try { if (res.rec) localStorage.setItem('obeii-usr', JSON.stringify({ id: res.u.id, pin: res.u.pin })); else localStorage.removeItem('obeii-usr'); } catch (_) { /* nada */ } toast(`Hola, ${res.u.nombre}`); }
-  else { USR = null; try { localStorage.removeItem('obeii-usr'); } catch (_) { /* nada */ } }
+  // se recuerda siempre el usuario; el PIN solo si se tildó (igual hay que entrar en cada apertura)
+  if (res && res.u) { USR = res.u; try { localStorage.setItem('obeii-usr', JSON.stringify(res.rec ? { id: res.u.id, pin: res.u.pin } : { id: res.u.id })); } catch (_) { /* nada */ } toast(`Hola, ${res.u.nombre}`); }
+  else USR = null;
   aplicarPermiso(); usrPie(); render(false);
 }
 setTimeout(() => { const el = $('#nav') && document.querySelector('.side-foot'); if (el && !$('#usrState')) el.insertAdjacentHTML('beforeend', '<div id="usrState"></div>'); usrPie(); }, 0);

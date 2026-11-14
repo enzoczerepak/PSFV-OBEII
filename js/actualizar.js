@@ -37,6 +37,29 @@ function updCardBind() {
     UPD = r; updBarra(); const c = $('#updCard'); if (c) { c.innerHTML = updCardHTML(); updCardBind(); }
   };
 }
+// Versión nueva lista: hay que instalarla para entrar al programa (en todas las PCs, con o sin usuarios)
+let updObligPend = null;
+async function updObligatoria() {
+  if (window.VISOR || !window.api.updEstado) return false;
+  if (updObligPend) return updObligPend;
+  updObligPend = (async () => {
+    try { if (!UPD) UPD = await window.api.updEstado(); } catch (_) { return false; }
+    if (!UPD || (!UPD.listo && !UPD.bajando)) return false;
+    for (;;) {
+      const u = UPD || {};
+      if (!u.listo && !u.bajando) return false;
+      const r = await modal({ title: '⬆️ Hay una versión nueva del programa', sub: u.listo ? `Versión instalada ${esc(u.version || '')} · nueva <b>${esc(u.listo.version)}</b> (${esc(u.listo.origen || '')})` : `Bajando la versión ${esc(u.bajando.version)} del servidor…`,
+        body: u.listo ? `<p>Para entrar hay que instalarla: así todas las PCs trabajan con la misma versión y no se pisan datos. Tarda menos de un minuto y los datos se conservan.</p>${u.error ? `<div class="alert error" style="display:block">La última instalación falló: ${esc(u.error)}</div>` : ''}`
+          : `<p>Esperá a que termine de bajar: <b id="updP">${fmt((u.bajando.p || 0) * 100)} %</b>. Después se instala.</p>`,
+        buttons: [].concat(u.error ? [['Entrar sin actualizar', 'btn', () => 'skip']] : [], u.listo ? [['Instalar y reiniciar', 'btn pri', () => 'inst']] : [['Esperar', 'btn', () => 'wait']]) });
+      if (r === 'skip') return false;
+      if (r === 'inst') { toast('Instalando… el programa se vuelve a abrir solo'); const ok = await window.api.updInstalar(); if (ok) return true; UPD = Object.assign({}, UPD, { error: 'no se pudo iniciar el instalador' }); continue; }
+      if (r === 'wait' || !r) await new Promise((res) => setTimeout(res, 3000));
+      try { UPD = await window.api.updEstado(); } catch (_) { /* sigue */ }
+    }
+  })();
+  const out = await updObligPend; updObligPend = null; return out;
+}
 async function updIniciar() {
   if (!window.api.updEstado) return;
   UPD = await window.api.updEstado(); updBarra();
