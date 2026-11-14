@@ -56,7 +56,7 @@ function normalizar(st) {
   Engine.sincronizarPAT(st);
   // ajustes de obra informados (se aplican una sola vez)
   st.migr = st.migr || {};
-  if (ED.blank) Object.assign(st.migr, { mt120: true, lista0110: true, tx2_12: true });
+  if (ED.blank) Object.assign(st.migr, { mt120: true, lista0110: true, tx2_12: true, holgura: true });
   aplicarParque(st);
   if (!st.migr.mt120) {
     const c = st.circuitos.find((x) => x.cat === 'MT' && x.designacion === 'C33-02');
@@ -82,6 +82,8 @@ function normalizar(st) {
     st.migr.lista0110 = true;
     Engine.sincronizarPAT(st);
   }
+  // holgura en el último corte de cada bobina (2.36.2): una sola vez se liberan los compromisos para replanificar lo listo con holgura
+  if (!st.migr.holgura) { st.compromiso = {}; st.migr.holgura = true; }
   if (!st.migr.tx2_12) {
     const a = st.circuitos.find((x) => x.cat === 'BT' && !x.vinculo && x.desde === 'TX2-INV1'), b = st.circuitos.find((x) => x.cat === 'BT' && !x.vinculo && x.desde === 'TX2-INV2');
     if (a && b && a.zanjaId !== b.zanjaId) Engine.unirZanjas(st, [a.zanjaId, b.zanjaId]);

@@ -18,7 +18,7 @@
   const tolDe = (c) => { if (!MGc || !c || c.cat === 'PAT') return null; const g = MGc.find((x) => x.key === c.key); return g ? window.Margen.tolerancia(g, c.lenFase, tolF()) : null; };
   // tolerancia de un corte: margen de la sección, limitado por lo que queda en su bobina
   const tolP = (c, p) => { if (!c || c.cat === 'PAT') return null; const t = tolDe(c); if (!t && !MGc) return null; return window.Margen.topeBobina ? window.Margen.topeBobina(t, Object.assign({ key: c.key, cid: c.id }, p), R, c.lenFase) : t; };
-  const bobTxt = (t) => (t && t.bob ? `<span class="tolbob ${t.bob.corto ? 'bad' : ''}">Bobina ${esc(t.bob.codigo)}: quedan ${fmt(t.bob.saldo, 1)} m${t.bob.libre < t.bob.saldo - 0.05 ? ` (${fmt(t.bob.libre, 1)} m libres después de los otros cortes)` : ''}${t.bob.corto ? ' · no alcanza para el teórico' : ''}</span>` : '');
+  const bobTxt = (t) => (t && t.bob ? `<span class="tolbob ${t.bob.corto ? 'bad' : ''}">Bobina ${esc(t.bob.codigo)}: quedan ${fmt(t.bob.saldo, 1)} m${t.bob.n > 1 ? ` · sobran ${fmt(t.bob.holg, 1)} m repartidos entre sus ${t.bob.n} cortes de hoy` : ''}${t.bob.corto ? ' · no alcanza para el teórico' : ''}</span>` : '');
   const tolTxt = (t) => (!t ? '' : (t.sinMargen ? `<span class="tol bad">sin margen: no pasarse de ${fmt(Math.min(t.L, t.max), 1)} m</span>` : `<span class="tol"><i class="ok">seguro ≤ ${fmt(t.seg, 1)}</i><i class="warn">riesgo ≤ ${fmt(t.max, 1)}</i></span>`) + bobTxt(t));
   async function cargar(d, id, k, nombre, u) {
     const txt = await W.abrir(d, id, k);

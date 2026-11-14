@@ -60,18 +60,21 @@
     return { L, P, seg: Math.round(L * (1 + P * f / 100) * 10) / 10, max: Math.round(L * (1 + P / 100) * 10) / 10 };
   }
   // tope físico de la bobina: un conductor no puede pasar de lo que queda en su bobina.
-  // seguro ≤ saldo real − los otros cortes listos de esa bobina (no se tocan); riesgo ≤ saldo real de la bobina.
+  // seguro: la holgura de la bobina (saldo real − todos sus cortes listos) se reparte entre esos cortes en proporción a su largo,
+  //   así aunque TODOS se tiendan en su seguro, el último entra igual; se recalcula con cada parte aprobado.
+  // riesgo: margen de la sección, sin pasar del saldo real de la bobina (si se usa, el plan mueve otros cortes a otra bobina).
   // p: { bobina, key, cid, fase, len } (el corte a tirar); R: resultado del motor
   function topeBobina(t, p, R, L) {
     if (!p || !p.bobina || !R) return t;
     const b = (R.bobinas || []).find((x) => x.codigo === p.bobina && (!p.key || x.key === p.key)); if (!b) return t;
     const saldo = Math.max(0, Number(b.saldoActual) || 0);
     const otros = (R.piezas || []).filter((q) => q.bobina === p.bobina && q.key === b.key && q.estado === 'listo' && !(q.cid === p.cid && q.fase === p.fase)).reduce((a, q) => a + (Number(q.len) || 0), 0);
-    const libre = Math.max(0, saldo - otros), base = t || { L: L || p.len, seg: L || p.len, max: L || p.len, P: 0 }, LL = base.L;
-    const seg = Math.min(base.seg, libre), max = Math.max(seg, Math.min(base.max, saldo));
+    const base = t || { L: L || p.len, seg: L || p.len, max: L || p.len, P: 0 }, LL = base.L;
+    const tot = otros + LL, holg = saldo - tot, libre = Math.max(0, saldo - otros);
+    const seg = Math.min(base.seg, holg >= 0 ? LL + holg * (LL / tot) : libre), max = Math.max(seg, Math.min(base.max, saldo));
     if (t && seg >= base.seg - 0.05 && max >= base.max - 0.05) return t;
     const r1 = (x) => Math.floor(x * 10) / 10;
-    return Object.assign({}, base, { seg: r1(seg), max: r1(max), bob: { codigo: p.bobina, saldo: r1(saldo), libre: r1(libre), corto: libre < LL - 0.05 }, sinMargen: max <= LL + 0.05 });
+    return Object.assign({}, base, { seg: r1(seg), max: r1(max), bob: { codigo: p.bobina, saldo: r1(saldo), libre: r1(libre), holg: r1(Math.max(0, holg)), n: (R.piezas || []).filter((q) => q.bobina === p.bobina && q.key === b.key && q.estado === 'listo').length || 1, corto: libre < LL - 0.05 }, sinMargen: max <= LL + 0.05 });
   }
   // nivel de unos metros tirados: 'ok' (seguro o de menos), 'riesgo', 'falta'
   function nivel(t, m) {
