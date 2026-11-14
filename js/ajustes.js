@@ -6,6 +6,7 @@ function vAjustes(el) {
   el.innerHTML = `<div class="grid g2 stagger"><div class="card"><h3>Parámetros del cálculo</h3><div class="form">
     <label>Margen por corte (m por conductor)<input type="number" step="0.1" min="0" id="pM" value="${p.margen}"></label>
     <label>Remanente mínimo útil (m)<input type="number" step="1" min="0" id="pU" value="${p.minUtil}"></label>
+    <label title="El plan deja en cada bobina, después de su último corte, al menos este % del largo de ese corte, para que el que tiende tenga tolerancia. Si el stock no alcanza para respetarlo, se planifica sin holgura antes que dejar un faltante.">Holgura en el último corte de cada bobina (%)<input type="number" step="1" min="0" max="30" id="pH" value="${p.holgura != null ? p.holgura : 8}"></label>
     <label title="Del margen disponible de cada sección, qué parte se considera segura al tender. El resto es riesgo.">Tolerancia segura (% del margen)<input type="number" step="5" min="0" max="100" id="pTS" value="${p.tolSeg != null ? p.tolSeg : 50}"></label>
     <label>Cola no utilizable por bobina (m)<input type="number" step="1" min="0" id="pC" value="${p.cola}"></label></div>
     <h4 style="margin:16px 0 6px">Corrección de largo por tipo (%)</h4>
@@ -30,7 +31,7 @@ function vAjustes(el) {
     <li>Los cortes que ya figuran como <b>listos</b> quedan comprometidos a su bobina: al abrirse nuevas zanjas no cambian, salvo que ya no entren o uses "Replanificar".</li></ol></div></div>`;
   const setP = (k) => (e) => { S.params[k] = Math.max(0, Number(e.target.value) || 0); commit('Parámetros actualizados'); };
   if ($('#pTS')) $('#pTS').onchange = (e) => { S.params.tolSeg = Math.max(0, Math.min(100, Number(e.target.value) || 0)); commit('Tolerancia segura: ' + S.params.tolSeg + ' % del margen'); };
-  $('#pM').onchange = setP('margen'); $('#pU').onchange = setP('minUtil'); $('#pC').onchange = setP('cola');
+  $('#pM').onchange = setP('margen'); $('#pU').onchange = setP('minUtil'); $('#pH').onchange = setP('holgura'); $('#pC').onchange = setP('cola');
   const setAj = (k, v) => { S.params.ajuste = Object.assign({}, S.params.ajuste || {}); S.params.ajuste[k] = Math.max(-30, Math.min(30, Number(v) || 0)); recalcularTodo(k); commit(`Corrección ${CATN[k]}: ${fmt(S.params.ajuste[k], 1)} % · plan recalculado`); };
   $$('.pAj', el).forEach((i) => { i.onchange = () => setAj(i.dataset.k, i.value); });
   $$('.useSug', el).forEach((a) => { a.onclick = (e) => { e.preventDefault(); setAj(a.dataset.k, a.dataset.v); }; });

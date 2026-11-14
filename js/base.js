@@ -34,7 +34,7 @@ const ui = { sec: {}, est: {}, q: {}, sts: {}, cest: {}, zf: {}, sel: new Set(),
 
 // ======================= estado =======================
 function normalizar(st) {
-  st.params = Object.assign({ margen: 0, minUtil: 30, cola: 0 }, st.params || {});
+  st.params = Object.assign({ margen: 0, minUtil: 30, cola: 0, holgura: 8 }, st.params || {});
   st.fundaciones = st.fundaciones || {};
   normalizarHincado(st);
   st.cronoTareas = st.cronoTareas || [];

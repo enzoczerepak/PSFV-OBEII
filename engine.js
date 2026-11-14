@@ -66,14 +66,16 @@
 
   // Mejora local del plan provisorio: mover o intercambiar conductores entre bobinas del mismo tipo/sección
   // sin abrir bobinas nuevas, para bajar el descarte y concentrar el sobrante en remanentes útiles.
-  function mejorar(prov, bob, minUtil) {
+  function mejorar(prov, bob, minUtil, resv) {
+    resv = resv || {};
     const bk = new Map(bob.map((b) => [b.codigo + '|' + b.key, b]));
     bob.forEach((b) => { b.nProv = 0; });
     const asg = prov.filter((x) => x.bobina);
     asg.forEach((x) => { bk.get(x.bobina + '|' + x.key).nProv++; });
     const cost = (b, saldo, nProv) => {
       if (!(b.fijo || nProv > 0)) return 0;
-      return 1e9 + (saldo > 0.01 && saldo < minUtil ? saldo * 1000 : 0) - saldo * saldo;
+      const rv = resv[b.key] || 0, falta = nProv > 0 && saldo < rv - 1e-9 ? rv - saldo : 0;
+      return 1e9 + falta * 1e7 + (saldo > 0.01 && saldo < minUtil ? saldo * 1000 : 0) - saldo * saldo;
     };
     const cur = (b) => cost(b, b.saldo, b.nProv);
     let mejoras = 0;
@@ -108,14 +110,18 @@
   }
 
   // Best Fit Decreasing
-  function bfd(piezas, bob) {
+  function bfd(piezas, bob, h) {
     piezas.sort((a, b) => b.len - a.len || a.orden - b.orden);
     for (const pz of piezas) {
       let best = -1;
-      for (let j = 0; j < bob.length; j++) {
-        const b = bob[j];
-        if (b.key !== pz.key || b.saldo + 1e-9 < pz.len) continue;
-        if (best < 0 || b.saldo < bob[best].saldo - 1e-9) best = j;
+      for (const hh of h > 0 ? [h, 0] : [0]) {
+        const nec = pz.len * (1 + hh / 100);
+        for (let j = 0; j < bob.length; j++) {
+          const b = bob[j];
+          if (b.key !== pz.key || b.saldo + 1e-9 < nec) continue;
+          if (best < 0 || b.saldo < bob[best].saldo - 1e-9) best = j;
+        }
+        if (best >= 0) break;
       }
       if (best < 0) { pz.bobina = null; pz.estado = 'falta'; continue; }
       bob[best].saldo = r2(bob[best].saldo - pz.len);
@@ -124,7 +130,8 @@
   }
 
   function calcular(state) {
-    const p = Object.assign({ margen: 0, minUtil: 30, cola: 0 }, state.params || {});
+    const p = Object.assign({ margen: 0, minUtil: 30, cola: 0, holgura: 8 }, state.params || {});
+    const hol = Math.max(0, Number(p.holgura) || 0);
     const alerts = [];
 
     // ---- bobinas
@@ -230,11 +237,15 @@
       const b = cod && bobCalc.find((x) => x.codigo === cod && x.key === pz.key);
       if (b && b.saldo + 1e-9 >= pz.len) { b.saldo = r2(b.saldo - pz.len); pz.bobina = b.codigo; pz.fijado = true; } else libres.push(pz);
     });
-    bfd(libres, bobCalc);
+    bfd(libres, bobCalc, hol);
     // etapa 2: plan provisorio; después mejora de todo lo que no está ejecutado ni comprometido
     bobCalc.forEach((b) => { b.fijo = b.fijo || etapa1.some((x) => x.bobina === b.codigo && x.key === b.key); });
-    const etapa2 = pend((c) => !c.listo, 'provisorio'); bfd(etapa2, bobCalc);
-    const mejoras = p.mejorar === false ? 0 : mejorar(etapa2, bobCalc, p.minUtil);
+    const etapa2 = pend((c) => !c.listo, 'provisorio'); bfd(etapa2, bobCalc, hol);
+    // reserva por sección para la mejora: la holgura sobre el corte mediano de lo que falta tender
+    const resv = {};
+    if (hol > 0) { const por = {}; [...etapa1, ...etapa2].forEach((x) => { (por[x.key] = por[x.key] || []).push(x.len); });
+      Object.entries(por).forEach(([k, ls]) => { ls.sort((a, b) => a - b); resv[k] = r2(ls[Math.floor(ls.length / 2)] * hol / 100); }); }
+    const mejoras = p.mejorar === false ? 0 : mejorar(etapa2, bobCalc, p.minUtil, resv);
     manuales.forEach((pz) => (pz.estado === 'listo' ? etapa1 : etapa2).push(pz));
     const compromiso = {};
     etapa1.forEach((pz) => { if (pz.bobina) compromiso[pz.cid + '|' + pz.fase] = pz.bobina; });

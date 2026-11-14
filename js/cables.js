@@ -27,8 +27,10 @@ function vPlan(el, cat) {
   const permTxt = (p, c) => {
     if (p.estado === 'ejecutado') { const t = Margen.tolerancia(mgDe(c.key), c.lenFase, tolF()); const nv = t ? Margen.nivel(t, p.len) : null; return nv ? `<span class="tl-${nv}" title="tirado ${fmt(p.len, 2)} m">${nv === 'ok' ? '✓' : nv === 'riesgo' ? 'riesgo' : 'excedido'}</span>` : ''; }
     const g = mgDe(c.key); if (!g) return '<span class="muted">…</span>';
-    const t = Margen.tolerancia(g, p.len - (Number(S.params.margen) || 0), tolF()); if (!t) return '';
-    if (t.sinMargen) return `<span class="tl-falta" title="Sin margen en la sección: no pasarse del plan">≤ ${fmt(p.len, 1)}</span>`;
+    const L0 = p.len - (Number(S.params.margen) || 0), t = Margen.topeBobina(Margen.tolerancia(g, L0, tolF()), p, R, L0); if (!t) return '';
+    const bt = t.bob ? ` · bobina ${t.bob.codigo}: quedan ${fmt(t.bob.saldo, 1)} m${t.bob.libre < t.bob.saldo ? `, ${fmt(t.bob.libre, 1)} m libres después de los otros cortes` : ''}` : '';
+    if (t.sinMargen) return `<span class="tl-falta" title="${t.bob ? 'Tope de la bobina' : 'Sin margen en la sección'}: no pasarse del plan${bt}">≤ ${fmt(Math.min(p.len, t.max), 1)}${t.bob ? ' 🧵' : ''}</span>`;
+    if (t.bob) return `<span class="tl-ok" title="Seguro: hasta ${fmt(t.seg, 1)} m${bt}">${fmt(t.seg, 1)}</span> / <span class="tl-riesgo" title="Máximo: hasta ${fmt(t.max, 1)} m${bt}">${fmt(t.max, 1)}</span> <span title="Limitado por lo que queda en la bobina${bt}">🧵</span>`;
     return `<span class="tl-ok" title="Seguro: hasta ${fmt(t.seg, 1)} m">${fmt(t.seg, 1)}</span> / <span class="tl-riesgo" title="Máximo (riesgo): hasta ${fmt(t.max, 1)} m">${fmt(t.max, 1)}</span>`;
   };
   bobs.forEach((b) => {
