@@ -39,6 +39,15 @@ function usrPie() {
 }
 // Cada vez que se abre el programa hay que entrar (la sesión no sobrevive al cierre). Esta PC recuerda el usuario
 // y, si se tilda, el PIN: entrar es un toque. Antes de entrar se exige instalar la versión nueva si hay una lista.
+// saludo al entrar (mismo cartel que el visor web)
+function usrBienvenida(nombre) {
+  const fecha = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const g = document.createElement('div'); g.id = 'greet';
+  g.innerHTML = `<div class="gb"><div class="gi">👋</div><div><b>Hola ${esc(nombre)}, ¡bienvenido de nuevo!</b><span>${fecha.charAt(0).toUpperCase() + fecha.slice(1)}</span><small>${esc(S.nombre || 'PSFV Oberá II')} · Gestión de obra</small></div></div>`;
+  document.body.appendChild(g); requestAnimationFrame(() => g.classList.add('show'));
+  const fuera = () => { g.classList.remove('show'); setTimeout(() => g.remove(), 500); };
+  g.onclick = fuera; setTimeout(fuera, 3000);
+}
 const usrRec = () => { try { return JSON.parse(localStorage.getItem('obeii-usr') || 'null') || {}; } catch (_) { return {}; } };
 async function usrEntrar(forzar) {
   usrPedido = true;
@@ -64,7 +73,7 @@ async function usrEntrar(forzar) {
     setTimeout(() => p.focus(), 50); }
   const res = await pm;
   // se recuerda siempre el usuario; el PIN solo si se tildó (igual hay que entrar en cada apertura)
-  if (res && res.u) { USR = res.u; try { localStorage.setItem('obeii-usr', JSON.stringify(res.rec ? { id: res.u.id, pin: res.u.pin } : { id: res.u.id })); } catch (_) { /* nada */ } toast(`Hola, ${res.u.nombre}`); }
+  if (res && res.u) { USR = res.u; try { localStorage.setItem('obeii-usr', JSON.stringify(res.rec ? { id: res.u.id, pin: res.u.pin } : { id: res.u.id })); } catch (_) { /* nada */ } usrBienvenida(res.u.nombre); }
   else USR = null;
   aplicarPermiso(); usrPie(); render(false);
 }
