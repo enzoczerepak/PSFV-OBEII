@@ -57,7 +57,7 @@ function normalizar(st) {
   Engine.sincronizarPAT(st);
   // ajustes de obra informados (se aplican una sola vez)
   st.migr = st.migr || {};
-  if (ED.blank) Object.assign(st.migr, { mt120: true, lista0110: true, tx2_12: true, holgura: true, rest1114: true });
+  if (ED.blank) Object.assign(st.migr, { mt120: true, lista0110: true, tx2_12: true, holgura: true, rest1114: true, rest1114b: true });
   aplicarParque(st);
   if (!st.migr.mt120) {
     const c = st.circuitos.find((x) => x.cat === 'MT' && x.designacion === 'C33-02');
@@ -97,6 +97,19 @@ function normalizar(st) {
     }
     const av = st.sala && st.sala.av; if (av && av['exc|C4'] && !av['exc|C4'].ok && av['exc|C4'].ini === '2026-11-12') av['exc|C4'] = { ini: '2026-11-12', fin: '2026-11-14', ok: true };
     st.migr.rest1114 = true;
+  }
+  if (!st.migr.rest1114b) {
+    const L = {"ml101ltv|2026-11-09":{"2026-11-12":193,"2026-11-13":203},"msn2cn70|2026-11-09":{"2026-11-12":233,"2026-11-13":245},"matbmael|2026-11-09":{"2026-11-12":4452,"2026-11-13":4463},"m9q6csiw|2026-11-09":{"2026-11-12":5196.8,"2026-11-13":5201},"mz9bja4o|2026-11-09":{"2026-11-12":879.7,"2026-11-13":890}};
+    (st.maqHoras || []).forEach((r) => { const v = L[r.id]; if (v && r.lect && r.lect['2026-11-12'] == null && r.lect['2026-11-13'] == null) r.lect = Object.assign({}, r.lect, v); });
+    const D = st.lluvia && st.lluvia.dias;
+    if (D) {
+      const ant = { '2026-11-10': { trab: 'si' }, '2026-11-11': { man: false }, '2026-11-12': { mm: 1.3, man: true, trab: 'parcial' } };
+      Object.entries(ant).forEach(([f, v]) => { const x = D[f]; if (!x || (x.trab == null && x.man == null)) D[f] = v; });
+      ['2026-11-13', '2026-11-14'].forEach((f) => { const x = D[f]; if (x && Object.keys(x).length === 1 && x.mm === 0) delete D[f]; });
+    }
+    const av = st.sala && st.sala.av; if (av && av['exc|C4'] && !av['exc|C4'].ok && av['exc|C4'].ini === '2026-11-12') av['exc|C4'] = { ini: '2026-11-12', fin: '2026-11-14', ok: true };
+        (st.maquinas || []).forEach((m) => { if ((m.interno === 'HI-2' || m.interno === 'HI-3') && !m.inact) m.inact = [{ d: '2026-11-14', h: null }]; });
+    st.migr.rest1114b = true;
   }
   if (!st.migr.tx2_12) {
     const a = st.circuitos.find((x) => x.cat === 'BT' && !x.vinculo && x.desde === 'TX2-INV1'), b = st.circuitos.find((x) => x.cat === 'BT' && !x.vinculo && x.desde === 'TX2-INV2');

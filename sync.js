@@ -5,7 +5,7 @@
   const KINDS = [['b', 'bobinas'], ['c', 'circuitos'], ['z', 'zanjas'], ['k', 'cronoTareas'], ['p', 'partes'], ['m', 'maquinas'], ['w', 'maqHoras'], ['e', 'maqEventos'], ['hl', 'hist'], ['us', 'usuarios'], ['mo', 'montaje']];
   // Versión del protocolo: 2 agrega fundaciones STS ('f:') y conserva registros de tipos desconocidos.
   // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
-  const PROTO = 3; // 3: cada cambio lleva la revisión del servidor sobre la que se hizo (no se pisa un dato más nuevo)
+  const PROTO = 4; // 3: cada cambio lleva la revisión del servidor sobre la que se hizo · 4: al actualizar, el cliente primero toma todo del servidor
   // 'hc' catálogo y distribución de hincas, 'ht:' hincado por tracker, 'hr:' recepciones de hincas
   const nuevo = (k) => k.startsWith('hl:') || k.startsWith('us:') || k.startsWith('mo:') || k === 'tb' || k.startsWith('te:') || k.startsWith('tn:') || k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('la:') || k.startsWith('sv:');
   const conocido = (k) => k === 'cfg' || k === 'comp' || k === 'km' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
@@ -130,7 +130,7 @@
   function atender(S, body) {
     const y = meta(S), off = Date.now() - (Number(body.now) || Date.now());
     const viejo = !(Number(body.proto) >= PROTO);
-    let aplicados = 0, rechazados = 0;
+    let aplicados = 0, rechazados = 0; const rech = [];
     if (viejo) return { aplicados: 0, rechazados: (body.cambios || []).length, viejo: true }; // una PC con versión anterior solo recibe: no puede pisar datos
     const cols = records(S);
     (body.cambios || []).forEach((ch) => {
@@ -143,7 +143,7 @@
           // horas de equipos: se suman las lecturas de los dos lados (lo del servidor no se pierde)
           const m = Object.assign({}, sv, ch.v); ['lect', 'hs', 'per'].forEach((f) => { if (sv[f] || ch.v[f]) m[f] = Object.assign({}, sv[f] || {}, ch.v[f] || {}); });
           if (canon(m) !== canon(sv)) { aplicar(S, ch.k, false, m); y.meta[ch.k] = { m: Math.max(adj, cur.m), d: 0, r: ++y.rev }; y.snap[ch.k] = canon(m); aplicados++; }
-        } else rechazados++;
+        } else { rechazados++; rech.push(ch.k); }
         return;
       }
       if (!cur || adj >= cur.m || (cur && Number(ch.base) >= cur.r)) {
@@ -154,20 +154,23 @@
       }
     });
     if (aplicados) ordenar(S);
-    return { aplicados, rechazados };
+    return { aplicados, rechazados, rech };
   }
-  function respuesta(S, since, proto) {
-    const y = meta(S), cur = records(S), out = [], viejo = !(Number(proto) >= PROTO);
-    Object.entries(y.meta).forEach(([k, mt]) => { if (mt.r > since && !(viejo && nuevo(k))) out.push({ k, m: mt.m, d: mt.d, r: mt.r, v: mt.d ? null : cur.get(k) || null }); });
+  // extra: claves que el cliente mandó y se rechazaron → se le devuelve la versión del servidor para que la tome
+  function respuesta(S, since, proto, extra) {
+    const y = meta(S), cur = records(S), out = [], viejo = !(Number(proto) >= PROTO), ex = new Set(extra || []);
+    Object.entries(y.meta).forEach(([k, mt]) => { if ((mt.r > since || ex.has(k)) && !(viejo && nuevo(k))) out.push({ k, m: mt.m, d: mt.d, r: mt.r, v: mt.d ? null : cur.get(k) || null }); });
     return { rev: y.rev, now: Date.now(), proto: PROTO, cambios: out };
   }
 
   // ---- cliente
   function paquete(S, cfg) {
     const y = meta(S), cur = records(S);
-    // versión nueva del programa: se vuelve a pedir todo al servidor (una versión vieja descartaba los tipos de dato que no conocía)
-    if (y.proto !== PROTO) { y.peerRev = 0; y.proto = PROTO; }
-    const keys = Object.keys(y.pend);
+    // versión nueva del programa: primero se toma todo del servidor, sin mandar nada (una versión vieja pudo quedar con
+    // datos distintos de los del servidor aunque creyera tenerlos; lo cargado en ella y no enviado se descarta)
+    let soloRecibir = false;
+    if (y.proto !== PROTO) { y.peerRev = 0; y.proto = PROTO; y.pend = {}; soloRecibir = true; }
+    const keys = soloRecibir ? [] : Object.keys(y.pend);
     const cambios = keys.map((k) => ({ k, m: (y.meta[k] || {}).m || Date.now(), d: (y.meta[k] || {}).d || (cur.has(k) ? 0 : 1), v: cur.get(k) || null, base: (y.meta[k] || {}).r || 0 }));
     return { body: { dev: cfg.devId, clave: cfg.clave, now: Date.now(), since: y.peerRev, proto: PROTO, cambios }, enviados: Object.fromEntries(keys.map((k) => [k, (y.meta[k] || {}).m])) };
   }
@@ -176,13 +179,16 @@
     const off = res.now - Math.round((t0 + Date.now()) / 2);
     let aplicados = 0;
     const viejo = !(Number(res.proto) >= PROTO);
+    const cur = records(S);
     (res.cambios || []).forEach((ch) => {
       if (viejo && nuevo(ch.k)) return; // servidor de versión anterior: no se aceptan sus borrados de fundaciones
       const local = y.meta[ch.k], mLocal = ch.m - off;
       const pendiente = y.pend[ch.k] && !(ch.k in enviados);
       if (pendiente && local && local.m > mLocal) return; // tengo un cambio más nuevo sin enviar
       const h = ch.d ? undefined : canon(ch.v);
-      if (!ch.d && y.snap[ch.k] === h) { y.meta[ch.k] = { m: mLocal, d: 0, r: ch.r }; return; }
+      // se compara con el dato que realmente hay en esta PC (no con lo que se creía tener)
+      if (!ch.d && cur.has(ch.k) && canon(cur.get(ch.k)) === h) { y.meta[ch.k] = { m: mLocal, d: 0, r: ch.r }; y.snap[ch.k] = h; return; }
+      if (ch.d && !cur.has(ch.k)) { y.meta[ch.k] = { m: mLocal, d: 1, r: ch.r }; delete y.snap[ch.k]; return; }
       aplicar(S, ch.k, ch.d, ch.v);
       y.meta[ch.k] = { m: mLocal, d: ch.d ? 1 : 0, r: ch.r };
       if (ch.d) delete y.snap[ch.k]; else y.snap[ch.k] = h;

@@ -189,13 +189,13 @@ const viejos = new Set(); let avisoViejo = false;
 function atenderRed({ id, body }) {
   try {
     if (NET.modo !== 'servidor') { window.api.netReply(id, { error: 'no es servidor' }); return; }
-    const { aplicados, rechazados } = Sync.atender(S, body);
+    const { aplicados, rechazados, rech } = Sync.atender(S, body);
     const quien = body.nombre || (body.dev ? 'PC ' + body.dev : 'otra PC');
     // queda en el historial qué PC cambió qué (y qué se rechazó por venir sobre datos viejos)
     if (aplicados || rechazados) { S.hist = S.hist || []; const ks = (body.cambios || []).map((c) => c.k.split(':')[0]); const tipos = [...new Set(ks)].join(', ');
       S.hist.push({ id: uid('h'), _o: Date.now(), t: new Date().toISOString(), u: quien, s: 'red', v: 'red', m: `Red: ${aplicados} cambio${aplicados === 1 ? '' : 's'} aplicado${aplicados === 1 ? '' : 's'}${rechazados ? ` · ${rechazados} rechazado${rechazados === 1 ? '' : 's'} (datos más viejos que los del servidor)` : ''} · ${tipos}` }); }
     if (aplicados) { S = normalizarRed(S); commitRed(`${aplicados} cambios recibidos de ${quien}`); } else if (rechazados) commitRed(`Cambios de ${quien} rechazados: venían sobre datos viejos`);
-    window.api.netReply(id, Sync.respuesta(S, Number(body.since) || 0, body.proto));
+    window.api.netReply(id, Sync.respuesta(S, Number(body.since) || 0, body.proto, rech));
     if (!(Number(body.proto) >= Sync.PROTO) && !viejos.has(body.dev)) { viejos.add(body.dev); toast(`La PC ${body.nombre || body.dev || ''} tiene una versión anterior del programa: actualizala. Hasta entonces solo recibe datos y lo que cargue en ella no llega al servidor.`, { err: true, ms: 15000 }); }
   } catch (e) { window.api.netReply(id, { error: String(e.message || e) }); }
 }
