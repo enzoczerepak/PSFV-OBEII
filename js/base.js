@@ -3,6 +3,7 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = (n, d = 0) => (n == null || isNaN(n) ? '–' : Number(n).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d }));
+const fmtM = (n) => { const v = Math.round(Number(n) * 100) / 100; return n == null || isNaN(n) ? '–' : v.toLocaleString('es-AR', { minimumFractionDigits: Number.isInteger(v) ? 0 : 1, maximumFractionDigits: 2 }); }; // metros: enteros sin decimales
 const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 const uid = (p) => p + Math.random().toString(36).slice(2, 9);
 const CATS = Engine.CATS;
@@ -159,7 +160,7 @@ const estPill = {
 };
 const pill = (t) => `<span class="pill ${estPill[t] || 'p-prov'}">${esc(t)}</span>`;
 const phCls = { ejecutado: 'done', listo: 'ready', provisorio: 'prov', falta: 'bad' };
-const phases = (c) => `<span class="ph">${c.fz.map((f) => { const p = c.fasesInfo[f] || {}; return `<span class="${phCls[p.estado] || 'prov'}" title="${f} · ${p.estado || ''} · ${fmt(p.len, 2)} m${p.manual ? ' · bobina elegida a mano' : ''}"><b>${f === 'C' ? '' : f}</b> ${esc(p.bobina || '—')}${p.manual ? '<i class="pin">●</i>' : ''}</span>`; }).join('')}</span>`;
+const phases = (c) => `<span class="ph">${c.fz.map((f) => { const p = c.fasesInfo[f] || {}; return `<span class="${phCls[p.estado] || 'prov'}" title="${f} · ${p.estado || ''} · ${fmtM(p.len)} m${p.manual ? ' · bobina elegida a mano' : ''}"><b>${f === 'C' ? '' : f}</b> ${esc(p.bobina || '—')}${p.manual ? '<i class="pin">●</i>' : ''}</span>`; }).join('')}</span>`;
 function segBind(sel, cur, fn) { $$(`${sel} button`).forEach((b) => { b.classList.toggle('on', b.dataset.v === String(cur)); b.onclick = () => fn(b.dataset.v); }); }
 function searchBind(sel, set) {
   const i = $(sel); if (!i) return; let t;

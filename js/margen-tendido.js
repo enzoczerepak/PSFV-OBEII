@@ -65,7 +65,7 @@ function tolHTML(g, L) {
   if (!t) return '';
   if (t.sinMargen) return `<span class="tl bad">Sin margen en ${g.seccion} mm²</span> · no conviene pasarse de <b>${fmt(L, 1)} m</b> por conductor (tirar de menos siempre suma)`;
   return `<span class="tl">Tolerancia ${g.cat} ${g.seccion} mm² (margen +${fmt(t.P, 1)} %)</span>
-    <span class="tlv ok">Seguro ≤ <b>${fmt(t.seg, 1)} m</b></span><span class="tlv warn">Riesgo ≤ <b>${fmt(t.max, 1)} m</b></span><span class="tlv bad">Más: falta de cable</span>`;
+    <span class="tlv ok">Seguro ≤ <b>${fmt(t.seg, 0)} m</b></span><span class="tlv warn">Riesgo ≤ <b>${fmt(t.max, 0)} m</b></span><span class="tlv bad">Más: falta de cable</span>`;
 }
 async function verMargenes() {
   margenAlDia();

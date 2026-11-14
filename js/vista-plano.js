@@ -113,7 +113,7 @@ function planoPanel(I) {
   if (k === 'i') {
     const c = circ.get(id); if (!c) return `<h3>${esc(id)}</h3><p class="muted">Sin circuito en la lista de cables.</p>`;
     const e = zest(c), z = R.zlist.find((x) => x.id === c.zid);
-    return `<h3>${esc(id)}</h3>${fila('Circuito', esc(c.designacion))}${fila('Destino', esc(c.hasta))}${fila('Cable', `${c.seccion} mm² · ${c.fz.length} conductores`)}${fila('Largo por conductor', fmt(c.lenFase, 1) + ' m')}
+    return `<h3>${esc(id)}</h3>${fila('Circuito', esc(c.designacion))}${fila('Destino', esc(c.hasta))}${fila('Cable', `${c.seccion} mm² · ${c.fz.length} conductores`)}${fila('Largo por conductor', fmtM(c.lenFase) + ' m')}
       ${fila('Zanja', `<span class="kst" style="--c:${ZEST[e] === '#b9c2cf' ? '#7a8aa3' : ZEST[e]}">${e}</span>${z && z.miembros.length > 1 ? ' · compartida' : ''}`)}${fila('Largo de zanja', z ? fmt(z.largo, 1) + ' m' : '–')}
       ${fila('Tendido', c.completo ? '✓ completo' : `${c.nReal}/${c.fz.length} conductores`)}${fila('Bobinas', [...new Set(c.fz.map((f) => (c.fasesInfo[f] || {}).bobina).filter(Boolean))].map(esc).join(', ') || '–')}
       <div class="plact"><button class="btn sm" data-goc="BT-circ|${esc(id)}">Ver circuito</button>${window.READONLY ? '' : `<button class="btn sm acc" data-tend="${c.id}">Tender</button>`}</div>`;
@@ -121,7 +121,7 @@ function planoPanel(I) {
   if (k === 'm') {
     const c = R.circuitos.find((x) => x.cat === 'MT' && x.designacion === id); if (!c) return `<h3>${esc(id)}</h3>`;
     const e = zest(c);
-    return `<h3>${esc(id)} · ${CATN.MT}</h3>${fila('Recorrido', `${esc(c.desde)} → ${esc(c.hasta)}`)}${fila('Cable', esc(c.formacion || c.seccion + ' mm²'))}${fila('Largo por conductor', fmt(c.lenFase, 1) + ' m')}${fila('Zanja', e)}${fila('Tendido', c.completo ? '✓ completo' : `${c.nReal}/${c.fz.length}`)}
+    return `<h3>${esc(id)} · ${CATN.MT}</h3>${fila('Recorrido', `${esc(c.desde)} → ${esc(c.hasta)}`)}${fila('Cable', esc(c.formacion || c.seccion + ' mm²'))}${fila('Largo por conductor', fmtM(c.lenFase) + ' m')}${fila('Zanja', e)}${fila('Tendido', c.completo ? '✓ completo' : `${c.nReal}/${c.fz.length}`)}
       <div class="plact"><button class="btn sm" data-goc="MT-circ">Ver circuitos MT</button>${window.READONLY ? '' : `<button class="btn sm acc" data-tend="${c.id}">Tender</button>`}</div>`;
   }
   if (k === 'e') {

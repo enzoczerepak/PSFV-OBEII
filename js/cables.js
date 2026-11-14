@@ -25,13 +25,13 @@ function vPlan(el, cat) {
   // largo permitido por conductor según el margen de la sección (seguro / máximo)
   const tolCol = cat !== 'PAT';
   const permTxt = (p, c) => {
-    if (p.estado === 'ejecutado') { const t = Margen.tolerancia(mgDe(c.key), c.lenFase, tolF()); const nv = t ? Margen.nivel(t, p.len) : null; return nv ? `<span class="tl-${nv}" title="tirado ${fmt(p.len, 2)} m">${nv === 'ok' ? '✓' : nv === 'riesgo' ? 'riesgo' : 'excedido'}</span>` : ''; }
+    if (p.estado === 'ejecutado') { const t = Margen.tolerancia(mgDe(c.key), c.lenFase, tolF()); const nv = t ? Margen.nivel(t, p.len) : null; return nv ? `<span class="tl-${nv}" title="tirado ${fmtM(p.len)} m">${nv === 'ok' ? '✓' : nv === 'riesgo' ? 'riesgo' : 'excedido'}</span>` : ''; }
     const g = mgDe(c.key); if (!g) return '<span class="muted">…</span>';
     const L0 = p.len - (Number(S.params.margen) || 0), t = Margen.topeBobina(Margen.tolerancia(g, L0, tolF()), p, R, L0); if (!t) return '';
-    const bt = t.bob ? ` · bobina ${t.bob.codigo}: quedan ${fmt(t.bob.saldo, 1)} m${t.bob.n > 1 ? `, sobran ${fmt(t.bob.holg, 1)} m repartidos entre sus ${t.bob.n} cortes listos` : ''}` : '';
-    if (t.sinMargen) return `<span class="tl-falta" title="${t.bob ? 'Tope de la bobina' : 'Sin margen en la sección'}: no pasarse del plan${bt}">≤ ${fmt(Math.min(p.len, t.max), 1)}${t.bob ? ' 🧵' : ''}</span>`;
-    if (t.bob) return `<span class="tl-ok" title="Seguro: hasta ${fmt(t.seg, 1)} m${bt}">${fmt(t.seg, 1)}</span> / <span class="tl-riesgo" title="Máximo: hasta ${fmt(t.max, 1)} m${bt}">${fmt(t.max, 1)}</span> <span title="Limitado por lo que queda en la bobina${bt}">🧵</span>`;
-    return `<span class="tl-ok" title="Seguro: hasta ${fmt(t.seg, 1)} m">${fmt(t.seg, 1)}</span> / <span class="tl-riesgo" title="Máximo (riesgo): hasta ${fmt(t.max, 1)} m">${fmt(t.max, 1)}</span>`;
+    const bt = t.bob ? ` · bobina ${t.bob.codigo}: quedan ${fmt(t.bob.saldo, 0)} m${t.bob.n > 1 ? `, sobran ${fmt(t.bob.holg, 0)} m repartidos entre sus ${t.bob.n} cortes listos` : ''}` : '';
+    if (t.sinMargen) return `<span class="tl-falta" title="${t.bob ? 'Tope de la bobina' : 'Sin margen en la sección'}: no pasarse del plan${bt}">≤ ${fmt(Math.min(p.len, t.max), 0)}${t.bob ? ' 🧵' : ''}</span>`;
+    if (t.bob) return `<span class="tl-ok" title="Seguro: hasta ${fmt(t.seg, 0)} m${bt}">${fmt(t.seg, 0)}</span> / <span class="tl-riesgo" title="Máximo: hasta ${fmt(t.max, 0)} m${bt}">${fmt(t.max, 0)}</span> <span title="Limitado por lo que queda en la bobina${bt}">🧵</span>`;
+    return `<span class="tl-ok" title="Seguro: hasta ${fmt(t.seg, 0)} m">${fmt(t.seg, 0)}</span> / <span class="tl-riesgo" title="Máximo (riesgo): hasta ${fmt(t.max, 0)} m">${fmt(t.max, 0)}</span>`;
   };
   bobs.forEach((b) => {
     const rem = Math.max(0, b.remanente);
@@ -41,7 +41,7 @@ function vPlan(el, cat) {
     if (!b.cortes.length) h += `<div class="closed">Sin cortes asignados: queda cerrada.</div>`;
     else {
       h += `<table><thead><tr><th>#</th><th>Circuito</th><th>Desde → Hasta</th><th>${cat === 'PAT' ? '' : 'Fase'}</th><th class="n" title="Largo de corte del conductor (en los ejecutados, lo tirado real)">${cat === 'PAT' ? 'Metros' : 'A tender'}</th>${tolCol ? '<th class="n" title="Largo máximo que se puede tirar: seguro / máximo (riesgo). Más que el máximo, falta cable al final.">Permitido</th>' : ''}<th class="n">Saldo</th></tr></thead><tbody>`;
-      b.cortes.forEach((p) => { const c = cMap.get(p.cid); h += `<tr class="${p.estado} ${p.estado !== 'ejecutado' ? 'clk' : ''}" data-cid="${p.cid}" title="${p.estado}${p.manual ? ' · bobina elegida a mano' : ''}${p.estado !== 'ejecutado' ? ' · clic para elegir otra bobina o corregir el largo' : ''}"><td><span class="dot ${p.estado}"></span>${p.corte}${p.manual ? '<i class="pin">●</i>' : ''}</td><td class="mono">${esc(c.designacion)}</td><td>${esc(c.desde)} → ${esc(c.hasta)}</td><td>${p.fase === 'C' ? '' : p.fase}</td><td class="n">${fmt(p.len, 2)}</td>${tolCol ? `<td class="n tolc2">${permTxt(p, c)}</td>` : ''}<td class="n">${fmt(p.saldo, 1)}</td></tr>`; });
+      b.cortes.forEach((p) => { const c = cMap.get(p.cid); h += `<tr class="${p.estado} ${p.estado !== 'ejecutado' ? 'clk' : ''}" data-cid="${p.cid}" title="${p.estado}${p.manual ? ' · bobina elegida a mano' : ''}${p.estado !== 'ejecutado' ? ' · clic para elegir otra bobina o corregir el largo' : ''}"><td><span class="dot ${p.estado}"></span>${p.corte}${p.manual ? '<i class="pin">●</i>' : ''}</td><td class="mono">${esc(c.designacion)}</td><td>${esc(c.desde)} → ${esc(c.hasta)}</td><td>${p.fase === 'C' ? '' : p.fase}</td><td class="n">${fmtM(p.len)}</td>${tolCol ? `<td class="n tolc2">${permTxt(p, c)}</td>` : ''}<td class="n">${fmtM(p.saldo)}</td></tr>`; });
       h += `</tbody></table>`;
     }
     h += `</div>`;
@@ -85,7 +85,7 @@ function vCircuitos(el, cat) {
   list.forEach((c) => {
     h += `<tr data-id="${c.id}" class="${ui.sel.has(c.id) ? 'sel' : ''}">${isPat ? '' : `<td><input type="checkbox" class="sel" ${ui.sel.has(c.id) ? 'checked' : ''}></td>`}
       <td class="mono">${esc(c.designacion)}${c.obs ? ` <span title="${esc(c.obs)}">ⓘ</span>` : ''}</td><td>${esc(c.desde)}</td><td>${esc(c.hasta)}</td><td>${c.seccion ?? '?'}</td>
-      <td class="n">${fmt(c.lenFase, 2)}</td><td>${isLA ? `<button class="pill ${c.habilitado ? 'p-ready' : 'p-prov'} pbtn" data-a="hab" title="Tocá para cambiar">${c.habilitado ? 'Listos' : 'Pendientes'}</button>` : isPat ? pill(c.zanja) : zSeg(c.zid, c.zanja, c.listoCerrar) + (c.compartida ? ` <span class="shr" title="Zanja compartida: ${esc(c.zTitulo)}">⫘</span>` : '')}</td><td>${phases(c)}</td><td class="n">${desv(c)}</td><td>${pill(c.estado)}</td>
+      <td class="n">${fmtM(c.lenFase)}</td><td>${isLA ? `<button class="pill ${c.habilitado ? 'p-ready' : 'p-prov'} pbtn" data-a="hab" title="Tocá para cambiar">${c.habilitado ? 'Listos' : 'Pendientes'}</button>` : isPat ? pill(c.zanja) : zSeg(c.zid, c.zanja, c.listoCerrar) + (c.compartida ? ` <span class="shr" title="Zanja compartida: ${esc(c.zTitulo)}">⫘</span>` : '')}</td><td>${phases(c)}</td><td class="n">${desv(c)}</td><td>${pill(c.estado)}</td>
       <td style="white-space:nowrap"><button class="btn sm acc" data-a="tender">Tender</button> <button class="btn sm" data-a="bob" title="Elegir bobina y corregir largo">Bobina / largo</button><button class="btn sm ghost" data-a="edit" title="Editar">✎</button></td></tr>`;
   });
   h += `</tbody></table>${list.length ? '' : '<div class="empty"><b>Sin resultados</b></div>'}</div>`;

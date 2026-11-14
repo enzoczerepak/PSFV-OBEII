@@ -60,7 +60,9 @@
   function largoFase(c, p) {
     const aj = Number(((p.ajuste || {})[catDe(c)]) || 0);
     const base = Number(c.largoCorte) > 0 ? Number(c.largoCorte) : (Number(c.cantidad) || 0) / fasesDe(c).length * (1 + aj / 100);
-    return r2(base + (Number(p.margen) || 0));
+    const v = r2(base + (Number(p.margen) || 0));
+    // en campo se corta por metro entero (bobinas metradas) y siempre para arriba: el plan reserva el metro entero
+    return p.redondeo === false || !(v > 0) ? v : Math.ceil(v - 1e-6);
   }
   const teorico = (c) => r2((Number(c.cantidad) || 0) / fasesDe(c).length);
 

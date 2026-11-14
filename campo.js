@@ -5,6 +5,8 @@
   const W = window.WebCore, KEY = 'campo-sesion';
   let KQ = 'campo-cola', KH = 'campo-hist';
   const fmt = (n, d = 0) => Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
+  // metros: enteros (bobinas metradas); si el dato real tiene decimales, se muestra con uno
+  const fm = (n) => { const v = Math.round(Number(n || 0) * 10) / 10; return fmt(v, Number.isInteger(v) ? 0 : 1); };
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const hoy = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
   const ls = { get(k, def) { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch (_) { return def; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* nada */ } } };
@@ -18,8 +20,8 @@
   const tolDe = (c) => { if (!MGc || !c || c.cat === 'PAT') return null; const g = MGc.find((x) => x.key === c.key); return g ? window.Margen.tolerancia(g, c.lenFase, tolF()) : null; };
   // tolerancia de un corte: margen de la sección, limitado por lo que queda en su bobina
   const tolP = (c, p) => { if (!c || c.cat === 'PAT') return null; const t = tolDe(c); if (!t && !MGc) return null; return window.Margen.topeBobina ? window.Margen.topeBobina(t, Object.assign({ key: c.key, cid: c.id }, p), R, c.lenFase) : t; };
-  const bobTxt = (t) => (t && t.bob ? `<span class="tolbob ${t.bob.corto ? 'bad' : ''}">Bobina ${esc(t.bob.codigo)}: quedan ${fmt(t.bob.saldo, 1)} m${t.bob.n > 1 ? ` · sobran ${fmt(t.bob.holg, 1)} m repartidos entre sus ${t.bob.n} cortes de hoy` : ''}${t.bob.corto ? ' · no alcanza para el teórico' : ''}</span>` : '');
-  const tolTxt = (t) => (!t ? '' : (t.sinMargen ? `<span class="tol bad">sin margen: no pasarse de ${fmt(Math.min(t.L, t.max), 1)} m</span>` : `<span class="tol"><i class="ok">seguro ≤ ${fmt(t.seg, 1)}</i><i class="warn">riesgo ≤ ${fmt(t.max, 1)}</i></span>`) + bobTxt(t));
+  const bobTxt = (t) => (t && t.bob ? `<span class="tolbob ${t.bob.corto ? 'bad' : ''}">Bobina ${esc(t.bob.codigo)}: quedan ${fm(t.bob.saldo)} m${t.bob.n > 1 ? ` · sobran ${fm(t.bob.holg)} m repartidos entre sus ${t.bob.n} cortes de hoy` : ''}${t.bob.corto ? ' · no alcanza para el teórico' : ''}</span>` : '');
+  const tolTxt = (t) => (!t ? '' : (t.sinMargen ? `<span class="tol bad">sin margen: no pasarse de ${fm(Math.min(t.L, t.max))} m</span>` : `<span class="tol"><i class="ok">seguro ≤ ${fm(t.seg)}</i><i class="warn">riesgo ≤ ${fm(t.max)}</i></span>`) + bobTxt(t));
   async function cargar(d, id, k, nombre, u) {
     const txt = await W.abrir(d, id, k);
     S = JSON.parse(txt); R = window.Engine.calcular(S); D = d;
@@ -102,11 +104,11 @@
   const destino = (c) => (c.cat === 'PAT' ? 'PAT Cu ' + c.seccion + ' mm²' : c.cat === 'BT' ? c.desde : `${c.desde} → ${c.hasta}`);
   const tolBox = (c, teo, t) => {
     t = t === undefined ? tolDe(c) : t; const m = (lbl, v, k) => `<div class="tb ${k}"><small>${lbl}</small><b>${v}</b></div>`;
-    const teoB = m('Teórico', teo != null ? fmt(teo, 1) + ' m' : 'ver fases', 'teo');
+    const teoB = m('Teórico', teo != null ? fm(teo) + ' m' : 'ver fases', 'teo');
     if (c.cat === 'PAT') return `<div class="tolb">${teoB}</div>`;
     if (!t) return `<div class="tolb">${teoB}${MGt ? m('Seguro / riesgo', 'calculando…', 'calc') : ''}</div>`;
-    if (t.sinMargen) return `<div class="tolb">${teoB}${m(t.bob ? 'Tope de bobina' : 'Sin margen', 'no pasarse de ' + fmt(Math.min(t.L, t.max), 1) + ' m', 'bad')}</div>${bobTxt(t)}`;
-    return `<div class="tolb">${teoB}${m('Seguro hasta', fmt(t.seg, 1) + ' m', 'ok')}${m('Riesgo hasta', fmt(t.max, 1) + ' m', 'warn')}</div>${bobTxt(t)}`;
+    if (t.sinMargen) return `<div class="tolb">${teoB}${m(t.bob ? 'Tope de bobina' : 'Sin margen', 'no pasarse de ' + fm(Math.min(t.L, t.max)) + ' m', 'bad')}</div>${bobTxt(t)}`;
+    return `<div class="tolb">${teoB}${m('Seguro hasta', fm(t.seg) + ' m', 'ok')}${m('Riesgo hasta', fm(t.max) + ' m', 'warn')}</div>${bobTxt(t)}`;
   };
   function vPlan(v) {
     const cat = ui.cat, H = hoy(), modo = ui.modo || 'inv';
@@ -130,7 +132,7 @@
             const w = ts.reduce((a, t) => (t.seg < a.seg || (t.seg === a.seg && t.max < a.max) ? t : a)); return tolBox(c, teo, w); })()}
           <div class="frs">${arr.map((p) => { const ya = p.estado === 'ejecutado', env = enviadosHoy.has(c.id + '|' + p.fase);
             const tp = ya ? null : tolP(c, p), dif = tp && pend.some((q) => { const o = tolP(c, q); return o && (Math.abs(o.seg - tp.seg) > 0.05 || Math.abs(o.max - tp.max) > 0.05); });
-            return `<div class="fr ${ya ? 'ok' : env ? 'pend' : ''}"><b class="fl">${lbl(p.fase)}</b><span class="bob"><small>Bobina</small> <b>${esc(p.bobina)}</b></span><span class="m">${fmt(p.len, 1)} m</span>${dif ? `<span class="r2">seguro ≤ ${fmt(tp.seg, 1)} · riesgo ≤ ${fmt(tp.max, 1)}${tp.bob ? ' · tope de la bobina' : ''}</span>` : ''}${env && !ya ? '<span class="r">enviado, falta aprobar</span>' : ''}</div>`; }).join('')}</div>
+            return `<div class="fr ${ya ? 'ok' : env ? 'pend' : ''}"><b class="fl">${lbl(p.fase)}</b><span class="bob"><small>Bobina</small> <b>${esc(p.bobina)}</b></span><span class="m">${fm(p.len)} m</span>${dif ? `<span class="r2">seguro ≤ ${fm(tp.seg)} · riesgo ≤ ${fm(tp.max)}${tp.bob ? ' · tope de la bobina' : ''}</span>` : ''}${env && !ya ? '<span class="r">enviado, falta aprobar</span>' : ''}</div>`; }).join('')}</div>
           ${!todo && c.cat !== 'PAT' ? `<button class="b acc" data-cg="${c.id}">Cargar tendido</button>` : ''}
           <div class="sec">Circuito ${esc(c.designacion || '')} · ${c.seccion || ''} mm²${c.zTitulo && c.zTitulo !== `${c.desde} → ${c.hasta}` ? ` · zanja compartida: ${esc(c.zTitulo)}` : ''}</div></div>`;
       });
@@ -144,7 +146,7 @@
         h += `<div class="card"><h3><span><span class="tag t-${cat}">${cat}</span> Bobina ${esc(cod)}</span><span class="muted">${b.seccion || ''} mm²</span></h3>
           <div class="muted">Saldo actual ${fmt(b.saldoActual, 0)} m · a cortar hoy ${fmt(tot, 0)} m</div>
           ${arr.map((p) => { const c = circ(p.cid); const ya = p.estado === 'ejecutado', env = enviadosHoy.has(p.cid + '|' + p.fase);
-            return `<div class="corte ${ya ? 'ok' : env ? 'pend' : ''}"><b>${esc(destino(c))} · ${lbl(p.fase)}</b><span class="m">${fmt(p.len, 1)} m</span>${!ya ? tolTxt(tolP(c, p)) : ''}<span class="r">${esc(c.designacion || '')}${c.cat === 'BT' ? ' → ' + esc(c.hasta) : ''}${env && !ya ? ' · enviado, falta aprobar' : ''}</span>${!ya && c.cat !== 'PAT' && !yaBoton.has(c.id) && yaBoton.add(c.id) ? `<button class="b" data-cg="${c.id}">Cargar tendido de ${esc(destino(c))}</button>` : ''}</div>`; }).join('')}</div>`;
+            return `<div class="corte ${ya ? 'ok' : env ? 'pend' : ''}"><b>${esc(destino(c))} · ${lbl(p.fase)}</b><span class="m">${fm(p.len)} m</span>${!ya ? tolTxt(tolP(c, p)) : ''}<span class="r">${esc(c.designacion || '')}${c.cat === 'BT' ? ' → ' + esc(c.hasta) : ''}${env && !ya ? ' · enviado, falta aprobar' : ''}</span>${!ya && c.cat !== 'PAT' && !yaBoton.has(c.id) && yaBoton.add(c.id) ? `<button class="b" data-cg="${c.id}">Cargar tendido de ${esc(destino(c))}</button>` : ''}</div>`; }).join('')}</div>`;
       });
       h += `<p class="hint">Cortes listos para hoy (zanjas abiertas), en el orden de corte de cada bobina. Los tachados ya están registrados.</p>`;
     }
@@ -170,7 +172,7 @@
           const pl = c.fasesInfo[f] || {}, real = pl.estado === 'ejecutado';
           h += `<div class="fase ${real ? 'off' : ''}" data-f="${f}"><label class="chk"><input type="checkbox" class="fon" ${real ? 'disabled' : 'checked'}><span class="fl">${lbl(f)}</span></label>
             <select class="fb" ${real ? 'disabled' : ''}>${bobs.map((b) => `<option value="${esc(b.codigo)}" ${b.codigo === pl.bobina ? 'selected' : ''}>${esc(b.codigo)} · ${fmt(b.saldoActual, 0)} m</option>`).join('')}</select>
-            <input type="number" inputmode="decimal" step="0.1" class="fm" placeholder="${fmt(c.lenFase, 1)} m" value="${real ? fmt(pl.len, 1) : ''}" ${real ? 'disabled' : ''}></div>`;
+            <input type="number" inputmode="numeric" step="1" class="fm" placeholder="${fm(c.lenFase)} m" value="${real ? fm(pl.len) : ''}" ${real ? 'disabled' : ''}></div>`;
         });
         h += `<p class="hint">Cargá los metros reales tirados de cada conductor (la bobina propuesta es la del plan). Las fases ya registradas aparecen bloqueadas.</p>`;
       }
@@ -179,14 +181,14 @@
       h += `<label>Zanja<select id="fZ"><option value="">Elegí la zanja…</option>${optZ(ui.zanja, (x) => x.pat)}</select></label>`;
       if (z && z.pat) {
         const bobs = R.bobinas.filter((b) => b.key === z.pat.key);
-        h += `<div class="muted">PAT Cu ${z.pat.seccion} mm² · largo de zanja ${fmt(z.largo, 1)} m</div>
+        h += `<div class="muted">PAT Cu ${z.pat.seccion} mm² · largo de zanja ${fm(z.largo)} m</div>
           <div class="dos"><label>Metros de PAT<input type="number" inputmode="decimal" step="0.1" id="fPm" value="${z.largo || ''}"></label>
           <label>Bobina<select id="fPb"><option value="">Sin bobina / no sé</option>${bobs.map((b) => `<option value="${esc(b.codigo)}" ${b.codigo === (z.pat.fasesInfo.C || {}).bobina ? 'selected' : ''}>${esc(b.codigo)}</option>`).join('')}</select></label></div>`;
       }
     } else if (t === 'zanja') {
       const z = R.zlist.find((x) => x.id === ui.zanja);
       h += `<label>Zanja<select id="fZ"><option value="">Elegí la zanja…</option>${optZ(ui.zanja)}</select></label>`;
-      if (z) h += `<div class="muted">${z.miembros.length} circuito${z.miembros.length > 1 ? 's' : ''} · largo actual ${fmt(z.largo, 1)} m</div><label>Largo real de la zanja terminada (m)<input type="number" inputmode="decimal" step="0.1" id="fZl" value=""></label>`;
+      if (z) h += `<div class="muted">${z.miembros.length} circuito${z.miembros.length > 1 ? 's' : ''} · largo actual ${fm(z.largo)} m</div><label>Largo real de la zanja terminada (m)<input type="number" inputmode="decimal" step="0.1" id="fZl" value=""></label>`;
     } else {
       h += `<label>Sobre (opcional)<select id="fZ"><option value="">General</option>${optZ(ui.zanja)}</select></label>`;
     }
@@ -209,7 +211,7 @@
       const fases = $$('.fase', v).filter((r) => { const k = $('.fon', r); return k.checked && !k.disabled; }).map((r) => ({ f: r.dataset.f, bobina: $('.fb', r).value, metros: Number(String($('.fm', r).value).replace(',', '.')) }));
       if (!fases.length) return toast('Marcá al menos un conductor', true);
       if (fases.some((f) => !(f.metros > 0))) return toast('Completá los metros de cada conductor marcado', true);
-      if (fases.some((f) => f.metros > c.lenFase * 1.5 || f.metros < c.lenFase * 0.5)) { if (!confirm('Algún valor difiere mucho de la lista (' + fmt(c.lenFase, 1) + ' m). ¿Enviar igual?')) return; }
+      if (fases.some((f) => f.metros > c.lenFase * 1.5 || f.metros < c.lenFase * 0.5)) { if (!confirm('Algún valor difiere mucho de la lista (' + fm(c.lenFase) + ' m). ¿Enviar igual?')) return; }
       p = { tipo: 'tendido', circuito: c.id, designacion: c.designacion, desde: c.desde, hasta: c.hasta, cat: c.cat, fases };
     } else if (t === 'pat') {
       const z = R.zlist.find((x) => x.id === ui.zanja); if (!z) return toast('Elegí la zanja', true);
@@ -233,7 +235,7 @@
     const h0 = ls.get(KH, []);
     if (!h0.length) { v.innerHTML = '<div class="card empty"><b>Todavía no enviaste partes</b></div>'; return; }
     const ST = { cola: ['cola', 'en cola'], pend: ['pend', 'pendiente de aprobación'], ok: ['ok', 'aprobado'], no: ['no', 'rechazado'] };
-    const desc = (p) => p.tipo === 'tendido' ? `${esc(p.designacion)} · ${p.fases.map((f) => `${lbl(f.f)} ${fmt(f.metros, 1)} m (${esc(f.bobina)})`).join(' · ')}` : p.tipo === 'pat' ? `PAT · ${esc(p.titulo)} · ${fmt(p.metros, 1)} m` : p.tipo === 'zanja' ? `Zanja ${esc(p.titulo)} · largo real ${fmt(p.largo, 1)} m` : `Observación${p.titulo ? ' · ' + esc(p.titulo) : ''}`;
+    const desc = (p) => p.tipo === 'tendido' ? `${esc(p.designacion)} · ${p.fases.map((f) => `${lbl(f.f)} ${fm(f.metros)} m (${esc(f.bobina)})`).join(' · ')}` : p.tipo === 'pat' ? `PAT · ${esc(p.titulo)} · ${fm(p.metros)} m` : p.tipo === 'zanja' ? `Zanja ${esc(p.titulo)} · largo real ${fm(p.largo)} m` : `Observación${p.titulo ? ' · ' + esc(p.titulo) : ''}`;
     v.innerHTML = h0.map((p) => { const e = est(p), r = (S.partes || []).find((x) => x.id === p.id); return `<div class="card parte"><b>${desc(p)}</b><span class="st ${ST[e][0]}">${ST[e][1]}</span><span class="muted" style="grid-column:1/-1">${new Date(p.fecha + 'T12:00').toLocaleDateString('es-AR')}${p.obs ? ' · «' + esc(p.obs) + '»' : ''}${r && r.motivo ? ' · Oficina: ' + esc(r.motivo) : ''}</span></div>`; }).join('') + '<p class="hint">El estado se actualiza solo cuando la oficina aprueba o rechaza cada parte.</p>';
   }
   $$('#tabs button').forEach((b) => { b.onclick = () => { tab = b.dataset.t; render(); }; });
