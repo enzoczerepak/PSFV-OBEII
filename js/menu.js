@@ -12,11 +12,11 @@ const MENU = [
   { s: 'maqs', t: 'Maquinaria de obra', ico: 'maquina', items: [['maq', 'Horas mensuales', 'dia'], ['maqev', 'Paradas y mantenimientos', 'llave'], ['maqeq', 'Equipos', 'camion']] },
 ];
 // en el visor web (solo lectura) no van las pantallas que existen solo para cargar datos
-const SOLO_PC = ['campo', 'partes'];
+const SOLO_PC = ['campo', 'partes', 'ctend'];
 if (window.READONLY) MENU.splice(0, MENU.length, ...MENU.filter((m) => !(Array.isArray(m) && SOLO_PC.includes(m[0]))));
 const MOV_SIN = window.READONLY ? SOLO_PC : [];
 // vistas que no tienen botón propio: se marca la del menú que las contiene
-const MENU_ALIAS = { gantt: 'crono' };
+const MENU_ALIAS = { gantt: 'crono', ctend: 'campo' };
 // color de cada frente de obra: ícono, recuadro de la sección y marca del apartado activo
 const MCOL = { cables: '#2fc4b2', fo: '#5ab8ff', lmt: '#8b9dff', fundaciones: '#f2b33d', sala: '#b294ff', trk: '#3fb27f', maqs: '#ff8f57' };
 const GRUPOS = [['BT', 'BT · 0,8 kV', [['plan', 'Plan de corte', 'corte'], ['circ', 'Circuitos', 'circuito']]], ['MT', 'MT · 33 kV', [['plan', 'Plan de corte', 'corte'], ['circ', 'Circuitos', 'circuito']]], ['PAT', 'PAT · Cu desnudo', [['plan', 'Plan de corte', 'corte'], ['circ', 'Tendidos', 'circuito']]]];

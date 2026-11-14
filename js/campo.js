@@ -54,10 +54,11 @@ function bindParaHoy(el) {
 
 // ---------- carga rápida de campo ----------
 const CAMPO = [
+  ['tend', '🧵', 'Tendido BT / MT', 'Lo listo para tender, en orden', '#2fc4b2'],
   ['hinc', '🔨', 'Hincado', 'Marcar trackers hincados', '#7c5cbf'],
   ['arm', '🔩', 'Armado de estructura', 'Etapas por rango de trackers', '#3fb27f'],
   ['pan', '☀️', 'Paneles', 'Módulos, fijación y strings', '#f0a23b'],
-  ['zanjas', '🚧', 'Zanjas y cables', 'Abrir, tender y tapar', '#2fc4b2'],
+  ['zanjas', '🚧', 'Zanjas', 'Abrir, unir y tapar', '#c97b12'],
   ['fundaciones', '🏗️', 'Fundaciones STS', 'Etapas de las bases', '#f2b33d'],
   ['sala', '🏢', 'Edificio O&M', 'Zapatas, vigas y muros', '#b294ff'],
   ['maq', '⏱️', 'Horas de equipos', 'Horómetro del día', '#ff8f57'],
@@ -91,9 +92,40 @@ document.addEventListener('input', (e) => { if (e.target && e.target.id === 'cR'
 async function campoAccion(k) {
   if (k === 'hinc') { const ids = await campoRango('Hincado', 'Trackers con todas sus hincas hincadas'); if (ids) setTimeout(() => marcarHincado(ids, true), 50); return; }
   if (k === 'arm' || k === 'pan') { const ids = await campoRango(MON_T[k][0], 'Después elegís las etapas y la fecha'); if (ids) setTimeout(() => monMarcar(k, ids), 50); return; }
+  if (k === 'tend') { go('ctend'); return; }
   if (k === 'rec') { trkEditEnt(); return; }
   if (k === 'llu') { verLluvias(); return; }
   go(k);
+}
+
+// ---------- tendido BT / MT: lo listo para tender, por inversor y en orden ----------
+const CTEND = { cat: 'BT' };
+function vCTend(el) {
+  actions([['Volver a carga rápida', 'btn', () => go('campo')]]);
+  const cats = ['BT', 'MT'].concat(R.circuitos.some((c) => c.cat === 'LA') ? ['LA'] : []), cat = CTEND.cat;
+  const ps = R.piezas.filter((p) => p.cat === cat && p.bobina && (p.estado === 'listo' || (p.estado === 'ejecutado' && p.fecha === today())));
+  const porC = new Map(); ps.forEach((p) => { if (!porC.has(p.cid)) porC.set(p.cid, []); porC.get(p.cid).push(p); });
+  const lista = [...porC.entries()].map(([cid, arr]) => [R.circuitos.find((c) => c.id === cid), arr]).filter(([c]) => c).sort((a, b) => (a[1].some((p) => p.estado === 'listo') ? 0 : 1) - (b[1].some((p) => p.estado === 'listo') ? 0 : 1) || a[0].idx - b[0].idx);
+  const dest = (c) => (c.cat === 'BT' ? c.desde : `${c.desde} → ${c.hasta}`);
+  const tolP = (c, p) => { const g = mgDe(c.key); return Margen.topeBobina(g ? Margen.tolerancia(g, c.lenFase, tolF()) : null, p, R, c.lenFase); };
+  // bobinas a llevar
+  const porB = new Map(); ps.filter((p) => p.estado === 'listo').forEach((p) => porB.set(p.bobina, (porB.get(p.bobina) || 0) + p.len));
+  const pend = lista.filter(([, arr]) => arr.some((p) => p.estado === 'listo'));
+  el.innerHTML = `<div class="tools"><div class="seg" id="ctC">${cats.map((c) => `<button data-v="${c}">${CATN[c] || c}</button>`).join('')}</div><span class="sp"></span><span class="muted">${pend.length} tendido${pend.length === 1 ? '' : 's'} listo${pend.length === 1 ? '' : 's'}</span></div>
+    ${porB.size ? `<div class="card ctbob"><b>Bobinas a llevar</b>${[...porB.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es', { numeric: true })).map(([cod, m]) => { const b = R.bobinas.find((x) => x.codigo === cod && x.cat === cat) || {}; return `<span class="ctb"><b>${esc(cod)}</b> ${fmt(m)} m <small>· saldo ${fmt(b.saldoActual)}</small></span>`; }).join('')}</div>` : ''}
+    ${lista.length ? `<div class="ctgrid">${lista.map(([c, arr]) => {
+      const pe = arr.filter((p) => p.estado === 'listo'), todo = !pe.length;
+      const ts = pe.map((p) => tolP(c, p)).filter(Boolean), w = ts.length ? ts.reduce((a, t) => (t.seg < a.seg ? t : a)) : null;
+      const box = (l, v, k) => `<div class="ctt ${k}"><small>${l}</small><b>${v}</b></div>`;
+      return `<div class="card ctc ${todo ? 'ok' : ''}"><div class="cth"><span class="kst" style="--c:${SERIE[c.cat] || '#00939a'}">${c.cat}</span><b>${esc(dest(c))}</b>${c.cat === 'BT' ? `<span class="muted">→ ${esc(c.hasta)}</span>` : ''}${todo ? '<span class="pill p-done" style="margin-left:auto">✓ tendido hoy</span>' : ''}</div>
+        ${todo ? '' : `<div class="cttol">${box('Teórico', fmtM(c.lenFase) + ' m', 'teo')}${w ? (w.sinMargen ? box(w.bob ? 'Tope de bobina' : 'Sin margen', 'no pasarse de ' + fmtM(Math.min(w.L, w.max)) + ' m', 'bad') : box('Seguro hasta', fmtM(w.seg) + ' m', 'ok') + box('Riesgo hasta', fmtM(w.max) + ' m', 'warn')) : box('Seguro / riesgo', 'calculando…', 'calc')}</div>`}
+        <div class="ctf">${arr.map((p) => `<div class="${p.estado === 'ejecutado' ? 'hecho' : ''}"><b>${p.fase === 'C' ? 'Cu' : p.fase}</b><span>Bobina <b>${esc(p.bobina)}</b></span><span class="m">${fmtM(p.len)} m</span></div>`).join('')}</div>
+        ${todo ? '' : `<button class="btn acc" data-tend="${c.id}">Registrar tendido</button>`}
+        <div class="muted ctsec">${esc(c.designacion)} · ${c.seccion} mm²${c.zTitulo && c.zTitulo !== c.desde + ' → ' + c.hasta ? ` · zanja ${esc(c.zTitulo)}` : ''}</div></div>`; }).join('')}</div>`
+      : `<div class="card empty"><b>No hay nada listo para tender en ${CATN[cat] || cat}</b><p class="muted">Los tendidos aparecen cuando se abre la zanja (o se unen inversores en la misma zanja) en <b>Zanjas</b>.</p></div>`}
+    <p class="hint">En el orden del plan: cada tarjeta es un inversor con la bobina de cada conductor. <b>Seguro</b>: no cambia el plan de corte. <b>Riesgo</b>: el plan reubica otros cortes, sin faltante. Metros enteros, ya con la holgura de la bobina.</p>`;
+  segBind('#ctC', cat, (v) => { CTEND.cat = v; render(false); });
+  $$('[data-tend]', el).forEach((b) => { b.onclick = () => tender(b.dataset.tend); });
 }
 
 // ---------- frentes terminados: se archivan al final del menú ----------

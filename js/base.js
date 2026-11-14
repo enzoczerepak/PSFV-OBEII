@@ -57,7 +57,7 @@ function normalizar(st) {
   Engine.sincronizarPAT(st);
   // ajustes de obra informados (se aplican una sola vez)
   st.migr = st.migr || {};
-  if (ED.blank) Object.assign(st.migr, { mt120: true, lista0110: true, tx2_12: true, holgura: true });
+  if (ED.blank) Object.assign(st.migr, { mt120: true, lista0110: true, tx2_12: true, holgura: true, rest1114: true });
   aplicarParque(st);
   if (!st.migr.mt120) {
     const c = st.circuitos.find((x) => x.cat === 'MT' && x.designacion === 'C33-02');
@@ -85,6 +85,19 @@ function normalizar(st) {
   }
   // holgura en el último corte de cada bobina (2.36.2): una sola vez se liberan los compromisos para replanificar lo listo con holgura
   if (!st.migr.holgura) { st.compromiso = {}; st.migr.holgura = true; }
+  // 14/11: una PC con versión anterior y datos del miércoles pisó horómetros, lluvias y una zapata; se recupera lo que había (solo si sigue faltando)
+  if (!st.migr.rest1114) {
+    const L = {"ml101ltv|2026-11-09":{"2026-11-12":193,"2026-11-13":203},"msn2cn70|2026-11-09":{"2026-11-12":233,"2026-11-13":245},"matbmael|2026-11-09":{"2026-11-12":4452,"2026-11-13":4463},"m9q6csiw|2026-11-09":{"2026-11-12":5196.8,"2026-11-13":5201},"mz9bja4o|2026-11-09":{"2026-11-12":879.7,"2026-11-13":890}};
+    (st.maqHoras || []).forEach((r) => { const v = L[r.id]; if (v && r.lect && r.lect['2026-11-12'] == null && r.lect['2026-11-13'] == null) r.lect = Object.assign({}, r.lect, v); });
+    const D = st.lluvia && st.lluvia.dias;
+    if (D) {
+      const ant = { '2026-11-10': { trab: 'si' }, '2026-11-11': { man: false }, '2026-11-12': { mm: 1.3, man: true, trab: 'parcial' } };
+      Object.entries(ant).forEach(([f, v]) => { const x = D[f]; if (!x || (x.trab == null && x.man == null)) D[f] = v; });
+      ['2026-11-13', '2026-11-14'].forEach((f) => { const x = D[f]; if (x && Object.keys(x).length === 1 && x.mm === 0) delete D[f]; });
+    }
+    const av = st.sala && st.sala.av; if (av && av['exc|C4'] && !av['exc|C4'].ok && av['exc|C4'].ini === '2026-11-12') av['exc|C4'] = { ini: '2026-11-12', fin: '2026-11-14', ok: true };
+    st.migr.rest1114 = true;
+  }
   if (!st.migr.tx2_12) {
     const a = st.circuitos.find((x) => x.cat === 'BT' && !x.vinculo && x.desde === 'TX2-INV1'), b = st.circuitos.find((x) => x.cat === 'BT' && !x.vinculo && x.desde === 'TX2-INV2');
     if (a && b && a.zanjaId !== b.zanjaId) Engine.unirZanjas(st, [a.zanjaId, b.zanjaId]);
@@ -192,6 +205,7 @@ const VIEWS = {
   trec: ['Recepción de materiales de trackers', () => 'Control de lo que llega a obra contra el Bill of Materials de Trina · recibido, dañado y faltante por código'],
   tent: ['Entregas de materiales de trackers', () => 'Remitos y packing lists recibidos: lo declarado, lo contado conforme y lo dañado en cada entrega'],
   trecl: ['Reclamos al fabricante', () => 'Faltantes, dañados y códigos fuera del BOM de cada entrega · reportes para Trina y seguimiento hasta la reposición'],
+  ctend: ['Tendido BT / MT', () => 'Lo listo para tender, en el orden del plan: inversor, bobina, teórico, seguro y riesgo'],
   campo: ['Carga rápida de campo', () => 'Lo de todos los días a un toque: hincado y montaje por rango, horas, paradas, lluvia y materiales'],
   pdia: ['Parte diario', () => 'Todo lo registrado en el día en todos los frentes · PDF y texto para WhatsApp'],
   hist: ['Historial de cambios', () => 'Quién cambió qué y cuándo, en todas las PCs de la red'],
@@ -281,7 +295,7 @@ function render(anim) {
   const [t, sub] = VIEWS[view];
   const vc = view.split('-')[0];
   setTimeout(badgePartes, 0);
-  $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes', 'pdia', 'hist', 'crono', 'campo'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : ['trec', 'tent', 'trecl', 'tarm', 'tpan', 'tstk'].includes(view) ? 'Trackers' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'fo' ? 'Fibra óptica' : view === 'lmt' ? 'Línea aérea MT' : view === 'sala' ? 'Edificio O&M' : ['hincado', 'htrk', 'hrec', 'hcat'].includes(view) ? 'Trackers · Hincado' : MAQ_V.includes(view) ? 'Maquinaria de obra' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
+  $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes', 'pdia', 'hist', 'crono', 'campo', 'ctend'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : ['trec', 'tent', 'trecl', 'tarm', 'tpan', 'tstk'].includes(view) ? 'Trackers' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'fo' ? 'Fibra óptica' : view === 'lmt' ? 'Línea aérea MT' : view === 'sala' ? 'Edificio O&M' : ['hincado', 'htrk', 'hrec', 'hcat'].includes(view) ? 'Trackers · Hincado' : MAQ_V.includes(view) ? 'Maquinaria de obra' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
   $('#vTitle').innerHTML = (CATN[vc] && view.includes('-') ? `<span class="cchip c-${vc}">${CATL[vc]}</span>` : '') + esc(t); $('#vSub').innerHTML = sub();
   $('#projName').textContent = S.nombre;
   const el = $('#view'), sc = el.scrollTop;
@@ -292,7 +306,7 @@ function render(anim) {
   const [cat, kind] = view.split('-');
   if (kind === 'plan') vPlan(el, cat);
   else if (kind === 'circ') vCircuitos(el, cat);
-  else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hrec: vHRec, hcat: vHCat, fo: vFibra, lmt: vLMT, sala: vSala, trec: vTrkRec, tent: vTrkEnt, trecl: vTrkRecl, hist: vHist, pdia: vPdia, campo: vCampo, tarm: (e) => vMont(e, 'arm'), tpan: (e) => vMont(e, 'pan'), tstk: vStock, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
+  else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hrec: vHRec, hcat: vHCat, fo: vFibra, lmt: vLMT, sala: vSala, trec: vTrkRec, tent: vTrkEnt, trecl: vTrkRecl, hist: vHist, pdia: vPdia, campo: vCampo, ctend: vCTend, tarm: (e) => vMont(e, 'arm'), tpan: (e) => vMont(e, 'pan'), tstk: vStock, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
   if (typeof menuArchivar === 'function') menuArchivar();
   if (anim) { void el.offsetWidth; el.classList.add('enter'); el.scrollTop = 0; countUp(el); }
   else {

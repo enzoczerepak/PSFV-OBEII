@@ -5,7 +5,7 @@
   const KINDS = [['b', 'bobinas'], ['c', 'circuitos'], ['z', 'zanjas'], ['k', 'cronoTareas'], ['p', 'partes'], ['m', 'maquinas'], ['w', 'maqHoras'], ['e', 'maqEventos'], ['hl', 'hist'], ['us', 'usuarios'], ['mo', 'montaje']];
   // Versión del protocolo: 2 agrega fundaciones STS ('f:') y conserva registros de tipos desconocidos.
   // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
-  const PROTO = 2;
+  const PROTO = 3; // 3: cada cambio lleva la revisión del servidor sobre la que se hizo (no se pisa un dato más nuevo)
   // 'hc' catálogo y distribución de hincas, 'ht:' hincado por tracker, 'hr:' recepciones de hincas
   const nuevo = (k) => k.startsWith('hl:') || k.startsWith('us:') || k.startsWith('mo:') || k === 'tb' || k.startsWith('te:') || k.startsWith('tn:') || k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('la:') || k.startsWith('sv:');
   const conocido = (k) => k === 'cfg' || k === 'comp' || k === 'km' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
@@ -130,11 +130,22 @@
   function atender(S, body) {
     const y = meta(S), off = Date.now() - (Number(body.now) || Date.now());
     const viejo = !(Number(body.proto) >= PROTO);
-    let aplicados = 0;
+    let aplicados = 0, rechazados = 0;
+    if (viejo) return { aplicados: 0, rechazados: (body.cambios || []).length, viejo: true }; // una PC con versión anterior solo recibe: no puede pisar datos
+    const cols = records(S);
     (body.cambios || []).forEach((ch) => {
-      if (viejo && (nuevo(ch.k) || !conocido(ch.k))) return; // una PC vieja no puede borrar ni pisar fundaciones
       const adj = ch.m + off, cur = y.meta[ch.k];
-      if (!cur || adj >= cur.m) {
+      // el cambio se hizo sobre una versión vieja del registro (otra PC lo cambió después): no se pisa
+      if (cur && cur.r && !(Number(ch.base) >= cur.r)) {
+        const sv = cols.get(ch.k);
+        if (ch.k.startsWith('w:') && !ch.d && !cur.d && sv && ch.v) {
+          // horas de equipos: se suman las lecturas de los dos lados (lo del servidor no se pierde)
+          const m = Object.assign({}, sv, ch.v); ['lect', 'hs', 'per'].forEach((f) => { if (sv[f] || ch.v[f]) m[f] = Object.assign({}, sv[f] || {}, ch.v[f] || {}); });
+          if (canon(m) !== canon(sv)) { aplicar(S, ch.k, false, m); y.meta[ch.k] = { m: Math.max(adj, cur.m), d: 0, r: ++y.rev }; y.snap[ch.k] = canon(m); aplicados++; }
+        } else rechazados++;
+        return;
+      }
+      if (!cur || adj >= cur.m || (cur && Number(ch.base) >= cur.r)) {
         aplicar(S, ch.k, ch.d, ch.v);
         y.meta[ch.k] = { m: adj, d: ch.d ? 1 : 0, r: ++y.rev };
         if (ch.d) delete y.snap[ch.k]; else y.snap[ch.k] = canon(ch.v);
@@ -142,7 +153,7 @@
       }
     });
     if (aplicados) ordenar(S);
-    return { aplicados };
+    return { aplicados, rechazados };
   }
   function respuesta(S, since, proto) {
     const y = meta(S), cur = records(S), out = [], viejo = !(Number(proto) >= PROTO);
@@ -154,7 +165,7 @@
   function paquete(S, cfg) {
     const y = meta(S), cur = records(S);
     const keys = Object.keys(y.pend);
-    const cambios = keys.map((k) => ({ k, m: (y.meta[k] || {}).m || Date.now(), d: (y.meta[k] || {}).d || (cur.has(k) ? 0 : 1), v: cur.get(k) || null }));
+    const cambios = keys.map((k) => ({ k, m: (y.meta[k] || {}).m || Date.now(), d: (y.meta[k] || {}).d || (cur.has(k) ? 0 : 1), v: cur.get(k) || null, base: (y.meta[k] || {}).r || 0 }));
     return { body: { dev: cfg.devId, clave: cfg.clave, now: Date.now(), since: y.peerRev, proto: PROTO, cambios }, enviados: Object.fromEntries(keys.map((k) => [k, (y.meta[k] || {}).m])) };
   }
   function recibir(S, res, enviados, t0) {
