@@ -57,7 +57,8 @@
     if (!g || !(L > 0)) return null;
     if (g.faltante > 0 || !g.pct || g.pct.x == null || g.pct.x <= 0) return { L, seg: L, max: L, P: g.pct && g.pct.x != null ? g.pct.x : 0, sinMargen: true };
     const P = Math.min(g.pct.x, 200);
-    const fl = (x) => Math.max(L, Math.floor(x + 1e-6));
+    // metros enteros hacia abajo y un metro menos de resguardo (metrado de la bobina, corte en campo); nunca por debajo del teórico
+    const fl = (x) => Math.max(L, Math.floor(x + 1e-6) - 1);
     return { L, P, seg: fl(L * (1 + P * f / 100)), max: fl(L * (1 + P / 100)) };
   }
   // tope físico de la bobina: un conductor no puede pasar de lo que queda en su bobina.
@@ -74,8 +75,8 @@
     const tot = otros + LL, holg = saldo - tot, libre = Math.max(0, saldo - otros);
     const seg = Math.min(base.seg, holg >= 0 ? LL + holg * (LL / tot) : libre), max = Math.max(seg, Math.min(base.max, saldo));
     if (t && seg >= base.seg - 0.05 && max >= base.max - 0.05) return t;
-    const r1 = (x) => Math.floor(x + 1e-6);
-    return Object.assign({}, base, { seg: r1(seg), max: r1(max), bob: { codigo: p.bobina, saldo: r1(saldo), libre: r1(libre), holg: r1(Math.max(0, holg)), n: (R.piezas || []).filter((q) => q.bobina === p.bobina && q.key === b.key && q.estado === 'listo').length || 1, corto: libre < LL - 0.05 }, sinMargen: max <= LL + 0.05 });
+    const r1 = (x) => Math.floor(x + 1e-6), rs = (x) => Math.max(LL, r1(x) - 1); // un metro de resguardo, nunca por debajo del teórico
+    return Object.assign({}, base, { seg: seg < base.seg - 1e-6 ? rs(seg) : base.seg, max: Math.max(seg < base.seg - 1e-6 ? rs(seg) : base.seg, max < base.max - 1e-6 ? rs(max) : base.max), bob: { codigo: p.bobina, saldo: r1(saldo), libre: r1(libre), holg: r1(Math.max(0, holg)), n: (R.piezas || []).filter((q) => q.bobina === p.bobina && q.key === b.key && q.estado === 'listo').length || 1, corto: libre < LL - 0.05 }, sinMargen: max <= LL + 0.05 });
   }
   // nivel de unos metros tirados: 'ok' (seguro o de menos), 'riesgo', 'falta'
   function nivel(t, m) {
