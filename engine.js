@@ -305,6 +305,14 @@
       z.listoCerrar = z.completo; // la PAT se registra al cerrar
       z.miembros.forEach((c) => { c.pat = z.pat; c.listoCerrar = z.listoCerrar; c.compartida = z.miembros.length > 1; c.zTitulo = z.titulo; });
     });
+    // tramos pendientes de una zanja compartida (cierre parcial): siguen siendo parte de ella y se le suman al cerrarse
+    zlist.forEach((z) => {
+      const pa = z.parcialDe && zlist.find((x) => x.id === z.parcialDe);
+      if (!pa) return;
+      z.tramoDe = { id: pa.id, titulo: pa.titulo, estado: pa.estado };
+      (pa.tramos = pa.tramos || []).push({ id: z.id, titulo: z.titulo, estado: z.estado, inv: z.miembros.map((c) => c.desde) });
+      z.miembros.forEach((c) => { c.compartida = true; c.zCompartida = pa.titulo; });
+    });
 
     // ---- resumen por tipo de cable
     const keys = [...new Set([...bobinas.map((b) => b.key), ...circuitos.map((c) => c.key)])].filter((k) => !k.endsWith('|null'));
@@ -424,6 +432,26 @@
     state.zanjas = state.zanjas.filter((z) => !ids2.has(z.id));
     return null;
   }
+  // Suma un tramo (zanja nacida de un cierre parcial) a su zanja compartida. La PAT que se haya tendido en el tramo
+  // se suma a la de la compartida (misma bobina o sin bobina). Devuelve un mensaje de error o null.
+  function sumarTramo(state, tid) {
+    const t = (state.zanjas || []).find((z) => z.id === tid), pa = t && state.zanjas.find((z) => z.id === t.parcialDe);
+    if (!t || !pa) return 'Ese tramo ya no tiene zanja compartida';
+    const patT = state.circuitos.find((c) => c.vinculo === t.id), patP = state.circuitos.find((c) => c.vinculo === pa.id);
+    const rt = patT && patT.real && patT.real.C, m = rt ? Number(rt.metros) || 0 : 0;
+    if (m > 0) {
+      if (!patP) return 'La zanja compartida no tiene PAT para sumarle la del tramo';
+      const rp = (patP.real || {}).C;
+      if (rp && rt.bobina && rp.bobina && rp.bobina !== rt.bobina) return `La PAT del tramo salió de la bobina ${rt.bobina} y la de la zanja compartida de la ${rp.bobina}: no se pueden sumar en un solo registro`;
+      patP.real = { C: Object.assign({}, rp || {}, rt.bobina ? { bobina: rt.bobina } : rp ? {} : { sinBobina: true }, { metros: r2(((rp && Number(rp.metros)) || 0) + m), fecha: (rp && rp.fecha) || rt.fecha }) };
+    }
+    state.circuitos.forEach((c) => { if (c.zanjaId === t.id) c.zanjaId = pa.id; });
+    state.circuitos = state.circuitos.filter((c) => c.vinculo !== t.id);
+    state.zanjas = state.zanjas.filter((z) => z.id !== t.id);
+    if (t.estado !== 'cerrada') pa.estado = t.estado === 'abierta' ? 'abierta' : pa.estado;
+    if (!state.zanjas.some((z) => z.parcialDe === pa.id)) delete pa.parcial;
+    return null;
+  }
   // Saca un circuito de una zanja compartida y le da zanja propia
   function separarCircuito(state, cid) {
     const c = state.circuitos.find((x) => x.id === cid); if (!c) return;
@@ -485,6 +513,6 @@
     return lotes;
   }
 
-  const Engine = { calcular, propuesta, sincronizarPAT, unirZanjas, separarCircuito, tituloZanja, PAT_SEC, parseSeccion, fasesDe, CATS, ZANJA, PRYSALAC, RETENAX, ficha };
+  const Engine = { calcular, propuesta, sincronizarPAT, unirZanjas, sumarTramo, separarCircuito, tituloZanja, PAT_SEC, parseSeccion, fasesDe, CATS, ZANJA, PRYSALAC, RETENAX, ficha };
   if (typeof module !== 'undefined' && module.exports) module.exports = Engine; else root.Engine = Engine;
 })(typeof window !== 'undefined' ? window : globalThis);

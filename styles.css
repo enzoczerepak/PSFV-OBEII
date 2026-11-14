@@ -1306,3 +1306,4 @@ tr.evrun td { background: #fff8ec; }
 #navArch .archh em{font-style:normal;background:rgba(255,255,255,.12);border-radius:9px;padding:2px 7px}
 #navArch .archb{display:none}#navArch.open .archb{display:block}
 .pha{font-style:normal;font-size:20px;opacity:.45}
+.p-info { background: #e5f0fb; color: #1d5fa8; }
