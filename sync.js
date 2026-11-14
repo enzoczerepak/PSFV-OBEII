@@ -134,6 +134,7 @@
     if (viejo) return { aplicados: 0, rechazados: (body.cambios || []).length, viejo: true }; // una PC con versión anterior solo recibe: no puede pisar datos
     const cols = records(S);
     (body.cambios || []).forEach((ch) => {
+      if (ch.k === 'comp') return; // los compromisos de corte los calcula el servidor con sus propios datos
       const adj = ch.m + off, cur = y.meta[ch.k];
       // el cambio se hizo sobre una versión vieja del registro (otra PC lo cambió después): no se pisa
       if (cur && cur.r && !(Number(ch.base) >= cur.r)) {
@@ -164,6 +165,8 @@
   // ---- cliente
   function paquete(S, cfg) {
     const y = meta(S), cur = records(S);
+    // versión nueva del programa: se vuelve a pedir todo al servidor (una versión vieja descartaba los tipos de dato que no conocía)
+    if (y.proto !== PROTO) { y.peerRev = 0; y.proto = PROTO; }
     const keys = Object.keys(y.pend);
     const cambios = keys.map((k) => ({ k, m: (y.meta[k] || {}).m || Date.now(), d: (y.meta[k] || {}).d || (cur.has(k) ? 0 : 1), v: cur.get(k) || null, base: (y.meta[k] || {}).r || 0 }));
     return { body: { dev: cfg.devId, clave: cfg.clave, now: Date.now(), since: y.peerRev, proto: PROTO, cambios }, enviados: Object.fromEntries(keys.map((k) => [k, (y.meta[k] || {}).m])) };

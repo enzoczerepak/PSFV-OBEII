@@ -83,7 +83,7 @@ async function renderNet() {
       <label>Puerto<input type="number" id="nPort" value="${NET.puerto}"></label><label>&nbsp;<button class="btn pri" id="nConn">${S.__sync && S.__sync.srvId ? 'Reconectar' : 'Conectar'}</button></label></div></details>
       <div class="alert ${netStatus.ok ? 'ok' : netStatus.ok === false ? 'error' : 'info'}" style="margin-top:10px">${netStatus.ok ? `Conectado a ${esc(NET.ip)} · última sincronización ${esc(netStatus.cuando || '')}` : esc(netStatus.msg || 'Sin conectar')}</div>
       <p class="hint">Esta PC guarda sus propios datos y puede trabajar sin conexión: los cambios se envían solos al volver la red. Si dos PCs cambian lo mismo, queda el cambio más reciente.</p>
-      <div style="display:flex;gap:8px"><button class="btn" id="nNow">Sincronizar ahora</button></div>`;
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="nNow">Sincronizar ahora</button><button class="btn" id="nFull" title="Si en esta PC falta algo que en el servidor está (equipos, trackers, sala…), baja de nuevo toda la obra del servidor">Bajar todo del servidor</button></div>`;
   }
   box.innerHTML = h;
   segBind('#nMode', m, async (v) => {
@@ -102,6 +102,10 @@ async function renderNet() {
   if (m === 'cliente') {
     $('#nConn').onclick = () => conectar($('#nIp').value.trim(), Number($('#nPort').value) || 47821, $('#nKey').value.trim());
     $('#nNow').onclick = () => syncNow(true);
+    $('#nFull').onclick = async () => {
+      if (!(await confirmar('Bajar todo del servidor', 'Esta PC toma la obra completa tal como está en el servidor. Lo que se haya cargado solo acá y no llegó al servidor se reemplaza (queda en el respaldo del día de esta PC).', 'Bajar todo'))) return;
+      const id = Sync.meta(S).srvId; Sync.reemplazarPorServidor(S); Sync.meta(S).srvId = id; Sync.meta(S).peerRev = 0; Sync.meta(S).proto = Sync.PROTO;
+      await syncNow(true); toast('Obra actualizada desde el servidor'); };
   }
 }
 async function conectarEncontrado(f) {
