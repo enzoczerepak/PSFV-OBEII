@@ -156,9 +156,10 @@ async function syncNow(manual) {
     }
     if (r.res.srvId !== y.srvId) { netStatus = { ok: false, msg: 'El servidor cambió: volvé a conectar' }; return; }
     const n = Sync.recibir(S, r.res, enviados, t0);
-    const viejo = !(Number(r.res.proto) >= Sync.PROTO);
-    if (viejo && !avisoViejo) { avisoViejo = true; toast('El servidor tiene una versión anterior del programa: actualizalo. Hasta entonces las fundaciones STS no se sincronizan (quedan guardadas en esta PC).', { err: true, ms: 12000 }); }
-    netStatus = { ok: true, msg: viejo ? 'servidor con versión anterior: actualizalo' : '', cuando: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) };
+    const viejo = !(Number(r.res.proto) >= Sync.PROTO), nuevoSrv = Number(r.res.proto) > Sync.PROTO;
+    if (viejo && !avisoViejo) { avisoViejo = true; toast('El servidor tiene una versión anterior del programa: actualizalo. Hasta entonces esta PC solo recibe datos (lo que cargues acá no se envía).', { err: true, ms: 15000 }); }
+    if (nuevoSrv && !avisoViejo) { avisoViejo = true; modal({ title: '⬆️ Actualizá este programa', body: '<p>El servidor tiene una versión más nueva. Hasta que actualices esta PC, <b>lo que cargues acá no llega al servidor</b>.</p><p>Cerrá el programa y volvé a abrirlo: si el servidor ya la está repartiendo, se instala sola. Si no, instalá la versión nueva a mano.</p>', buttons: [['Entendido', 'btn pri', () => true]] }); }
+    netStatus = { ok: true, msg: viejo ? 'servidor con versión anterior: actualizalo' : nuevoSrv ? 'esta PC tiene una versión anterior: actualizala' : '', cuando: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) };
     if (n || Object.keys(enviados).length) {
       S = normalizarRed(S);
       commitRed(n ? `${n} cambios recibidos de la red` : '');

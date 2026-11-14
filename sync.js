@@ -5,7 +5,7 @@
   const KINDS = [['b', 'bobinas'], ['c', 'circuitos'], ['z', 'zanjas'], ['k', 'cronoTareas'], ['p', 'partes'], ['m', 'maquinas'], ['w', 'maqHoras'], ['e', 'maqEventos'], ['hl', 'hist'], ['us', 'usuarios'], ['mo', 'montaje']];
   // Versión del protocolo: 2 agrega fundaciones STS ('f:') y conserva registros de tipos desconocidos.
   // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
-  const PROTO = 4; // 3: cada cambio lleva la revisión del servidor sobre la que se hizo · 4: al actualizar, el cliente primero toma todo del servidor
+  const PROTO = 5; // 3: cada cambio lleva la revisión del servidor sobre la que se hizo · 4: al actualizar, el cliente primero toma todo del servidor · 5: tipos de 2 letras (usuarios, historial, montaje) y fin del reenvío sin fin
   // 'hc' catálogo y distribución de hincas, 'ht:' hincado por tracker, 'hr:' recepciones de hincas
   const nuevo = (k) => k.startsWith('hl:') || k.startsWith('us:') || k.startsWith('mo:') || k === 'tb' || k.startsWith('te:') || k.startsWith('tn:') || k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('la:') || k.startsWith('sv:');
   const conocido = (k) => k === 'cfg' || k === 'comp' || k === 'km' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
@@ -50,6 +50,32 @@
     y.rev = y.rev || 0; y.peerRev = y.peerRev || 0;
     return y;
   }
+  // versiones anteriores de cada registro en el servidor (huella corta + cuándo se reemplazó): un cliente que manda de nuevo
+  // un dato que el servidor ya había reemplazado hace rato es un eco de una PC desactualizada y no se acepta
+  const ECO_MS = 10 * 60e3;
+  function hsh(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36) + s.length.toString(36); }
+  function guardarPrev(y, k, viejo, t) {
+    if (viejo == null) return; y.prev = y.prev || {};
+    const a = (y.prev[k] = y.prev[k] || []); a.push([hsh(viejo), t == null ? Date.now() : t]); if (a.length > 6) a.splice(0, a.length - 6);
+  }
+  function esEco(y, k, h) {
+    if (!y.prev || !y.prev[k] || y.snap[k] === h) return false;
+    const x = hsh(h), now = Date.now();
+    return y.prev[k].some(([p, t]) => p === x && now - t > ECO_MS);
+  }
+  // para una corrección hecha en el programa (recupero de datos): los valores que se reemplazan quedan marcados como viejos desde ya
+  function recordarViejos(S, antes) {
+    const y = meta(S), cur = records(S);
+    antes.forEach((h, k) => { const n = cur.has(k) ? canon(cur.get(k)) : null; if (n !== h) guardarPrev(y, k, h, 0); });
+  }
+  // registros de tipos conocidos que una versión anterior guardó como "desconocidos" (usuarios, historial, montaje): a su lugar
+  function rescatar(S) {
+    const O = S.__otros; if (!O) return 0; let n = 0;
+    Object.keys(O).forEach((k) => { const ix = k.indexOf(':'); if (ix > 0 && KINDS.some(([p]) => p === k.slice(0, ix))) { aplicar(S, k, false, O[k]); delete O[k]; n++; } });
+    if (!Object.keys(O).length) delete S.__otros;
+    return n;
+  }
+  const huellas = (S) => { const m = new Map(); records(S).forEach((v, k) => m.set(k, canon(v))); return m; };
   const orden = (a, b) => ((a._o ?? 1e18) - (b._o ?? 1e18)) || String(a.id).localeCompare(String(b.id));
   function ordenar(S) { KINDS.forEach(([, col]) => { if (S[col]) S[col].sort(orden); }); }
 
@@ -91,8 +117,8 @@
       const id = k.slice(3); if (d) delete F.z[id]; else F.z[id] = v; return;
     }
     if (k.startsWith('f:')) { const [sts, e] = k.slice(2).split('|'); S.fundaciones = S.fundaciones || {}; const o = (S.fundaciones[sts] = S.fundaciones[sts] || {}); if (d) delete o[e]; else o[e] = v; return; }
-    const [p, id] = [k.slice(0, 1), k.slice(2)];
-    const col = (KINDS.find((x) => x[0] === p) || [])[1];
+    const ix = k.indexOf(':'), p = k.slice(0, ix), id = k.slice(ix + 1); // prefijo de 1 o 2 letras (us:, hl:, mo:)
+    const col = ix > 0 ? (KINDS.find((x) => x[0] === p) || [])[1] : null;
     if (!col) { S.__otros = S.__otros || {}; if (d) delete S.__otros[k]; else S.__otros[k] = v; return; }
     S[col] = S[col] || [];
     const i = S[col].findIndex((x) => x.id === id);
@@ -109,8 +135,9 @@
       if (modo === 'cliente') y.pend[k] = 1;
     };
     let n = 0;
-    cur.forEach((v, k) => { const h = canon(v); if (y.snap[k] !== h) { y.snap[k] = h; touch(k, false); n++; } });
-    Object.keys(y.snap).forEach((k) => { if (!cur.has(k)) { delete y.snap[k]; touch(k, true); n++; } });
+    const srv = modo !== 'cliente';
+    cur.forEach((v, k) => { const h = canon(v); if (y.snap[k] !== h) { if (srv) guardarPrev(y, k, y.snap[k]); y.snap[k] = h; touch(k, false); n++; } });
+    Object.keys(y.snap).forEach((k) => { if (!cur.has(k)) { if (srv) guardarPrev(y, k, y.snap[k]); delete y.snap[k]; touch(k, true); n++; } });
     return n;
   }
   // Primera vez: toma el estado actual como base sin marcar cambios
@@ -136,19 +163,21 @@
     (body.cambios || []).forEach((ch) => {
       if (ch.k === 'comp') return; // los compromisos de corte los calcula el servidor con sus propios datos
       const adj = ch.m + off, cur = y.meta[ch.k];
+      if (!ch.d && ch.v && esEco(y, ch.k, canon(ch.v))) { rechazados++; rech.push(ch.k); return; } // dato que el servidor ya había reemplazado: PC desactualizada
       // el cambio se hizo sobre una versión vieja del registro (otra PC lo cambió después): no se pisa
       if (cur && cur.r && !(Number(ch.base) >= cur.r)) {
         const sv = cols.get(ch.k);
         if (ch.k.startsWith('w:') && !ch.d && !cur.d && sv && ch.v) {
           // horas de equipos: se suman las lecturas de los dos lados (lo del servidor no se pierde)
           const m = Object.assign({}, sv, ch.v); ['lect', 'hs', 'per'].forEach((f) => { if (sv[f] || ch.v[f]) m[f] = Object.assign({}, sv[f] || {}, ch.v[f] || {}); });
-          if (canon(m) !== canon(sv)) { aplicar(S, ch.k, false, m); y.meta[ch.k] = { m: Math.max(adj, cur.m), d: 0, r: ++y.rev }; y.snap[ch.k] = canon(m); aplicados++; }
+          if (canon(m) !== canon(sv)) { aplicar(S, ch.k, false, m); y.meta[ch.k] = { m: Math.max(adj, cur.m), d: 0, r: ++y.rev }; guardarPrev(y, ch.k, y.snap[ch.k]); y.snap[ch.k] = canon(m); aplicados++; }
         } else { rechazados++; rech.push(ch.k); }
         return;
       }
       if (!cur || adj >= cur.m || (cur && Number(ch.base) >= cur.r)) {
         aplicar(S, ch.k, ch.d, ch.v);
         y.meta[ch.k] = { m: adj, d: ch.d ? 1 : 0, r: ++y.rev };
+        guardarPrev(y, ch.k, y.snap[ch.k]);
         if (ch.d) delete y.snap[ch.k]; else y.snap[ch.k] = canon(ch.v);
         aplicados++;
       }
@@ -170,9 +199,11 @@
     // datos distintos de los del servidor aunque creyera tenerlos; lo cargado en ella y no enviado se descarta)
     let soloRecibir = false;
     if (y.proto !== PROTO) { y.peerRev = 0; y.proto = PROTO; y.pend = {}; soloRecibir = true; }
+    // con un servidor de otra versión no se manda nada (solo se recibe) hasta que las dos PCs tengan la misma
+    if (y.srvProto != null && Number(y.srvProto) !== PROTO) soloRecibir = true;
     const keys = soloRecibir ? [] : Object.keys(y.pend);
     const cambios = keys.map((k) => ({ k, m: (y.meta[k] || {}).m || Date.now(), d: (y.meta[k] || {}).d || (cur.has(k) ? 0 : 1), v: cur.get(k) || null, base: (y.meta[k] || {}).r || 0 }));
-    return { body: { dev: cfg.devId, clave: cfg.clave, now: Date.now(), since: y.peerRev, proto: PROTO, cambios }, enviados: Object.fromEntries(keys.map((k) => [k, (y.meta[k] || {}).m])) };
+    return { body: { dev: cfg.devId, clave: cfg.clave, now: Date.now(), since: y.peerRev, proto: PROTO, cambios }, enviados: Object.fromEntries(keys.map((k) => [k, cur.has(k) ? canon(cur.get(k)) : null])) };
   }
   function recibir(S, res, enviados, t0) {
     const y = meta(S);
@@ -194,9 +225,11 @@
       if (ch.d) delete y.snap[ch.k]; else y.snap[ch.k] = h;
       aplicados++;
     });
-    Object.entries(enviados).forEach(([k, m]) => { if (y.meta[k] && y.meta[k].m <= m + 1) delete y.pend[k]; else if (!y.meta[k]) delete y.pend[k]; });
+    // lo enviado deja de estar pendiente (el servidor ya lo tomó o devolvió su versión), salvo que se haya vuelto a cambiar mientras viajaba
+    const cur2 = records(S), recib = new Map((res.cambios || []).map((c) => [c.k, c.d ? null : canon(c.v)]));
+    Object.entries(enviados).forEach(([k, h]) => { const a = cur2.has(k) ? canon(cur2.get(k)) : null; if (a === h || (recib.has(k) && recib.get(k) === a)) { delete y.pend[k]; y.snap[k] = a == null ? undefined : a; if (a == null) delete y.snap[k]; } });
     y.peerRev = res.rev;
-    y.srvId = res.srvId;
+    y.srvId = res.srvId; y.srvProto = Number(res.proto) || 0;
     if (aplicados) ordenar(S);
     return aplicados;
   }
@@ -211,5 +244,5 @@
     y.peerRev = 0;
   }
 
-  window.Sync = { PROTO, sellar, base, prepararServidor, atender, respuesta, paquete, recibir, reemplazarPorServidor, marcarTodoPendiente, ordenar, meta };
+  window.Sync = { PROTO, huellas, recordarViejos, rescatar, sellar, base, prepararServidor, atender, respuesta, paquete, recibir, reemplazarPorServidor, marcarTodoPendiente, ordenar, meta };
 })();

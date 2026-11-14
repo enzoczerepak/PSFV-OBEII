@@ -52,6 +52,7 @@ const usrRec = () => { try { return JSON.parse(localStorage.getItem('obeii-usr')
 async function usrEntrar(forzar) {
   usrPedido = true;
   if (window.VISOR || !usersOn()) { USR = null; usrPie(); return; }
+  if (!USR) { aplicarPermiso(); render(false); } // hasta entrar, solo lectura
   if (typeof updObligatoria === 'function' && (await updObligatoria())) return;
   const rec = usrRec(), recU = usrL().find((x) => x.id === rec.id), recPin = recU && rec.pin && rec.pin === recU.pin;
   const us = usrL().slice().sort((a, b) => a.nombre.localeCompare(b.nombre));
