@@ -69,7 +69,7 @@
   function topeBobina(t, p, R, L) {
     if (!p || !p.bobina || !R) return t;
     const b = (R.bobinas || []).find((x) => x.codigo === p.bobina && (!p.key || x.key === p.key)); if (!b) return t;
-    const saldo = Math.max(0, Number(b.saldoActual) || 0);
+    const saldo = Math.max(0, (Number(b.saldoActual) || 0) - (Number((R.params || {}).cola) || 0)); // la cola de la bobina no se usa
     const otros = (R.piezas || []).filter((q) => q.bobina === p.bobina && q.key === b.key && q.estado === 'listo' && !(q.cid === p.cid && q.fase === p.fase)).reduce((a, q) => a + (Number(q.len) || 0), 0);
     const base = t || { L: L || p.len, seg: L || p.len, max: L || p.len, P: 0 }, LL = base.L;
     const tot = otros + LL, holg = saldo - tot, libre = Math.max(0, saldo - otros);
