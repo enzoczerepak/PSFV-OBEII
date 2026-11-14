@@ -6,7 +6,7 @@ function pendientesHoy() {
   const add = (ico, txt, go, col, fn) => P.push({ ico, txt, go, col: col || '#f0a23b', fn });
   try { [ayer, hoy].forEach((f) => { const e = lluEstado(f); if (e.k === 'sindato') add('🌧️', `${f === hoy ? 'Hoy' : 'Ayer'} llovió: indicar si se trabajó`, null, '#3d86d6', () => verLluvias()); }); } catch (_) {}
   try { const ec = evCurso(); if (ec.length) add('🛑', `${ec.length} parada${ec.length > 1 ? 's' : ''} / mantenimiento${ec.length > 1 ? 's' : ''} en curso`, 'maqev', '#d9573f'); } catch (_) {}
-  try { const sin = maqL().filter((m) => m.activa !== false && !m.sinHoro && datoDia(m.id, ayer).v == null && !(m.sinHoro && datoDia(m.id, ayer).h != null));
+  try { const sin = maqL().filter((m) => m.activa !== false && !m.sinHoro && !(typeof inactEn === 'function' && inactEn(m, ayer)) && datoDia(m.id, ayer).v == null && lecturas(m.id).length);
     const dSem = new Date(ayer + 'T12:00:00').getDay(); if (sin.length && dSem !== 0) add('⏱️', `${sin.length} equipo${sin.length > 1 ? 's' : ''} sin horómetro de ayer`, 'maq'); } catch (_) {}
   try { const I = trkInfo(); const sinR = I.difs.filter((d) => !d.recl).length; if (sinR) add('📦', `${sinR} diferencia${sinR > 1 ? 's' : ''} de entregas sin reclamar a Trina`, 'trecl', '#d9573f');
     const borr = trkS().recl.filter((r) => r.estado === 'borrador').length; if (borr) add('✉️', `${borr} reclamo${borr > 1 ? 's' : ''} en borrador sin enviar`, 'trecl'); } catch (_) {}
