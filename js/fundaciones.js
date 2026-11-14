@@ -1,11 +1,6 @@
 /* PSFV-OBE II · Fundaciones de STS. */
 // ======================= FUNDACIONES STS =======================
-const ETAPAS = [
-  ['exc', 'Excavación'], ['encL', 'Armado de encofrado hormigón de limpieza'], ['hL', 'Carga de hormigón de limpieza'],
-  ['hieP', 'Armado de estructura de hierro para platea'], ['encP', 'Armado de encofrado para platea'], ['hP', 'Carga de hormigón en platea'],
-  ['hieT', 'Armado de estructura de tabiques'], ['encT', 'Armado de encofrado de tabiques'], ['hT', 'Carga de hormigón en tabiques'],
-  ['frag', 'Fraguado general'], ['sts', 'Colocación de STS sobre base'],
-];
+const ETAPAS = window.CIVIL.ETAPAS;
 const ETN = Object.fromEntries(ETAPAS);
 const FCOL = { done: '#2f9e5b', curso: '#f5a524', pend: '#dfe5ec' };
 function fundInfo(sts) {

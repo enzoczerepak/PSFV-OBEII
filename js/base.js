@@ -168,7 +168,7 @@ function searchBind(sel, set) {
 }
 function actions(btns) {
   const a = $('#vActions'); a.innerHTML = '';
-  if (window.READONLY) btns = btns.filter(([t]) => /Exportar|PDF|Simular|Stock consolidado/.test(t) || (window.__editor && /Actualizar cronograma/.test(t)));
+  if (window.READONLY) btns = btns.filter(([t]) => /Exportar|PDF|Simular|Stock consolidado|Copiar texto/.test(t) || (window.__editor && /Actualizar cronograma/.test(t)));
   // las exportaciones (Excel / PDF) van juntas en un solo botón "Exportar"
   const esExp = ([t]) => /^(Exportar|PDF)/.test(t);
   const exp = btns.filter(esExp), resto = btns.filter((b) => !esExp(b));
@@ -257,6 +257,7 @@ setTimeout(() => {
 let navKey = 'resumen';
 const HINC_V = ['hincado', 'hplano', 'htrk', 'hrec', 'hcat'];
 function go(v) {
+  if (window.VISOR && typeof SOLO_PC !== 'undefined' && SOLO_PC.includes(v)) v = 'resumen';
   // al entrar al menú Hincado desde otra sección, cartel de precarga
   if (HINC_V.includes(v) && !HINC_V.includes(navKey)) setTimeout(hincAvisoEntrada, 450);
   const gc = /^(BT|MT|PAT|LA)-/.exec(v); if (gc) { const g = $(`#nav .grp[data-cat="${gc[1]}"]`); if (g && !g.classList.contains('open')) grpToggle(gc[1], true); }

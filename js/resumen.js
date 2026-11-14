@@ -53,7 +53,7 @@ function heroHTML() {
 }
 function vResumen(el) {
   actions([['Exportar Excel', 'btn', exportExcel]]);
-  let abierto = false; try { abierto = localStorage.getItem('iniDet') === '1'; } catch (_) {}
+  let abierto = !!window.VISOR; try { const g = localStorage.getItem('iniDet'); if (g != null) abierto = g === '1'; } catch (_) {}
   el.innerHTML = ghAvisoHTML() + (typeof evCursoHTML === 'function' ? evCursoHTML(true) : '') + heroHTML() + paraHoyHTML()
     + `<details class="inidet"${abierto ? ' open' : ''}><summary>Detalle por frente de obra</summary>${modulosHTML()}</details>`;
   if (typeof bindEvCurso === 'function') bindEvCurso(el);

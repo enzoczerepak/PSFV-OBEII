@@ -1307,3 +1307,4 @@ tr.evrun td { background: #fff8ec; }
 #navArch .archb{display:none}#navArch.open .archb{display:block}
 .pha{font-style:normal;font-size:20px;opacity:.45}
 .p-info { background: #e5f0fb; color: #1d5fa8; }
+body.ro .solo-pc { display: none !important; }

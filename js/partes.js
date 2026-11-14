@@ -8,7 +8,7 @@ function recibirParte(p, autor) {
   toast(`📱 Nuevo parte de campo de ${autor}: ${parteTxt(p)}`, { ms: 9000, action: ['Ver', () => go('partes')] });
   badgePartes();
 }
-const parteTxt = (p) => p.tipo === 'tendido' ? `${p.designacion} · ${p.fases.length} conductor${p.fases.length > 1 ? 'es' : ''}` : p.tipo === 'pat' ? `PAT ${p.titulo} · ${fmt(p.metros, 1)} m` : p.tipo === 'zanja' ? `zanja ${p.titulo} · ${fmt(p.largo, 1)} m` : 'observación';
+const parteTxt = (p) => p.tipo === 'fund' ? `${p.sts} · ${p.n} ${p.accion === 'fin' ? 'terminada' : 'iniciada'}` : p.tipo === 'sala' ? `Edificio O&M · ${p.n}${p.els && p.els[0] !== 'G' ? ' (' + p.els.join(', ') + ')' : ''} ${p.accion === 'fin' ? 'terminada' : 'iniciada'}` : p.tipo === 'tendido' ? `${p.designacion} · ${p.fases.length} conductor${p.fases.length > 1 ? 'es' : ''}` : p.tipo === 'pat' ? `PAT ${p.titulo} · ${fmt(p.metros, 1)} m` : p.tipo === 'zanja' ? `zanja ${p.titulo} · ${fmt(p.largo, 1)} m` : 'observación';
 function badgePartes() {
   const n = (S.partes || []).filter((p) => p.estado === 'pendiente').length;
   const b = $('#nav button[data-view="partes"]'); if (!b) return;
@@ -20,7 +20,7 @@ function vPartes(el) {
   const lista = (S.partes || []).slice().sort((a, b) => String(b.recibido).localeCompare(String(a.recibido))).filter((p) => (f === 'pend' ? p.estado === 'pendiente' : f === 'ok' ? p.estado !== 'pendiente' : true));
   const pend = (S.partes || []).filter((p) => p.estado === 'pendiente');
   actions(pend.length > 1 && !window.READONLY ? [['Aprobar todos los válidos', 'btn pri', aprobarTodos]] : []);
-  const TIPO = { tendido: ['Tendido', '#00939a'], pat: ['PAT', '#6a5acd'], zanja: ['Zanja', '#c97b12'], obs: ['Observación', '#7a8aa3'] };
+  const TIPO = { tendido: ['Tendido', '#00939a'], pat: ['PAT', '#6a5acd'], zanja: ['Zanja', '#c97b12'], fund: ['Civil · STS', '#f2b33d'], sala: ['Civil · O&M', '#b294ff'], obs: ['Observación', '#7a8aa3'] };
   let h = `<div class="tools"><div class="seg" id="pF"><button data-v="pend">Pendientes (${pend.length})</button><button data-v="ok">Resueltos</button><button data-v="all">Todos</button></div></div>`;
   if (!lista.length) h += `<div class="card empty"><b>${f === 'pend' ? 'No hay partes pendientes' : 'Sin partes'}</b>Los capataces cargan desde el celular en <b>campo.html</b>, en el mismo sitio del visor. Esta PC los recibe cada minuto si el programa está abierto.</div>`;
   lista.forEach((p) => {
@@ -40,8 +40,14 @@ function vPartes(el) {
     } else if (p.tipo === 'zanja') {
       const rz = R.zlist.find((z) => z.id === p.zanja);
       cuerpo = `<div class="muted">Zanja ${esc(p.titulo)}${rz ? ` · largo actual ${fmt(rz.largo, 1)} m (plano)` : ''}</div><div class="pt-row">Largo real ${pe ? `<input type="number" step="0.1" class="pm" value="${p.largo}" style="width:100px">` : `<b>${fmt(p.largo, 1)} m</b>`}${rz ? ` <span class="muted">dif. ${fmt(p.largo - rz.largo, 1)} m</span>` : ''}</div>`;
-    } else cuerpo = p.titulo ? `<div class="muted">Sobre zanja ${esc(p.titulo)}</div>` : '';
-    h += `<div class="card ptc ${p.estado}" data-id="${p.id}"><div class="pth"><span class="kst" style="--c:${t[1]}">${t[0]}</span><b>${esc(p.tipo === 'tendido' ? p.designacion : p.titulo || '')}</b><span class="muted">${esc(p.autor)} · ${fechaCorta(p.fecha)} · recibido ${new Date(p.recibido).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+    } else if (p.tipo === 'fund') {
+      const a = (((S.fundaciones || {})[p.sts]) || {})[p.etapa] || {};
+      cuerpo = `<div class="pt-row"><b>${esc(p.n)}</b> · ${p.accion === 'fin' ? 'se terminó' : 'se inició'} el ${fechaCorta(p.fecha)} <span class="muted">· hoy figura ${a.ok ? 'terminada' : a.ini ? 'en curso desde ' + fechaCorta(a.ini) : 'sin registro'}</span></div>`;
+    } else if (p.tipo === 'sala') {
+      const e = SALA_ETN[p.etapa], els = p.els || [], ya = els.filter((x) => salaAv(p.etapa, x).ok);
+      cuerpo = `<div class="pt-row"><b>${esc(p.n)}</b>${els[0] !== 'G' ? ` · ${els.map(esc).join(', ')}` : ''} · ${p.accion === 'fin' ? 'se terminó' : 'se inició'} el ${fechaCorta(p.fecha)}${p.pct ? ` · avance ${p.pct} %` : ''}${ya.length ? ` <span class="muted">· ya figuraban terminadas: ${ya.map(esc).join(', ')}</span>` : ''}${!e ? ' <b style="color:var(--bad)">etapa inexistente</b>' : ''}</div>`;
+    } else cuerpo = p.titulo ? `<div class="muted">Sobre ${p.titulo === 'Frente civil' ? '' : 'zanja '}${esc(p.titulo)}</div>` : '';
+    h += `<div class="card ptc ${p.estado}" data-id="${p.id}"><div class="pth"><span class="kst" style="--c:${t[1]}">${t[0]}</span><b>${esc(p.tipo === 'tendido' ? p.designacion : p.tipo === 'fund' ? p.sts : p.tipo === 'sala' ? 'Edificio O&M' : p.titulo || '')}</b><span class="muted">${esc(p.autor)} · ${fechaCorta(p.fecha)} · recibido ${new Date(p.recibido).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
         <span class="sp"></span>${p.estado === 'pendiente' ? '<span class="kst" style="--c:#1d5fa8">pendiente</span>' : p.estado === 'aprobado' ? '<span class="kst" style="--c:#2f9e5b">aprobado</span>' : `<span class="kst" style="--c:#d64545">rechazado</span>`}</div>
       ${cuerpo}${p.obs ? `<div class="pt-obs">«${esc(p.obs)}»</div>` : ''}${p.motivo ? `<div class="muted">Motivo: ${esc(p.motivo)}</div>` : ''}
       ${pe ? `<div class="plact"><button class="btn sm danger" data-rech="${p.id}">Rechazar</button><button class="btn sm pri" data-apr="${p.id}">${p.tipo === 'obs' ? 'Marcar como vista' : 'Aprobar y registrar'}</button></div>` : ''}</div>`;
@@ -67,6 +73,17 @@ function aplicarParte(p, box) {
     const m = box ? Number($('.pm', box).value) : p.metros, b = box ? $('.pb', box).value : p.bobina; if (!(m > 0)) return 'faltan los metros';
     const pc = S.circuitos.find((x) => x.id === rz.pat.id); pc.real = { C: b ? { bobina: b, metros: m, fecha: p.fecha, por: p.autor } : { sinBobina: true, metros: m, fecha: p.fecha, por: p.autor } };
     p.metros = m; p.bobina = b; return null;
+  }
+  // frente civil: inicio o fin de una etapa (sin pisar una fecha de inicio anterior)
+  const marca = (v, ac, f, pct) => { v = Object.assign({}, v); if (ac === 'fin') { v.ok = true; v.fin = f; if (!v.ini || v.ini > f) v.ini = f; delete v.pct; } else { if (!v.ini || v.ini > f) v.ini = f; if (pct) v.pct = pct; } return v; };
+  if (p.tipo === 'fund') {
+    if (!ETN[p.etapa]) return 'la etapa no existe';
+    S.fundaciones = S.fundaciones || {}; const o = (S.fundaciones[p.sts] = S.fundaciones[p.sts] || {});
+    o[p.etapa] = marca(o[p.etapa], p.accion, p.fecha); return null;
+  }
+  if (p.tipo === 'sala') {
+    if (!SALA_ETN[p.etapa]) return 'la etapa no existe';
+    const A = salaS().av; (p.els || []).forEach((el) => { A[p.etapa + '|' + el] = marca(A[p.etapa + '|' + el], p.accion, p.fecha, p.pct); }); return null;
   }
   if (p.tipo === 'zanja') {
     const z = S.zanjas.find((x) => x.id === p.zanja); if (!z) return 'la zanja no existe';

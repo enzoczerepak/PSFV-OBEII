@@ -11,7 +11,7 @@
   const hoy = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
   const ls = { get(k, def) { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch (_) { return def; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* nada */ } } };
   const toast = (t, err) => { const d = document.createElement('div'); d.textContent = t; if (err) d.className = 'e'; $('#toast').appendChild(d); setTimeout(() => d.remove(), 4500); };
-  let S = null, R = null, D = null, ses = null, enviar = null, tab = 'plan', ui = { cat: 'BT', carga: 'tendido', circ: null, zanja: null, modo: (() => { try { return JSON.parse(localStorage.getItem('campo-modo')) || 'inv'; } catch (_) { return 'inv'; } })() };
+  let S = null, R = null, D = null, ses = null, enviar = null, tab = 'plan', ui = { cat: 'BT', carga: 'tendido', circ: null, zanja: null, modo: (() => { try { return JSON.parse(localStorage.getItem('campo-modo')) || 'inv'; } catch (_) { return 'inv'; } })(), frente: (() => { try { return JSON.parse(localStorage.getItem('campo-frente')) || 'em'; } catch (_) { return 'em'; } })(), civ: 'fund', sts: null, sEt: null, sEls: [] };
   const lbl = (f) => (f === 'C' ? 'Cu' : f);
 
   // ---------- sesión ----------
@@ -92,12 +92,18 @@
     } catch (e) { if (avisar) toast(navigator.onLine ? 'No se pudo enviar ahora: queda en cola y se reintenta solo' : 'Sin señal: el parte queda guardado y se envía cuando haya conexión', !navigator.onLine ? false : true); }
     finally { vaciando = false; estado(); if (tab === 'mios') render(); }
   }
+  const est2 = (p) => est(p);
   const est = (p) => { const r = (S && S.partes || []).find((x) => x.id === p.id); if (r) return r.estado === 'aprobado' ? 'ok' : r.estado === 'rechazado' ? 'no' : 'pend'; return p.enviado ? 'pend' : 'cola'; };
 
   // ---------- vistas ----------
   function render() {
     estado(); $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === tab));
-    const v = $('#v'); ({ plan: vPlan, cargar: vCargar, mios: vMios })[tab](v); window.scrollTo(0, 0);
+    const v = $('#v'), civ = ui.frente === 'civ';
+    const tp = $('#tabs [data-t="plan"]'); if (tp) tp.lastChild.textContent = civ ? 'Avance civil' : 'Plan del día';
+    ({ plan: civ ? vCivPlan : vPlan, cargar: civ ? vCivCargar : vCargar, mios: vMios })[tab](v);
+    if (tab !== 'mios') { v.insertAdjacentHTML('afterbegin', `<div class="frente"><button data-fr="em" class="${civ ? '' : 'on'}">⚡ Electromecánico</button><button data-fr="civ" class="${civ ? 'on' : ''}">🏗️ Civil</button></div>`);
+      $$('[data-fr]', v).forEach((b) => { b.onclick = () => { ui.frente = b.dataset.fr; ls.set('campo-frente', ui.frente); render(); }; }); }
+    window.scrollTo(0, 0);
   }
   const circ = (id) => R.circuitos.find((c) => c.id === id);
   // lo que importa en campo: a qué inversor(es) se tiende, con qué bobina y cuántos metros (teórico, seguro, riesgo); el circuito queda como dato secundario
@@ -231,11 +237,94 @@
     await encolar(p);
     ui.circ = null; tab = 'mios'; render();
   }
+  // ---------- frente civil: fundaciones de STS y edificio O&M ----------
+  const CV = () => window.CIVIL || { ETAPAS: [], SALA_ET: [], SALA_ZAP: [], SALA_VIG: [], STS: [] };
+  const stsL = () => { const ks = Object.keys(S.fundaciones || {}); const b = CV().STS.slice(); ks.forEach((k) => { if (!b.includes(k)) b.push(k); }); return b.sort((a, c) => a.localeCompare(c, 'es', { numeric: true })); };
+  const fAv = (s, k) => (((S.fundaciones || {})[s]) || {})[k] || {};
+  const sAv = (k, el) => (((S.sala || {}).av || {})[k + '|' + el]) || {};
+  const sEls = (e) => (e.a === 'zap' ? CV().SALA_ZAP.map((z) => z.id) : e.a === 'viga' ? CV().SALA_VIG.map((x) => x.id) : ['G']);
+  const estC = (v) => (v.ok ? 'ok' : v.ini ? 'cur' : 'pend');
+  const ESTN = { ok: '✓ terminada', cur: '▶ en curso', pend: 'pendiente' };
+  const fc = (f) => (f ? new Date(f + 'T12:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) : '');
+  // partes civiles enviados y todavía sin aprobar (para no cargar dos veces)
+  const civEnviados = () => ls.get(KH, []).filter((p) => (p.tipo === 'fund' || p.tipo === 'sala') && (est2(p) === 'cola' || est2(p) === 'pend'));
+  function vCivPlan(v) {
+    const ET = CV().ETAPAS, pend = civEnviados();
+    let h = '<h3 class="cvh">Fundaciones de STS</h3>';
+    stsL().forEach((s) => {
+      const done = ET.filter(([k]) => fAv(s, k).ok).length, cur = ET.find(([k]) => { const x = fAv(s, k); return x.ini && !x.ok; }), sig = ET.find(([k]) => !fAv(s, k).ok && !fAv(s, k).ini);
+      h += `<div class="card cv"><div class="cvt"><b>${esc(s)}</b><span class="cvp">${Math.round(done / ET.length * 100)} %</span></div><div class="cvbar">${ET.map(([k, n]) => `<i class="${estC(fAv(s, k))}" title="${esc(n)}"></i>`).join('')}</div>
+        <div class="muted">${cur ? `En curso: <b>${esc(cur[1])}</b>` : ''}${cur && sig ? ' · ' : ''}${sig ? `Sigue: ${esc(sig[1])}` : done === ET.length ? '<b style="color:var(--ok)">Base terminada</b>' : ''}</div>
+        ${pend.filter((p) => p.tipo === 'fund' && p.sts === s).map((p) => `<div class="cvpend">Enviado: ${esc(p.n)} ${p.accion === 'fin' ? 'terminada' : 'iniciada'} · falta aprobar</div>`).join('')}
+        <button class="b" data-cvf="${esc(s)}">Cargar avance de ${esc(s)}</button></div>`;
+    });
+    const SE = CV().SALA_ET;
+    if (SE.length) {
+      const pe = SE.map((e) => { const els = sEls(e), vs = els.map((x) => sAv(e.k, x)); return { e, n: els.length, ok: vs.filter((x) => x.ok).length, cur: vs.filter((x) => x.ini && !x.ok).length }; });
+      const pct = Math.round(pe.reduce((a, x) => a + x.ok / x.n, 0) / pe.length * 100);
+      h += `<h3 class="cvh">Edificio O&M</h3><div class="card cv"><div class="cvt"><b>Avance del edificio</b><span class="cvp">${pct} %</span></div>
+        ${pe.filter((x) => x.ok < x.n).slice(0, 6).map((x) => `<div class="cvr"><span>${esc(x.e.n)}</span><span class="muted">${x.n > 1 ? `${x.ok}/${x.n}${x.cur ? ` · ${x.cur} en curso` : ''}` : ESTN[x.cur ? 'cur' : 'pend']}</span></div>`).join('')}
+        ${pend.filter((p) => p.tipo === 'sala').map((p) => `<div class="cvpend">Enviado: ${esc(p.n)}${p.els && p.els[0] !== 'G' ? ' · ' + p.els.join(', ') : ''} · falta aprobar</div>`).join('')}
+        <button class="b" data-cvs="1">Cargar avance del edificio</button></div>`;
+    }
+    v.innerHTML = h + '<p class="hint">Lo que cargues llega a la oficina como parte y se suma al avance cuando se aprueba.</p>';
+    $$('[data-cvf]', v).forEach((b) => { b.onclick = () => { ui.civ = 'fund'; ui.sts = b.dataset.cvf; tab = 'cargar'; render(); }; });
+    $$('[data-cvs]', v).forEach((b) => { b.onclick = () => { ui.civ = 'sala'; tab = 'cargar'; render(); }; });
+  }
+  function vCivCargar(v) {
+    const t = ui.civ;
+    let h = `<div class="chips">${[['fund', 'Fundaciones STS'], ['sala', 'Edificio O&M'], ['obs', 'Observación']].map(([k, n]) => `<button data-ck="${k}" class="${k === t ? 'on' : ''}">${n}</button>`).join('')}</div><div class="card"><div class="form">`;
+    if (t === 'fund') {
+      const s = ui.sts || stsL()[0]; ui.sts = s;
+      h += `<label>STS<select id="cS">${stsL().map((x) => `<option ${x === s ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+        <div class="muted">Elegí la etapa y si se inició o se terminó.</div><div class="cvets">${CV().ETAPAS.map(([k, n]) => { const a = fAv(s, k), e = estC(a);
+          return `<label class="cvet ${e}"><input type="radio" name="cE" value="${k}" ${e === 'ok' ? '' : ''}><span class="n">${esc(n)}</span><span class="e">${ESTN[e]}${a.ini ? ' · ' + fc(a.ini) : ''}${a.ok && a.fin ? ' → ' + fc(a.fin) : ''}</span></label>`; }).join('')}</div>`;
+    } else if (t === 'sala') {
+      const SE = CV().SALA_ET, e = SE.find((x) => x.k === ui.sEt) || SE.find((x) => sEls(x).some((el) => !sAv(x.k, el).ok)) || SE[0]; ui.sEt = e.k;
+      const grupos = [...new Set(SE.map((x) => x.g))];
+      h += `<label>Etapa<select id="cSE">${grupos.map((g) => `<optgroup label="${esc(g)}">${SE.filter((x) => x.g === g).map((x) => { const els = sEls(x), ok = els.filter((el) => sAv(x.k, el).ok).length; return `<option value="${x.k}" ${x.k === e.k ? 'selected' : ''}>${esc(x.n)} (${ok === els.length ? '✓' : els.length > 1 ? ok + '/' + els.length : sAv(x.k, 'G').ini ? 'en curso' : 'pendiente'})</option>`; }).join('')}</optgroup>`).join('')}</select></label>`;
+      if (e.a !== 'gral') {
+        const els = sEls(e);
+        h += `<div class="muted">${e.a === 'zap' ? 'Zapatas' : 'Vigas'}: tocá las que se trabajaron (podés elegir varias)</div><div class="cvels">${els.map((el) => { const a = sAv(e.k, el); return `<button class="cvel ${estC(a)} ${ui.sEls.includes(el) ? 'sel' : ''}" data-el="${el}">${el}<small>${a.ok ? '✓' : a.ini ? '▶' : ''}</small></button>`; }).join('')}</div>
+          <div class="cvsel"><button class="b" id="cAll">Todas las pendientes</button><button class="b" id="cNone">Ninguna</button></div>`;
+      } else { const a = sAv(e.k, 'G'); h += `<div class="muted">Estado: ${ESTN[estC(a)]}${a.pct && !a.ok ? ` · ${a.pct} %` : ''}</div><label>Avance estimado (%) si sigue en curso<input type="number" inputmode="numeric" id="cP" min="0" max="99" step="5" placeholder="ej. 50" value="${a.pct && !a.ok ? a.pct : ''}"></label>`; }
+    }
+    if (t !== 'obs') h += `<div class="seg2" id="cA"><button data-ac="ini" class="${ui.cAc !== 'fin' ? 'on' : ''}">▶ Se inició</button><button data-ac="fin" class="${ui.cAc === 'fin' ? 'on' : ''}">✓ Se terminó</button></div>`;
+    h += `<label>Fecha<input type="date" id="fD" value="${hoy()}"></label><label>Observación${t === 'obs' ? '' : ' (opcional)'}<textarea id="fO" placeholder="Ej.: llovió y se suspendió el hormigonado, faltó hierro…"></textarea></label>
+      <button class="b pri" id="fEnv">Enviar parte</button></div></div>`;
+    v.innerHTML = h;
+    $$('[data-ck]', v).forEach((b) => { b.onclick = () => { ui.civ = b.dataset.ck; render(); }; });
+    const cs = $('#cS', v); if (cs) cs.onchange = () => { ui.sts = cs.value; render(); };
+    const se = $('#cSE', v); if (se) se.onchange = () => { ui.sEt = se.value; ui.sEls = []; render(); };
+    $$('[data-el]', v).forEach((b) => { b.onclick = () => { const el = b.dataset.el; ui.sEls = ui.sEls.includes(el) ? ui.sEls.filter((x) => x !== el) : ui.sEls.concat(el); b.classList.toggle('sel'); }; });
+    const ca = $('#cAll', v); if (ca) ca.onclick = () => { const e = CV().SALA_ET.find((x) => x.k === ui.sEt); ui.sEls = sEls(e).filter((el) => !sAv(e.k, el).ok); render(); };
+    const cn = $('#cNone', v); if (cn) cn.onclick = () => { ui.sEls = []; render(); };
+    $$('[data-ac]', v).forEach((b) => { b.onclick = () => { ui.cAc = b.dataset.ac; $$('[data-ac]', v).forEach((x) => x.classList.toggle('on', x === b)); }; });
+    $('#fEnv', v).onclick = () => enviarCivil(t, v);
+  }
+  async function enviarCivil(t, v) {
+    const fecha = $('#fD', v).value || hoy(), obs = $('#fO', v).value.trim(), accion = ui.cAc === 'fin' ? 'fin' : 'ini';
+    let p = null;
+    if (t === 'fund') {
+      const r = $('input[name=cE]:checked', v); if (!r) return toast('Elegí la etapa', true);
+      const et = CV().ETAPAS.find(([k]) => k === r.value); p = { tipo: 'fund', sts: ui.sts, etapa: et[0], n: et[1], accion };
+      const a = fAv(ui.sts, et[0]); if (a.ok && !confirm(`${et[1]} ya figura terminada en ${ui.sts}. ¿Enviar igual?`)) return;
+    } else if (t === 'sala') {
+      const e = CV().SALA_ET.find((x) => x.k === ui.sEt); const els = e.a === 'gral' ? ['G'] : ui.sEls.slice();
+      if (!els.length) return toast('Tocá al menos una ' + (e.a === 'zap' ? 'zapata' : 'viga'), true);
+      p = { tipo: 'sala', etapa: e.k, n: e.n, els, accion };
+      if (e.a === 'gral' && accion === 'ini') { const pc = Number($('#cP', v) && $('#cP', v).value); if (pc > 0) p.pct = Math.min(99, pc); }
+    } else { if (!obs) return toast('Escribí la observación', true); p = { tipo: 'obs', titulo: 'Frente civil' }; }
+    p.fecha = fecha; if (obs) p.obs = obs;
+    $('#fEnv', v).disabled = true;
+    await encolar(p);
+    ui.sEls = []; ui.cAc = null; tab = 'mios'; render();
+  }
   function vMios(v) {
     const h0 = ls.get(KH, []);
     if (!h0.length) { v.innerHTML = '<div class="card empty"><b>Todavía no enviaste partes</b></div>'; return; }
     const ST = { cola: ['cola', 'en cola'], pend: ['pend', 'pendiente de aprobación'], ok: ['ok', 'aprobado'], no: ['no', 'rechazado'] };
-    const desc = (p) => p.tipo === 'tendido' ? `${esc(p.designacion)} · ${p.fases.map((f) => `${lbl(f.f)} ${fm(f.metros)} m (${esc(f.bobina)})`).join(' · ')}` : p.tipo === 'pat' ? `PAT · ${esc(p.titulo)} · ${fm(p.metros)} m` : p.tipo === 'zanja' ? `Zanja ${esc(p.titulo)} · largo real ${fm(p.largo)} m` : `Observación${p.titulo ? ' · ' + esc(p.titulo) : ''}`;
+    const desc = (p) => p.tipo === 'fund' ? `${esc(p.sts)} · ${esc(p.n)} · ${p.accion === 'fin' ? 'terminada' : 'iniciada'}` : p.tipo === 'sala' ? `Edificio O&M · ${esc(p.n)}${p.els && p.els[0] !== 'G' ? ' · ' + p.els.map(esc).join(', ') : ''} · ${p.accion === 'fin' ? 'terminada' : 'iniciada'}${p.pct ? ' (' + p.pct + ' %)' : ''}` : p.tipo === 'tendido' ? `${esc(p.designacion)} · ${p.fases.map((f) => `${lbl(f.f)} ${fm(f.metros)} m (${esc(f.bobina)})`).join(' · ')}` : p.tipo === 'pat' ? `PAT · ${esc(p.titulo)} · ${fm(p.metros)} m` : p.tipo === 'zanja' ? `Zanja ${esc(p.titulo)} · largo real ${fm(p.largo)} m` : `Observación${p.titulo ? ' · ' + esc(p.titulo) : ''}`;
     v.innerHTML = h0.map((p) => { const e = est(p), r = (S.partes || []).find((x) => x.id === p.id); return `<div class="card parte"><b>${desc(p)}</b><span class="st ${ST[e][0]}">${ST[e][1]}</span><span class="muted" style="grid-column:1/-1">${new Date(p.fecha + 'T12:00').toLocaleDateString('es-AR')}${p.obs ? ' · «' + esc(p.obs) + '»' : ''}${r && r.motivo ? ' · Oficina: ' + esc(r.motivo) : ''}</span></div>`; }).join('') + '<p class="hint">El estado se actualiza solo cuando la oficina aprueba o rechaza cada parte.</p>';
   }
   $$('#tabs button').forEach((b) => { b.onclick = () => { tab = b.dataset.t; render(); }; });

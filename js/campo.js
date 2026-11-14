@@ -14,7 +14,7 @@ function pendientesHoy() {
     const fa = T.filter((t) => HA[t.id] && monEstado(ix.get('arm|' + t.id), 'arm') === 0).length, fp = T.filter((t) => monEstado(ix.get('arm|' + t.id), 'arm') === 2 && monEstado(ix.get('pan|' + t.id), 'pan') === 0).length;
     if (fa) add('🔩', `${fa} tracker${fa > 1 ? 's' : ''} hincado${fa > 1 ? 's' : ''} listos para armar`, 'tarm', '#3fb27f');
     if (fp) add('☀️', `${fp} tracker${fp > 1 ? 's' : ''} con estructura lista para paneles`, 'tpan', '#3fb27f'); } } catch (_) {}
-  try { const pp = (S.partes || []).filter((p) => p.estado === 'pendiente').length; if (pp) add('📲', `${pp} parte${pp > 1 ? 's' : ''} de campo para revisar`, 'partes'); } catch (_) {}
+  try { const pp = window.VISOR ? 0 : (S.partes || []).filter((p) => p.estado === 'pendiente').length; if (pp) add('📲', `${pp} parte${pp > 1 ? 's' : ''} de campo para revisar`, 'partes'); } catch (_) {}
   try { const zc = R.zlist.filter((z) => z.estado === 'abierta' && z.listoCerrar).length; if (zc) add('🚧', `${zc} zanja${zc > 1 ? 's' : ''} con cable tendido sin tapar`, 'zanjas'); } catch (_) {}
   return P;
 }
@@ -39,7 +39,7 @@ function paraHoyHTML() {
   if (D.sala.length) hecho.push(`${D.sala.length} tareas en la sala`);
   if (D.rec.length) hecho.push(`${D.rec.length} entrega${D.rec.length > 1 ? 's' : ''} recibida${D.rec.length > 1 ? 's' : ''}`);
   return `<div class="phoy">
-    <div class="card phc"><div class="phh"><h3>Para hoy</h3>${window.VISOR ? '' : '<button class="btn acc" data-go="campo">⚡ Carga rápida de campo</button>'}</div>
+    <div class="card phc"><div class="phh"><h3>${window.VISOR ? 'Situación de hoy' : 'Para hoy'}</h3>${window.VISOR ? '' : '<button class="btn acc" data-go="campo">⚡ Carga rápida de campo</button>'}</div>
       ${P.length ? `<div class="phl">${P.map((p, i) => `<button class="phi" style="--c:${p.col}" ${p.go ? `data-go="${p.go}"` : `data-ph="${i}"`}><span class="phe">${p.ico}</span><span>${esc(p.txt)}</span><i class="pha">›</i></button>`).join('')}</div>`
         : '<p class="muted" style="margin:6px 0">Todo al día: no hay pendientes.</p>'}
       <div class="phd"><span><b>Hoy se cargó:</b> ${hecho.length ? hecho.join(' · ') : '<span class="muted">nada todavía</span>'}</span><button class="btn sm" data-go="pdia">Parte diario</button></div></div>

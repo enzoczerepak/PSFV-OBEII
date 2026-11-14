@@ -113,7 +113,7 @@ function heroRefrescar() {
 function climaWidgetHTML() {
   const C = lluCuenta();
   const pie = `<div class="clluv" data-llu title="Ver el registro de lluvias y jornadas"><span>🌧️ Lluvia en la obra <small>desde ${fechaCorta(C.desde).slice(0, 5)}</small></span><div><b>${C.semana}</b><small>días esta semana</small></div><div><b>${C.obra}</b><small>días en total</small></div><div><b class="perd">${C.perdSem}</b><small>jornadas perdidas (sem.)${C.parcSem ? `<br>+ ${C.parcSem} parcial${C.parcSem > 1 ? 'es' : ''}` : ''}</small></div><div><b class="perd">${C.perdObra}</b><small>jornadas perdidas${C.parcObra ? `<br>+ ${C.parcObra} parcial${C.parcObra > 1 ? 'es' : ''}` : ''}</small></div></div>`;
-  if (!CLIMA || !CLIMA.d) return `<div class="hclima" id="climaW" title="Pronóstico extendido"><div class="chead"><b>Clima en la obra</b><span>pronóstico ›</span></div><div class="cnow"><div class="cico">🌡️</div><div class="cdat">${CLIMA && CLIMA.error ? 'Sin conexión para traer el pronóstico' : 'Cargando el pronóstico…'}</div></div>${pie}</div>`;
+  if (!CLIMA || !CLIMA.d || !CLIMA.d.current) return `<div class="hclima" id="climaW" title="Pronóstico extendido"><div class="chead"><b>Clima en la obra</b><span>pronóstico ›</span></div><div class="cnow"><div class="cico">🌡️</div><div class="cdat">${CLIMA && CLIMA.error ? 'Sin conexión para traer el pronóstico' : 'Cargando el pronóstico…'}</div></div>${pie}</div>`;
   const d = CLIMA.d, c = d.current, sm = smnFresco(), sc = sm && smnCond(sm.estado);
   let [ic, tx] = wmo(c.weather_code, !c.is_day);
   if (sm) { tx = sm.estado; if (sc) ic = !c.is_day && (sc === 'despejado' || sc === 'parcial') ? '🌙' : SMN_ICO[sc]; }

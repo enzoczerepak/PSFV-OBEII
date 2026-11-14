@@ -11,6 +11,10 @@ const MENU = [
     'Montaje', ['tarm', 'Armado de estructuras', 'llave'], ['tpan', 'Instalación de paneles', 'sol']] },
   { s: 'maqs', t: 'Maquinaria de obra', ico: 'maquina', items: [['maq', 'Horas mensuales', 'dia'], ['maqev', 'Paradas y mantenimientos', 'llave'], ['maqeq', 'Equipos', 'camion']] },
 ];
+// en el visor web (solo lectura) no van las pantallas que existen solo para cargar datos
+const SOLO_PC = ['campo', 'partes'];
+if (window.READONLY) MENU.splice(0, MENU.length, ...MENU.filter((m) => !(Array.isArray(m) && SOLO_PC.includes(m[0]))));
+const MOV_SIN = window.READONLY ? SOLO_PC : [];
 // vistas que no tienen botón propio: se marca la del menú que las contiene
 const MENU_ALIAS = { gantt: 'crono' };
 // color de cada frente de obra: ícono, recuadro de la sección y marca del apartado activo
@@ -44,7 +48,7 @@ function menuHTML() {
 /* ---------- Navegación en celular ----------
    Barra superior con el apartado actual, barra inferior con accesos rápidos y un menú a pantalla completa,
    agrupado por frente de obra y con buscador. Se arma con las mismas vistas del menú lateral. */
-const MOV_ACCESOS = [['resumen', 'Inicio', 'inicio'], ['campo', 'Cargar', 'llave'], ['BT-plan', 'Plan de corte', 'corte'], ['zanjas', 'Zanjas', 'zanja']];
+const MOV_ACCESOS = [['resumen', 'Inicio', 'inicio'], window.READONLY ? ['avance', 'Avance', 'avance'] : ['campo', 'Cargar', 'llave'], ['BT-plan', 'Plan de corte', 'corte'], ['zanjas', 'Zanjas', 'zanja']];
 function movGrupos() {
   const plano = (items) => items.filter(Array.isArray).map(([v, t, i, tg]) => ({ v, t, i, tg }));
   const g = [{ t: 'General', items: plano(MENU.filter((m) => Array.isArray(m) && !MCOL[m[0]])) }];
