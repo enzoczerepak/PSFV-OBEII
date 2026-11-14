@@ -2,12 +2,12 @@
    Cada PC guarda sus datos; los cambios se intercambian por registro (bobina, circuito, zanja, ajustes, compromisos).
    Conflictos: gana el cambio más reciente (con corrección de diferencia de reloj entre PCs). */
 (function () {
-  const KINDS = [['b', 'bobinas'], ['c', 'circuitos'], ['z', 'zanjas'], ['k', 'cronoTareas'], ['p', 'partes'], ['m', 'maquinas'], ['w', 'maqHoras'], ['e', 'maqEventos']];
+  const KINDS = [['b', 'bobinas'], ['c', 'circuitos'], ['z', 'zanjas'], ['k', 'cronoTareas'], ['p', 'partes'], ['m', 'maquinas'], ['w', 'maqHoras'], ['e', 'maqEventos'], ['hl', 'hist'], ['us', 'usuarios'], ['mo', 'montaje']];
   // Versión del protocolo: 2 agrega fundaciones STS ('f:') y conserva registros de tipos desconocidos.
   // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
   const PROTO = 2;
   // 'hc' catálogo y distribución de hincas, 'ht:' hincado por tracker, 'hr:' recepciones de hincas
-  const nuevo = (k) => k === 'tb' || k.startsWith('te:') || k.startsWith('tn:') || k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('la:') || k.startsWith('sv:');
+  const nuevo = (k) => k.startsWith('hl:') || k.startsWith('us:') || k.startsWith('mo:') || k === 'tb' || k.startsWith('te:') || k.startsWith('tn:') || k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('la:') || k.startsWith('sv:');
   const conocido = (k) => k === 'cfg' || k === 'comp' || k === 'km' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
 
   // JSON con claves ordenadas: el orden interno de los campos no cuenta como cambio
@@ -182,7 +182,7 @@
   }
   // Cliente que se une por primera vez
   function reemplazarPorServidor(S) {
-    S.trackers = { ent: [], recl: [] }; S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {}; S.cronoTareas = []; S.cronoMeta = null; S.partes = []; S.maquinas = []; S.maqHoras = []; S.maqEventos = []; S.fibra = { cfg: { cada: 50, adic: 0 }, z: {} }; S.lmt = { cfg: { piquetes: [], etapas: [] }, av: {} }; S.lluvia = { cfg: { desde: today(), umbral: 1 }, dias: {} }; S.sala = { cfg: {}, av: {} }; S.hincado = { catalogo: [], matriz: {}, avance: {}, recep: [] };
+    S.trackers = { ent: [], recl: [] }; S.hist = []; S.usuarios = []; S.montaje = []; S.bobinas = []; S.circuitos = []; S.zanjas = []; S.compromiso = {}; S.fundaciones = {}; S.__otros = {}; S.cronoTareas = []; S.cronoMeta = null; S.partes = []; S.maquinas = []; S.maqHoras = []; S.maqEventos = []; S.fibra = { cfg: { cada: 50, adic: 0 }, z: {} }; S.lmt = { cfg: { piquetes: [], etapas: [] }, av: {} }; S.lluvia = { cfg: { desde: today(), umbral: 1 }, dias: {} }; S.sala = { cfg: {}, av: {} }; S.hincado = { catalogo: [], matriz: {}, avance: {}, recep: [] };
     S.__sync = { snap: {}, meta: {}, pend: {}, rev: 0, peerRev: 0 };
   }
   function marcarTodoPendiente(S) {

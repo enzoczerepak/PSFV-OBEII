@@ -43,8 +43,9 @@ async function init() {
   });
   marca();
   go('resumen');
-  if (!window.READONLY) updIniciar();
-  if (ED.blank && !S.parque && !window.READONLY) setTimeout(() => asistenteParque(true), 400);
+  if (!window.VISOR) updIniciar();
+  if (!window.VISOR) setTimeout(() => usrEntrar(false), 400);
+  if (ED.blank && !S.parque && !window.VISOR) setTimeout(() => asistenteParque(true), 400);
 }
 function recargar(text) { const st = JSON.parse(text); S = normalizar(st); Sync.ordenar(S); R = Engine.calcular(S); render(false); toast('Datos actualizados'); }
 window.__app = { salaInfo, salaToque, salaTodas, salaEditGral, salaEditElem, exportSala, printSala, verClima, climaCarga, lluCuenta, lmtGeo, editAltLMT, importAltLMT, editAvLMT, editPiquete, editEtapasLMT, exportLMT, printLMT, editFibra, exportFibra, printFibra, registrarHoras, exportMaq, editMaquina, editEvento, printMaqMes, exportStock, printStock, stockConsolidado, verMargenes, MG, cierreParcial, cerrarZanjas, simularTendido, margenStock, importarPdf, asistenteParque, recibirParte, aprobarParte, revisarBuzon, aplicarCrono, tareasDeProject, fechaEtapa, cronoCalc, editTarea, leerMSPDI, setEtapa, printFund, exportFund, printDia, printMes, printAvance, printPuntas, exportTendidos, exportPuntas, registrarPuntas, recargar, get S() { return S; }, get R() { return R; }, go, commit, setZanja, tender, cerrarZanjas, sacarDeZanja, Engine, conectar, syncNow, get NET() { return NET; }, get netStatus() { return netStatus; } };

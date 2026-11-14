@@ -26,8 +26,8 @@ function vPlano(el) {
   }
   if (cap('sect')) P.sect.forEach((s) => { g += `<polygon points="${pts(s.p)}" class="pl-sect" style="fill:${SECT_COL[s.n]};stroke:${SECT_COL[s.n]}" data-pk="s|${s.n}"/>`; });
   if (cap('trk')) {
-    const HA = (S.hincado || {}).avance || {};
-    const tcol = (t) => (pl.color === 'tipo' ? (t.t === '1P52' ? '#00939a' : '#f5a524') : pl.color === 'disc' ? CFGCOL[t.t + '|' + (t.z || 'Outer')] : pl.color === 'hinc' ? (HA[t.id] ? '#7c5cbf' : '#c9d0da') : SECT_COL[t.s]);
+    const HA = (S.hincado || {}).avance || {}, MIX = typeof monIdx === 'function' ? monIdx() : new Map();
+    const tcol = (t) => (pl.color === 'tipo' ? (t.t === '1P52' ? '#00939a' : '#f5a524') : pl.color === 'disc' ? CFGCOL[t.t + '|' + (t.z || 'Outer')] : pl.color === 'hinc' ? (HA[t.id] ? '#7c5cbf' : '#c9d0da') : (pl.color === 'arm' || pl.color === 'pan') ? ['#c9d0da', '#f5c24b', MON_T[pl.color][1]][monEstado(MIX.get(pl.color + '|' + t.id), pl.color)] : SECT_COL[t.s]);
     P.trk.forEach((t) => { g += `<rect x="${(t.x - t.w / 2).toFixed(1)}" y="${(t.y - t.h / 2).toFixed(1)}" width="${t.w}" height="${t.h}" rx="0.6" fill="${tcol(t)}" class="pl-trk${pl.sel === 't|' + t.id ? ' pl-on' : ''}${pl.color === 'disc' && t.sl === 'B' ? ' pl-soft' : ''}" data-pk="t|${t.id}"><title>${t.id} · ${t.t} · Sector ${t.s}${t.z ? ' · ' + cfgTxt(cfgDe(t)) : ''}</title></rect>`; });
   }
   if (cap('bt')) P.bt.forEach((z) => {
@@ -50,7 +50,7 @@ function vPlano(el) {
   const vb = pl.vb || [0, 0, P.W, P.H];
   // panel lateral
   const panel = planoPanel(I);
-  el.innerHTML = `<div class="tools"><div class="seg" id="plC"><button data-v="sector">Trackers por sector</button><button data-v="tipo">por tipo</button><button data-v="disc">discretización</button><button data-v="hinc">hincado</button></div>
+  el.innerHTML = `<div class="tools"><div class="seg" id="plC"><button data-v="sector">Trackers por sector</button><button data-v="tipo">por tipo</button><button data-v="disc">discretización</button><button data-v="hinc">hincado</button><button data-v="arm">estructura</button><button data-v="pan">paneles</button></div>
       <div class="seg" id="plZ"><button data-v="estado">Zanjas por estado</button><button data-v="tipo">BT rojo / MT azul</button></div>
       <span class="sp"></span><input type="search" id="plQ" placeholder="Buscar TRK-123, TX2-INV5, STS 3…" style="width:240px"></div>
     <div class="plwrap"><div class="card plcard"><svg id="plSvg" viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet">${g}</svg>

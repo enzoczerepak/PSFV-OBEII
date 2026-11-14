@@ -18,6 +18,8 @@ function vAjustes(el) {
     <p class="hint" id="pInfo"></p><div style="display:flex;gap:8px;margin-top:10px"><button class="btn" id="pOpenData">Abrir carpeta de datos</button><button class="btn danger" id="pReset">Restaurar datos iniciales</button></div></div>
     <div class="card" id="netCard"><h3>Trabajo en red</h3><div class="muted">Cargando…</div></div>
     <div class="card" id="webCard"><h3>Publicar en la web</h3><div class="muted">Cargando…</div></div>
+    <div class="card" id="usrCard">${usrCardHTML()}</div>
+    ${window.api.bkCfg ? '<div class="card" id="bkCard"><h3>Respaldo en la nube (GitHub)</h3><div class="muted">Cargando…</div></div>' : ''}
     <div class="card" id="updCard">${updCardHTML()}</div>
     <div class="card"><h3>Cómo arma el plan</h3><ol style="margin:0;padding-left:18px;line-height:1.6">
     <li>Los cortes registrados se descuentan de su bobina y no se tocan.</li>
@@ -35,7 +37,7 @@ function vAjustes(el) {
   if ($('#pParque')) $('#pParque').onclick = () => asistenteParque(false);
   if ($('#pN')) $('#pN').onchange = (e) => { S.nombre = e.target.value.trim() || 'Obra'; window.api.netObra(S.nombre); commit(); };
   window.api.info().then((i) => { $('#pInfo') && ($('#pInfo').textContent = `Versión ${i.version} · datos en ${i.userData}`); $('#pOpenData') && ($('#pOpenData').onclick = () => window.api.openPath(i.userData)); });
-  renderNet(); renderWeb(); updCardBind();
+  renderNet(); renderWeb(); renderBk(); updCardBind(); usrCardBind($('#usrCard'));
   $('#pReset').onclick = async () => {
     if (await confirmar('Restaurar datos iniciales', 'Se reemplazan bobinas, circuitos y tendidos por los datos con que vino el programa. El estado actual queda en el respaldo del día.', 'Restaurar')) {
       const keep = S.__sync, parque = S.parque, nom = S.nombre; S = JSON.parse(await window.api.seed());
@@ -198,7 +200,7 @@ function programarWeb() {
 }
 // aviso de token de GitHub vencido o por vencer y de publicación automática que falla (solo en la PC que publica)
 function ghAviso() {
-  if (window.READONLY || !WEB || !WEB.tieneToken) return null;
+  if (window.VISOR || !WEB || !WEB.tieneToken) return null;
   const f = (x) => new Date(x).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const efecto = 'el visor web y la app de campo no se actualizan y la PC no recibe los partes ni los cronogramas';
   if (WEB.tokEstado === 'invalido' || WEB.errorSt === 401) return { n: 'error', t: `<b>El token de GitHub venció o no es válido</b> (desde ${f(WEB.tokEstadoF || WEB.errorF || Date.now())}): ${efecto}. Generá uno nuevo en GitHub y cargalo en Ajustes → Publicar en la web.` };
@@ -223,7 +225,7 @@ function ghBanner() {
 }
 let ghUltErr = null;
 async function ghChequear() {
-  if (window.READONLY || !window.api.webCheck || !webListo()) return;
+  if (window.VISOR || !window.api.webCheck || !webListo()) return;
   try { await window.api.webCheck(); WEB = await window.api.webCfg(); ghBanner(); } catch (_) { /* nada */ }
 }
 async function publicarWeb(manual) {
@@ -349,3 +351,53 @@ async function importExcel(ctxCat) {
   }
   commit('Importado · ' + log.join(' · '));
 }
+
+// ======================= respaldo en la nube =======================
+async function renderBk() {
+  const box = $('#bkCard'); if (!box || !window.api.bkCfg) return;
+  const c = await window.api.bkCfg(), f = (x) => new Date(x).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  box.innerHTML = `<h3>Respaldo en la nube (GitHub)</h3>
+    <p class="muted" style="margin:0 0 10px">Una copia por día de toda la obra, guardada fuera de esta PC: si la PC servidor se rompe o se pierde, la obra se recupera desde cualquier otra. Se conservan las últimas 90.</p>
+    ${!c.listo ? '<div class="alert info" style="display:block">Primero configurá GitHub (usuario y token) en <b>Publicar en la web</b>.</div>' : `
+    <div class="alert ${c.err && (!c.ult || c.err.fecha > c.ult.fecha) ? 'error' : c.ult ? 'ok' : 'info'}" style="display:block">${c.err && (!c.ult || c.err.fecha > c.ult.fecha) ? `No se pudo respaldar (${f(c.err.fecha)}): ${esc(c.err.error)}` : c.ult ? `Último respaldo: <b>${f(c.ult.fecha)}</b> en ${esc(c.ult.repo)} (${c.ult.privado ? 'privado' : 'público'}${c.ult.cifrado ? ', cifrado' : ''}) · ${fmt(c.ult.bytes / 1024)} kB` : 'Todavía no se hizo ningún respaldo en la nube.'}</div>
+    <div class="form" style="margin-top:10px"><label>Repositorio de respaldo<input type="text" id="bkR" value="${esc(c.bkRepo)}" placeholder="${esc(c.repo)} (el mismo del visor)"></label>
+      <label>Clave de respaldo ${c.tieneClave ? '<span class="pill p-done" style="margin-left:4px">cargada</span>' : ''}<input type="password" id="bkK" placeholder="${c.tieneClave ? '•••••••• (dejá vacío para no cambiarla)' : 'Opcional en repositorio privado'}" autocomplete="new-password"></label>
+      <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="bkA" style="width:auto;margin:0" ${c.bkActivo ? 'checked' : ''}> Respaldar automáticamente una vez por día</label></div>
+    <p class="hint">Recomendado: un repositorio <b>privado</b> nuevo (por ejemplo <i>PSFV-OBEII-respaldos</i>), con el token del visor habilitado también para él (permiso <i>Contents: Read and write</i>). Si usás el del visor, que es público, la clave es obligatoria y las copias van cifradas. <b>Anotá la clave en un lugar seguro:</b> sin ella no se puede recuperar un respaldo cifrado.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn" id="bkG">Guardar</button><button class="btn pri" id="bkN">Respaldar ahora</button><button class="btn" id="bkL">Ver respaldos y recuperar…</button>${c.tieneClave ? '<button class="btn ghost" id="bkQ">Quitar clave</button>' : ''}</div>`}`;
+  if (!c.listo) return;
+  const guardar = async () => { const k = $('#bkK', box).value; await window.api.bkSetCfg(Object.assign({ bkRepo: $('#bkR', box).value, bkActivo: $('#bkA', box).checked }, k ? { bkClave: k } : {})); };
+  $('#bkG', box).onclick = async () => { const k = $('#bkK', box).value; if (k && k.length < 8) { toast('La clave tiene que tener al menos 8 caracteres', { err: true }); return; } await guardar(); toast('Respaldo configurado'); renderBk(); };
+  const q = $('#bkQ', box); if (q) q.onclick = async () => { if (await confirmar('Quitar clave de respaldo', 'Los próximos respaldos irán sin cifrar (solo se permite en un repositorio privado). Los anteriores siguen necesitando la clave.', 'Quitar')) { await window.api.bkSetCfg({ bkClave: '' }); renderBk(); } };
+  $('#bkN', box).onclick = async () => { const k = $('#bkK', box).value; if (k && k.length < 8) { toast('La clave tiene que tener al menos 8 caracteres', { err: true }); return; } await guardar(); const b = $('#bkN', box); b.disabled = true; b.textContent = 'Respaldando…';
+    const r = await window.api.bkAhora(); toast(r.ok ? `Respaldo guardado en ${r.repo}` : 'No se pudo respaldar: ' + r.error, { err: !r.ok, ms: 8000 }); renderBk(); };
+  $('#bkL', box).onclick = verRespaldos;
+}
+async function verRespaldos() {
+  const r = await window.api.bkLista();
+  if (!r.ok) { toast('No se pudo leer la lista: ' + r.error, { err: true }); return; }
+  const c = await window.api.bkCfg();
+  const res = await modal({ title: 'Respaldos en la nube', sub: `${esc(c.repo)} · ${r.items.length} copia${r.items.length === 1 ? '' : 's'}`, wide: true,
+    body: r.items.length ? `<div class="tblwrap" style="max-height:50vh"><table class="tbl"><thead><tr><th>Fecha</th><th>Archivo</th><th class="n">Tamaño</th><th></th></tr></thead><tbody>${r.items.map((x, i) => `<tr><td><b>${fechaCorta(x.nombre.match(/\d{4}-\d{2}-\d{2}/)[0])}</b></td><td class="mono muted">${esc(x.nombre)}</td><td class="n">${fmt(x.bytes / 1024)} kB</td><td>${window.READONLY ? '' : `<button class="btn sm" data-i="${i}">Recuperar…</button>`}</td></tr>`).join('')}</tbody></table></div>
+      <p class="hint">Recuperar reemplaza la obra de esta PC (y, si está en red, la de todas) por la del respaldo. Antes se guarda una copia local de lo actual en la carpeta de respaldos.</p>` : '<p class="muted">Todavía no hay respaldos en ese repositorio.</p>',
+    buttons: [['Cerrar', 'btn', () => null]] });
+  void res;
+}
+document.addEventListener('click', async (ev) => {
+  const b = ev.target.closest('#modal [data-i]'); if (!b || !$('#modal')?.innerText.includes('Respaldos en la nube')) return;
+  const r = await window.api.bkLista(), x = r.items[Number(b.dataset.i)]; if (!x) return;
+  let clave = null;
+  if (x.cifrado && !(await window.api.bkCfg()).tieneClave) {
+    cerrarModal(); await new Promise((ok) => setTimeout(ok, 80));
+    clave = await modal({ title: 'Clave de respaldo', sub: 'El respaldo está cifrado', body: '<div class="form"><label class="full">Clave<input type="password" id="bkPw"></label></div>', buttons: [['Cancelar', 'btn', () => null], ['Seguir', 'btn pri', (bx) => $('#bkPw', bx).value || false]] });
+    if (!clave) return;
+  }
+  b.disabled = true; b.textContent = 'Bajando…';
+  const d = await window.api.bkBajar({ sha: x.sha, cifrado: x.cifrado, clave });
+  if (!d.ok) { toast(d.error, { err: true }); b.disabled = false; b.textContent = 'Recuperar…'; return; }
+  let st; try { st = JSON.parse(d.text); } catch (_) { toast('El respaldo está dañado', { err: true }); return; }
+  if ($('#modal [data-i]')) cerrarModal(); await new Promise((ok) => setTimeout(ok, 80));
+  const fecha = x.nombre.match(/\d{4}-\d{2}-\d{2}/)[0];
+  if (!(await confirmar('Recuperar respaldo', `Se reemplaza toda la obra por la copia del <b>${fechaCorta(fecha)}</b> (${(st.circuitos || []).length} circuitos, ${(st.bobinas || []).length} bobinas). Lo cargado después de esa fecha se pierde.<br><br>Antes se guarda una copia de lo actual en la carpeta de respaldos de esta PC.`, 'Recuperar', 'btn danger'))) return;
+  try { await window.api.snapshot('antes-de-recuperar'); cargarTexto(d.text); toast(`Obra recuperada del respaldo del ${fechaCorta(fecha)}`); } catch (e) { toast('No se pudo cargar el respaldo', { err: true }); }
+});

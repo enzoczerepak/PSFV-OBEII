@@ -49,7 +49,7 @@ const lluS = () => { S.lluvia = S.lluvia || {}; S.lluvia.cfg = S.lluvia.cfg || {
 const lluAuto = (f) => { const L = lluS(), a = L.auto[f], d = L.dias[f] || {}; return { mm: a && a.mm != null ? a.mm : d.mm, smn: (a && a.smn) || d.smn || null }; };
 const lluMan = (f) => { const d = lluS().dias[f] || {}; return { man: d.man, trab: d.trab }; };
 // el clima automático lo registra solo la PC servidor (o la única PC si no hay red)
-const lluRegistra = () => !window.READONLY && !(typeof NET !== 'undefined' && NET && NET.modo === 'cliente');
+const lluRegistra = () => !window.VISOR && !(typeof NET !== 'undefined' && NET && NET.modo === 'cliente');
 const esLluvia = (f) => { const L = lluS(), m = lluMan(f); if (m.man === true) return true; if (m.man === false) return false; const a = lluAuto(f); return (Number(a.mm) || 0) >= (Number(L.cfg.umbral) || 1) || !!(a.smn && a.smn.length); };
 function lluCuenta() {
   const L = lluS(), hoy = today(), lun = lunesDe(hoy), dom = sumDias(lun, 6);

@@ -53,8 +53,12 @@ function heroHTML() {
 }
 function vResumen(el) {
   actions([['Exportar Excel', 'btn', exportExcel]]);
-  el.innerHTML = ghAvisoHTML() + (typeof evCursoHTML === 'function' ? evCursoHTML(true) : '') + heroHTML() + modulosHTML();
+  let abierto = false; try { abierto = localStorage.getItem('iniDet') === '1'; } catch (_) {}
+  el.innerHTML = ghAvisoHTML() + (typeof evCursoHTML === 'function' ? evCursoHTML(true) : '') + heroHTML() + paraHoyHTML()
+    + `<details class="inidet"${abierto ? ' open' : ''}><summary>Detalle por frente de obra</summary>${modulosHTML()}</details>`;
   if (typeof bindEvCurso === 'function') bindEvCurso(el);
+  bindParaHoy(el);
+  const det = $('.inidet', el); det.ontoggle = () => { try { localStorage.setItem('iniDet', det.open ? '1' : '0'); } catch (_) {} };
   $$('[data-go]', el).forEach((c) => { c.onclick = () => go(c.dataset.go); });
   bindClima(); climaCarga();
 }

@@ -2,13 +2,13 @@
 // ======================= MENÚ =======================
 // [vista, texto, ícono] o una sección plegable { s: clave, t: título, ico, items: [...], grupos: true }
 const MENU = [
-  ['resumen', 'Inicio', 'inicio'], ['avance', 'Avance de obra', 'avance'], ['plano', 'Plano de obra', 'plano'], ['partes', 'Partes de campo', 'partes'],
-  ['crono', 'Cronograma', 'crono'],
+  ['resumen', 'Inicio', 'inicio'], ['campo', 'Carga rápida', 'llave'], ['pdia', 'Parte diario', 'dia'], ['avance', 'Avance de obra', 'avance'], ['plano', 'Plano de obra', 'plano'], ['partes', 'Partes de campo', 'partes'],
+  ['crono', 'Cronograma', 'crono'], ['hist', 'Historial de cambios', 'libro'],
   { s: 'cables', t: 'Tendido de cables', ico: 'cable', grupos: true, items: [['cables', 'Resumen de tendido', 'barras'], ['diario', 'Tendido por fecha', 'dia'], ['zanjas', 'Zanjas', 'zanja'], ['bobinas', 'Bobinas', 'bobina'], ['propuesta', 'Propuesta de tendido', 'lista'], ['puntas', 'Puntas de cable', 'punta']] },
   ['fo', 'Fibra óptica', 'fibra'], ['lmt', 'Línea aérea MT (LMT)', 'poste'], ['fundaciones', 'Fundaciones STS', 'sts'], ['sala', 'Edificio O&M (sala de celdas)', 'edificio'],
-  { s: 'trk', t: 'Trackers', ico: 'trackers', items: ['Materiales', ['trec', 'Recepción de materiales', 'lista'], ['tent', 'Entregas y remitos', 'camion'], ['trecl', 'Reclamos al fabricante', 'libro'],
-    'Hincado', ['hincado', 'Avance de hincado', 'barras'], ['hplano', 'Plano de hincado', 'plano'], ['htrk', 'Distribución por tracker', 'trackers'], ['hrec', 'Recepción de hincas', 'camion'], ['hcat', 'Catálogo y distribución', 'libro'],
-    'Montaje', ['tarm', 'Armado de estructuras', 'llave', 'pronto'], ['tpan', 'Instalación de paneles', 'sol', 'pronto']] },
+  { s: 'trk', t: 'Trackers', ico: 'trackers', items: ['Materiales', ['trec', 'Recepción de materiales', 'lista'], ['tent', 'Entregas y remitos', 'camion'], ['trecl', 'Reclamos al fabricante', 'libro'], ['tstk', 'Stock en obra', 'barras'],
+    'Hincado', ['hincado', 'Avance de hincado', 'barras'], ['htrk', 'Distribución por tracker', 'trackers'], ['hcat', 'Catálogo y distribución', 'libro'],
+    'Montaje', ['tarm', 'Armado de estructuras', 'llave'], ['tpan', 'Instalación de paneles', 'sol']] },
   { s: 'maqs', t: 'Maquinaria de obra', ico: 'maquina', items: [['maq', 'Horas mensuales', 'dia'], ['maqev', 'Paradas y mantenimientos', 'llave'], ['maqeq', 'Equipos', 'camion']] },
 ];
 // vistas que no tienen botón propio: se marca la del menú que las contiene
@@ -44,16 +44,16 @@ function menuHTML() {
 /* ---------- Navegación en celular ----------
    Barra superior con el apartado actual, barra inferior con accesos rápidos y un menú a pantalla completa,
    agrupado por frente de obra y con buscador. Se arma con las mismas vistas del menú lateral. */
-const MOV_ACCESOS = [['resumen', 'Inicio', 'inicio'], ['avance', 'Avance', 'avance'], ['BT-plan', 'Plan de corte', 'corte'], ['zanjas', 'Zanjas', 'zanja']];
+const MOV_ACCESOS = [['resumen', 'Inicio', 'inicio'], ['campo', 'Cargar', 'llave'], ['BT-plan', 'Plan de corte', 'corte'], ['zanjas', 'Zanjas', 'zanja']];
 function movGrupos() {
   const plano = (items) => items.filter(Array.isArray).map(([v, t, i, tg]) => ({ v, t, i, tg }));
-  const g = [{ t: 'General', items: plano(MENU.filter(Array.isArray).slice(0, 5)) }];
+  const g = [{ t: 'General', items: plano(MENU.filter((m) => Array.isArray(m) && !MCOL[m[0]])) }];
   MENU.forEach((m) => {
     if (Array.isArray(m)) return;
     g.push({ t: m.t, ico: m.ico, items: plano(m.items) });
     if (m.grupos) g.push({ t: 'Plan de corte y circuitos', ico: 'corte', cats: true, items: GRUPOS.flatMap(([c, n, its]) => its.map(([k, t, i]) => ({ v: c + '-' + k, t, i, cat: c, cn: n }))) });
   });
-  g.splice(3, 0, { t: 'Otros frentes', items: plano(MENU.filter(Array.isArray).slice(5)) });
+  g.splice(3, 0, { t: 'Otros frentes', items: plano(MENU.filter((m) => Array.isArray(m) && MCOL[m[0]])) });
   return g;
 }
 const movExiste = (v) => !!document.querySelector(`#nav button[data-view="${v}"]`) && !(window.READONLY && v === 'ajustes');

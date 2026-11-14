@@ -54,6 +54,9 @@ function hincInfo() {
   });
   const rec = {}, recDud = {};
   H.recep.forEach((r) => { const v = verificar(r); (v.ok ? rec : recDud)[r.codigo] = ((v.ok ? rec : recDud)[r.codigo] || 0) + (Number(r.cant) || 0); });
+  // hincas recibidas desde Trackers → Recepción de materiales (código del BOM → plano de la hinca)
+  if (typeof trkS === 'function') { const T = trkS(), bi = new Map(((T.bom || {}).items || []).filter((i) => String(i.cat).toUpperCase() === 'POST').map((i) => [i.k, (i.dib || [])[0]]));
+    T.ent.forEach((e) => (e.lin || []).forEach((l) => { const c = bi.get(trkKey(l.mat)); if (c) rec[c] = (rec[c] || 0) + (Number(l.rec) || 0); })); }
   const nH = Object.keys(H.avance).filter((id) => trk.some((t) => t.id === id)).length;
   // cantidad de hincas: del replanteo (aunque falte el código de cada posición)
   const RP = window.REPLANTEO, nRep = RP ? trk.reduce((a, t) => a + nHincas(t), 0) : 0, nRepH = RP ? trk.filter((t) => H.avance[t.id]).reduce((a, t) => a + nHincas(t), 0) : 0;

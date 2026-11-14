@@ -475,7 +475,7 @@ function horasJornada(a, b, j) {
 }
 // lo registrado antes con hora de inicio y fin pasa a contar solo las horas de jornada (se guarda la jornada usada)
 function maqMigrJor() {
-  if (window.READONLY) return; let n = 0;
+  if (window.VISOR) return; let n = 0;
   maqE().forEach((e) => { if (e.inicio && e.fin && !e.enCurso && e.horasRel == null) { e.horasRel = Math.round(horasEntre(e.inicio, e.fin) * 100) / 100; e.jor = jorObra(); e.horas = Math.round(horasJornada(e.inicio, e.fin, e.jor) * 100) / 100; n++; } });
   if (n) commit(`${n} parada${n > 1 ? 's' : ''} / mantenimiento${n > 1 ? 's' : ''} recalculado${n > 1 ? 's' : ''} con la jornada de obra (${jorTxt()})`);
 }

@@ -92,7 +92,9 @@ function normalizar(st) {
 }
 let saveT = null;
 function commit(msg) {
-  if (window.READONLY) { Engine.sincronizarPAT(S); R = Engine.calcular(S); render(false); return; }
+  // visor: nunca guarda · sin permiso en la vista: se bloquea lo que carga la persona (con mensaje), no lo automático
+  if (window.VISOR || (window.READONLY && msg)) { Engine.sincronizarPAT(S); R = Engine.calcular(S); render(false); if (msg && !window.VISOR) toast('Tu usuario no tiene permiso para cambiar esta sección', { err: true }); return; }
+  if (msg && typeof histAnotar === 'function') histAnotar(msg);
   Engine.sincronizarPAT(S);
   R = Engine.calcular(S);
   S.compromiso = R.compromiso;
@@ -187,8 +189,12 @@ const VIEWS = {
   trec: ['Recepción de materiales de trackers', () => 'Control de lo que llega a obra contra el Bill of Materials de Trina · recibido, dañado y faltante por código'],
   tent: ['Entregas de materiales de trackers', () => 'Remitos y packing lists recibidos: lo declarado, lo contado conforme y lo dañado en cada entrega'],
   trecl: ['Reclamos al fabricante', () => 'Faltantes, dañados y códigos fuera del BOM de cada entrega · reportes para Trina y seguimiento hasta la reposición'],
-  tarm: ['Armado de estructuras', () => 'Montaje de la estructura de los trackers: motores, vigas, correas y amortiguadores · próximamente'],
-  tpan: ['Instalación de paneles solares', () => 'Montaje de los módulos fotovoltaicos sobre los trackers · próximamente'],
+  campo: ['Carga rápida de campo', () => 'Lo de todos los días a un toque: hincado y montaje por rango, horas, paradas, lluvia y materiales'],
+  pdia: ['Parte diario', () => 'Todo lo registrado en el día en todos los frentes · PDF y texto para WhatsApp'],
+  hist: ['Historial de cambios', () => 'Quién cambió qué y cuándo, en todas las PCs de la red'],
+  tarm: ['Armado de estructuras', () => 'Por tracker y por etapa: rodamientos, motor, vigas de torsión, amortiguadores, correas, TCU y torqueado'],
+  tpan: ['Instalación de paneles solares', () => 'Por tracker: módulos colocados, fijación y conexionado de strings'],
+  tstk: ['Stock de materiales en obra', () => 'Recibido conforme menos lo consumido por el hincado y el montaje, por código del BOM'],
   sala: ['Edificio de operación y mantenimiento', () => 'Sala de celdas de MT, comunicaciones y control · avance de obra civil por etapa, zapata y viga de fundación'],
   maq: ['Horas de máquinas', () => 'Registro mensual con detalle diario por equipo: horómetro, horas trabajadas, paradas, mantenimientos y disponibilidad'],
   maqev: ['Paradas y mantenimientos', () => 'Horas de parada y de mantenimiento de cada equipo, con motivo y observaciones'],
@@ -255,6 +261,7 @@ function go(v) {
     $$('#nav button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === 'hplano')); $$('.sfBtn').forEach((b) => b.classList.remove('on'));
     const sec = $('#nav [data-sect="trk"]'); if (sec && !sec.classList.contains('open')) abrirSect(sec, true); $$('#nav .sect').forEach((x) => x.classList.toggle('act', x === sec)); pillUpd(true); render(true); if (typeof movSync === 'function') movSync('hplano'); return; }
   view = v; ui.sel.clear(); navKey = MENU_ALIAS[v] || v;
+  if (typeof aplicarPermiso === 'function') aplicarPermiso(v);
   $$('.sfBtn').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
   $$('#nav button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === navKey));
   const bt = $(`#nav button[data-view="${navKey}"]`), sec = bt && bt.closest('.sect');
@@ -270,7 +277,7 @@ function render(anim) {
   const [t, sub] = VIEWS[view];
   const vc = view.split('-')[0];
   setTimeout(badgePartes, 0);
-  $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : ['trec', 'tent', 'trecl', 'tarm', 'tpan'].includes(view) ? 'Trackers' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'fo' ? 'Fibra óptica' : view === 'lmt' ? 'Línea aérea MT' : view === 'sala' ? 'Edificio O&M' : ['hincado', 'htrk', 'hrec', 'hcat'].includes(view) ? 'Trackers · Hincado' : MAQ_V.includes(view) ? 'Maquinaria de obra' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
+  $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes', 'pdia', 'hist', 'crono', 'campo'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : ['trec', 'tent', 'trecl', 'tarm', 'tpan', 'tstk'].includes(view) ? 'Trackers' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'fo' ? 'Fibra óptica' : view === 'lmt' ? 'Línea aérea MT' : view === 'sala' ? 'Edificio O&M' : ['hincado', 'htrk', 'hrec', 'hcat'].includes(view) ? 'Trackers · Hincado' : MAQ_V.includes(view) ? 'Maquinaria de obra' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
   $('#vTitle').innerHTML = (CATN[vc] && view.includes('-') ? `<span class="cchip c-${vc}">${CATL[vc]}</span>` : '') + esc(t); $('#vSub').innerHTML = sub();
   $('#projName').textContent = S.nombre;
   const el = $('#view'), sc = el.scrollTop;
@@ -281,7 +288,8 @@ function render(anim) {
   const [cat, kind] = view.split('-');
   if (kind === 'plan') vPlan(el, cat);
   else if (kind === 'circ') vCircuitos(el, cat);
-  else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hrec: vHRec, hcat: vHCat, fo: vFibra, lmt: vLMT, sala: vSala, trec: vTrkRec, tent: vTrkEnt, trecl: vTrkRecl, tarm: vPronto, tpan: vPronto, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
+  else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hrec: vHRec, hcat: vHCat, fo: vFibra, lmt: vLMT, sala: vSala, trec: vTrkRec, tent: vTrkEnt, trecl: vTrkRecl, hist: vHist, pdia: vPdia, campo: vCampo, tarm: (e) => vMont(e, 'arm'), tpan: (e) => vMont(e, 'pan'), tstk: vStock, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
+  if (typeof menuArchivar === 'function') menuArchivar();
   if (anim) { void el.offsetWidth; el.classList.add('enter'); el.scrollTop = 0; countUp(el); }
   else {
     el.scrollTop = sc;
