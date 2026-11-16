@@ -1396,3 +1396,4 @@ body.ro .solo-pc { display: none !important; }
 .rmsvg.z1 .rminvl { display: inline; }
 .rmsvg .rmtid2 { display: none; }
 .rmsvg.z1 .rmtid2 { display: inline; }
+.rmpre { display: inline-block; margin-left: 3mm; padding: 0.4mm 2mm; border: 0.4mm solid #c0392b; color: #c0392b; font-size: 8.5pt; font-weight: 700; vertical-align: 1px; }

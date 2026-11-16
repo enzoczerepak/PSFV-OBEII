@@ -12,7 +12,9 @@ const RAM_DEF = {
   difMax: 0.30,     // diferencia máxima de altura libre entre hincas vecinas (m)
   usarCodigos: true,// si la distribución por posición está completa, usar largo / altura / empotramiento de cada código
   hincadoras: 2, rend: 120, inicio: null, sabado: true, orden: '1,2,3,4,5,6', sentido: 'OE',
+  precarga: true,   // plan en precarga: alturas orientativas, no apto para hincar (se levanta en Parámetros)
 };
+const RAM_PRE_TXT = 'PRECARGA · alturas orientativas · no apto para hincar';
 const RAMUI = { tab: 'plano', color: 'estado', sel: null, s: 'all', q: '', f: 'all' };
 const ramP = () => { const H = S.hincado || (S.hincado = {}); const r = H.ram || {};
   if (r.revNom === 1.25 && r.largo === 3.46) { r.revNom = 1.315; r.largo = 3.515; }
@@ -82,7 +84,7 @@ function vRam(el) {
   const cnt = {}; C.L.forEach((r) => (cnt[r.est] = (cnt[r.est] || 0) + 1));
   const hF = C.L.reduce((a, r) => a + (r.fuera || 0), 0), nH = C.L.reduce((a, r) => a + r.n, 0);
   const PG = ramPrograma();
-  el.innerHTML = `<div class="grid g4 stagger" style="margin-bottom:12px">
+  el.innerHTML = (P.precarga ? ramPrecargaHTML(C) : '') + `<div class="grid g4 stagger" style="margin-bottom:12px">
       <div class="card kpi"><div class="kl">Trackers dentro de tolerancia</div><div class="kv">${fmt((cnt.ok || 0) + (cnt.ajus || 0))}<small> / ${fmt(C.L.length)}</small></div><div class="muted">${fmt(cnt.ajus || 0)} con la línea de cabezas corrida</div></div>
       <div class="card kpi"><div class="kl">Para revisar</div><div class="kv" style="color:${(cnt.fuera || 0) + (cnt.pend || 0) ? '#d64545' : 'inherit'}">${fmt((cnt.fuera || 0) + (cnt.pend || 0) + (cnt.salto || 0))}</div><div class="muted">${fmt(cnt.fuera || 0)} con hincas fuera (${fmt(hF)} hincas) · ${fmt(cnt.pend || 0)} por pendiente · ${fmt(cnt.salto || 0)} por saltos</div></div>
       <div class="card kpi"><div class="kl">Hincas con cota</div><div class="kv">${fmt(nH)}</div><div class="muted">terreno ${fmt(Math.min(...C.L.filter((r) => r.n).map((r) => r.zmin)), 1)} a ${fmt(Math.max(...C.L.filter((r) => r.n).map((r) => r.zmax)), 1)} m</div></div>
@@ -92,6 +94,22 @@ function vRam(el) {
   segBind('#rmT', RAMUI.tab, (v) => { RAMUI.tab = v; render(false); });
   const b = $('#rmB', el);
   ({ plano: ramPlano, trk: ramTabla, prog: ramProg, par: ramPar })[RAMUI.tab](b, C, PG);
+}
+// cartel de precarga del ramming plan: qué está cargado y qué falta para que el plan sea definitivo
+function ramPrecargaHTML(C) {
+  const RP = window.REPLANTEO || {}, CO = window.COTAS_HINCAS || {}, rev = C.L.filter((r) => r.t.rev).length;
+  const cods = Object.keys(S.hincado.matriz || {}).every((k) => matrizOk(k));
+  return `<div class="card hpre"><div class="hpreh"><span class="pill p-warn">PRECARGA</span><b>Ramming plan en condición de precarga</b><span class="muted">· las alturas son orientativas: no usar para hincar</span></div>
+    <div class="hprec"><div><h4>Datos cargados</h4><ul>
+      <li>✓ Posición de cada hinca: <b>${esc((RP.fuente || '').split(' · ')[0])}</b>, numeración de mesas OBEII-GR-PL-003 r1 · ${fmt(RP.nHincas || 0)} hincas.</li>
+      <li>✓ Cota de terreno natural por hinca: superficie TIN del relevamiento (OBEII-GR-PL-003 r1).</li>
+      <li>${cods ? '✓' : '·'} Código, largo y altura libre de cada hinca: Trina CIV-DW-26050-2402-0B y MEC-DW-26050-3401-0A${cods ? '' : ' (distribución incompleta)'}.</li>
+      <li>✓ Pendiente N-S de diseño 0–5 % y regulación ±200 mm (Trina).</li></ul></div>
+    <div><h4>Falta para que sea definitivo</h4><ol>
+      <li><b>Topografía final del terreno</b> (después del movimiento de suelos / malla de rugosidad): hoy las alturas se calculan sobre terreno natural.</li>
+      <li><b>Confirmación de la discretización</b> de los ${rev} trackers que se movieron en el replanteo r4 (zona y suelo definen el código y el largo de cada hinca).</li>
+      <li><b>Validación de Trina</b> del ramming plan: alturas libres, empotramientos y tolerancias de montaje.</li></ol></div></div>
+    <p class="hint" style="margin:6px 0 0">Los PDF, el DXF y el Excel salen con la marca de precarga. Cuando estén los datos, se levanta en la pestaña Parámetros.</p></div>`;
 }
 function vHDist(el) {
   PUI = DISTUI;
@@ -332,6 +350,7 @@ function ramPar(b) {
       ${f('pendMax', 'Pendiente N-S máxima del tracker', '%', '0.5', 'Trina diseña estas configuraciones para pendiente 0–5 % (MEC-DW-26050-3401-0A). Si el terreno tiene más, el tubo se limita a esta pendiente y el tracker queda para revisar.')}
       ${f('difMax', 'Salto máximo de altura libre entre hincas vecinas', 'm', '0.05', 'Se marca como aviso.')}
       <label class="rmchk"><input type="checkbox" data-k="usarCodigos" ${P.usarCodigos ? 'checked' : ''} ${ro ? 'disabled' : ''} style="width:auto"><span>Usar largo, altura y empotramiento de cada código de hinca (cuando esté cargada la distribución de Trina, reemplaza a los valores de arriba)${cods ? '' : '<small class="muted">La distribución por posición todavía no está completa en Catálogo y distribución: mientras tanto se usan los valores de arriba, motor y general por separado.</small>'}</span></label></div></div>
+    <div><div class="card" style="margin-bottom:12px"><h3>Estado del plan</h3><label class="rmchk"><input type="checkbox" data-k="precarga" ${P.precarga ? 'checked' : ''} ${ro ? 'disabled' : ''} style="width:auto"><span><b>Ramming plan en precarga</b>: alturas orientativas, no apto para hincar. Destildar recién cuando estén la topografía final, la discretización confirmada y la validación de Trina.</span></label></div>
     <div class="card"><h3>Programa</h3><div class="form rmform">
       ${f('hincadoras', 'Hincadoras trabajando', '', '1')}
       ${f('rend', 'Rendimiento por hincadora', 'hincas/día', '5')}
@@ -339,8 +358,8 @@ function ramPar(b) {
       <label>Orden de los sectores<span class="rmin"><input type="text" data-k="orden" value="${esc(P.orden)}" ${ro ? 'disabled' : ''}></span><small class="muted">Ej.: 3,4,1,2,5,6</small></label>
       <label>Sentido de avance<select data-k="sentido" ${ro ? 'disabled' : ''}><option value="OE" ${P.sentido !== 'EO' ? 'selected' : ''}>De oeste a este</option><option value="EO" ${P.sentido === 'EO' ? 'selected' : ''}>De este a oeste</option></select></label>
       <label class="rmchk"><input type="checkbox" data-k="sabado" ${P.sabado ? 'checked' : ''} ${ro ? 'disabled' : ''} style="width:auto"><span>Se trabaja los sábados</span></label></div>
-      <p class="hint">Cotas de terreno: ${esc((window.COTAS_HINCAS || {}).fuente || '')}. Coordenadas: lista de replanteo OBEII-CI-LI-211 r3.</p>
-      ${ro ? '' : '<button class="btn" id="rmRes">Volver a los valores por defecto</button>'}</div></div>
+      <p class="hint">Cotas de terreno: ${esc((window.COTAS_HINCAS || {}).fuente || '')}. Coordenadas: ${esc(((window.REPLANTEO || {}).fuente || '').split(' · ')[0])}.</p>
+      ${ro ? '' : '<button class="btn" id="rmRes">Volver a los valores por defecto</button>'}</div></div></div>
     <p class="hint">Los valores por defecto son de referencia: confirmalos con el manual de instalación de Trina (Vanguard 1P) y el estudio geotécnico. Todo se recalcula al cambiar un valor.</p>`;
   $$('[data-k]', b).forEach((i) => { i.onchange = () => { const k = i.dataset.k, H = S.hincado; H.ram = Object.assign({}, ramP());
     H.ram[k] = i.type === 'checkbox' ? i.checked : i.type === 'number' ? Number(i.value) : i.value || null; RAMC = null; commit(`Ramming plan: ${k} = ${H.ram[k]}`); }; });
@@ -352,23 +371,25 @@ async function ramExcel() {
   C.L.forEach((r) => r.H.forEach((h, k) => a.push([r.t.id, repDe(r.t.id).fr, r.t.s, r.t.t, k + 1, h.x, h.y, +h.z.toFixed(3), +h.cab.toFixed(3), +h.rev.toFixed(3), +h.emb.toFixed(3), h.motor ? 'Motor' : 'General', h.cod || '', h.cod && hcat(h.cod) ? hColSup(hcat(h.cod)) || 'sin color' : '', h.cod && hcat(h.cod) ? hcat(h.cod).color : '', h.est === 'ok' ? (h.salto ? 'salto' : 'ok') : h.est === 'corto' ? 'perfil corto' : 'terreno alto'])));
   const t = [['Tracker', 'Sector', 'Tipo', 'Estado', 'Pendiente terreno (%)', 'Pendiente tubo (%)', 'Ondulación (m)', 'Altura libre mín (m)', 'Altura libre máx (m)', 'Corrimiento línea (m)', 'Hincas fuera', 'Hincado', 'Programado', 'Hincadora']];
   C.L.forEach((r) => { const p = PG.plan.get(r.t.id); t.push([r.t.id, r.t.s, r.t.t, (RAM_EST[r.est] || RAM_EST.sin)[0], r.n ? +r.pend.toFixed(2) : '', r.n ? +r.pTub.toFixed(2) : '', r.n ? +r.ond.toFixed(3) : '', r.n ? +r.rmin.toFixed(3) : '', r.n ? +r.rmax.toFixed(3) : '', r.n ? +r.sh.toFixed(3) : '', r.fuera || 0, HA[r.t.id] ? HA[r.t.id].f : '', p ? p.f : '', p ? p.maq : '']); });
-  const par = [['Parámetro', 'Valor']].concat(Object.entries(P).map(([k, v]) => [k, v]));
+  const par = [['Parámetro', 'Valor']].concat(P.precarga ? [['ESTADO', RAM_PRE_TXT]] : []).concat(Object.entries(P).map(([k, v]) => [k, v]));
+  if (P.precarga) { t.unshift([RAM_PRE_TXT]); a.unshift([RAM_PRE_TXT]); }
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(t), 'Por tracker'); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a), 'Por hinca'); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(par), 'Parámetros');
-  const p = await window.api.saveBinary(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), `Ramming plan ${today()}.xlsx`, 'xlsx', 'Excel');
+  const p = await window.api.saveBinary(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), `Ramming plan${P.precarga ? ' PRECARGA' : ''} ${today()}.xlsx`, 'xlsx', 'Excel');
   if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
 }
 function ramPdf() {
   const C = ramCalc(), PG = ramPrograma(), HA = (S.hincado || {}).avance || {};
   const secs = [...new Set(C.L.map((r) => r.t.s))].sort().filter((s) => RAMUI.s === 'all' || s === RAMUI.s);
-  let h = prHead('Ramming plan · plan de hincado', 'Altura libre y empotramiento por hinca, de norte a sur');
+  let h = prHead('Ramming plan · plan de hincado' + (ramP().precarga ? ' · PRECARGA' : ''), 'Altura libre y empotramiento por hinca, de norte a sur');
+  if (ramP().precarga) h += `<p style="border:2px solid #c0392b;color:#c0392b;font-weight:700;padding:6px 10px;margin:6px 0">${RAM_PRE_TXT}. Calculado sobre terreno natural; falta topografía final, confirmación de la discretización y validación de Trina.</p>`;
   secs.forEach((s) => {
     h += `<h2 style="page-break-before:always">Sector ${s}</h2>`;
     C.L.filter((r) => r.t.s === s && r.n && !HA[r.t.id]).sort((a, b) => a.t.x - b.t.x).forEach((r) => { const p = PG.plan.get(r.t.id);
       h += `<div style="break-inside:avoid;margin:6px 0"><b>${r.t.id}</b> · ${r.t.t} · ${(RAM_EST[r.est] || RAM_EST.sin)[0]}${p ? ` · programado ${fechaCorta(p.f)} (H${p.maq})` : ''}
       <table class="tbl" style="font-size:8.5pt"><tr><th>Hinca</th>${r.H.map((x, k) => `<th>${k + 1}</th>`).join('')}</tr><tr><td>Altura libre (m)</td>${r.H.map((x) => `<td${x.est !== 'ok' ? ' style="color:#c00;font-weight:700"' : ''}>${fmt(x.rev, 2)}</td>`).join('')}</tr><tr><td>Cabeza (m)</td>${r.H.map((x) => `<td>${fmt(x.cab, 2)}</td>`).join('')}</tr></table></div>`; });
   });
-  printHTML(h, `Ramming plan ${today()}.pdf`, true);
+  printHTML(h, `Ramming plan${ramP().precarga ? ' PRECARGA' : ''} ${today()}.pdf`, true);
 }
 
 // ---------- DXF (R12, abre en AutoCAD y se guarda como DWG). Coordenadas reales del replanteo: se superpone al layout ----------
@@ -443,7 +464,9 @@ function ramDxf(modo = 'ram') {
     const [a1, a2] = ramInvNom(v.id).split(' '); g(0, 'TEXT', 8, 'RAM-INVERSOR', 10, num(X + 1.5), 20, num(Y + 0.05), 30, 0, 40, 0.8, 1, a1); g(0, 'TEXT', 8, 'RAM-INVERSOR', 10, num(X + 1.5), 20, num(Y - 0.95), 30, 0, 40, 0.8, 1, a2 || ''); });
   // referencias, a la derecha del plano
   { let ly = y1 - 5; const lx = x1 + 15, T = (t, h = 1.2, dx = 0) => { g(0, 'TEXT', 8, 'RAM-REFERENCIAS', 10, num(lx + dx), 20, num(ly), 30, 0, 40, h, 1, t); ly -= h * 1.9; };
-    T(dist ? 'PLANO DE DISTRIBUCION DE HINCAS - REFERENCIAS' : 'RAMMING PLAN - REFERENCIAS', 2.2); T(`${S.nombre || ''} · ${new Date().toLocaleDateString('es-AR')}${dist ? ' · Trina ' + TRINA_DIST_DOC : ''}`, 1.2); ly -= 2;
+    T(dist ? 'PLANO DE DISTRIBUCION DE HINCAS - REFERENCIAS' : 'RAMMING PLAN - REFERENCIAS', 2.2); T(`${S.nombre || ''} · ${new Date().toLocaleDateString('es-AR')}${dist ? ' · Trina ' + TRINA_DIST_DOC : ''}`, 1.2);
+    if (!dist && ramP().precarga) { T('PRECARGA - ALTURAS ORIENTATIVAS - NO APTO PARA HINCAR', 1.8); T('Terreno natural: falta topografia final, discretizacion confirmada y validacion de Trina', 1.0); }
+    ly -= 2;
     const box = (col1, col2, fillOne) => { const X = lx + 1, Y = ly + 0.4, A = 0.9, P = (dx, dy) => [num(X + dx), num(Y + dy)];
       if (fillOne != null) { const [ax, ay] = P(-A, -A), [bx, by] = P(A, -A), [cx2, cy2] = P(-A, A), [dx2, dy2] = P(A, A); g(0, 'SOLID', 8, 'RAM-REFERENCIAS', 62, fillOne, 10, ax, 20, ay, 30, 0, 11, bx, 21, by, 31, 0, 12, cx2, 22, cy2, 32, 0, 13, dx2, 23, dy2, 33, 0); }
       [[1, col1], [-1, col2]].forEach(([sg, col]) => { if (col && RAM_ACI[col] && col !== 'Blanco' && col !== 'Sin marca') { const [ax, ay] = P(-A, sg * A), [bx, by] = P(A, sg * A), [cx2, cy2] = P(0, 0); g(0, 'SOLID', 8, 'RAM-REFERENCIAS', 62, RAM_ACI[col], 10, ax, 20, ay, 30, 0, 11, bx, 21, by, 31, 0, 12, cx2, 22, cy2, 32, 0, 13, cx2, 23, cy2, 33, 0); } });
@@ -461,7 +484,7 @@ function ramDxf(modo = 'ram') {
   return b;
 }
 async function ramExportDxf(modo = 'ram') {
-  const p = await window.api.saveBinary(ramDxf(modo), `${modo === 'dist' ? 'Plano de distribución de hincas' : 'Ramming plan'} ${today()}.dxf`, 'dxf', 'Dibujo DXF (AutoCAD)');
+  const p = await window.api.saveBinary(ramDxf(modo), `${modo === 'dist' ? 'Plano de distribución de hincas' : 'Ramming plan' + (ramP().precarga ? ' PRECARGA' : '')} ${today()}.dxf`, 'dxf', 'Dibujo DXF (AutoCAD)');
   if (p) toast('Plano DXF exportado: abrilo en AutoCAD y guardalo como DWG', { action: ['Abrir carpeta', () => window.api.showItem ? window.api.showItem(p) : window.api.openPath(p)] });
 }
 
@@ -546,7 +569,7 @@ function ramCroquis(p) {
 }
 function ramPdfPlano(o) {
   const C = ramCalc(), HA = (S.hincado || {}).avance || {}, hojas = ramHojas(C, o), dist = o.modo === 'dist';
-  const tit = dist ? 'Plano de distribución de hincas' : 'Ramming plan · altura libre', ley = ramRefs(C, o.modo, ramDosCol);
+  const tit = dist ? 'Plano de distribución de hincas' : 'Ramming plan · altura libre', ley = ramRefs(C, o.modo, ramDosCol), pre = !dist && ramP().precarga;
   const pags = hojas.map((p, i) => {
     const txt = Math.max(0.55, Math.min(1.2, 2.6 * p.esc / 1000)), A = p.A;
     let g = '';
@@ -559,13 +582,14 @@ function ramPdfPlano(o) {
       L.forEach(({ h, k, x, y }) => { g += ramPilaSVG(h, k, x, y, Object.assign({}, o, { lat: ramLat(t, L, k) }), o.hech && !!HA[t.id], txt); });
     });
     g += ramRefSVG(txt, true);
+    if (pre) g += `<text x="${p.x0 + p.W / 2}" y="${p.y0 + p.H / 2}" font-size="${(p.W / 9).toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="#c0392b" fill-opacity="0.10" font-weight="700" transform="rotate(-30 ${p.x0 + p.W / 2} ${p.y0 + p.H / 2})">PRECARGA</text>`;
     return `<section class="rmpg" data-o="${p.port ? 'P' : 'L'}" style="width:${A.pw}mm;height:${A.ph}mm">
-      <div class="rmpgh"><div><b>${tit} · Sector ${p.s}</b><br>${esc_(S.nombre || '')}${dist ? ` · Trina ${esc_(TRINA_DIST_DOC)}` : ''}</div>${ramCroquis(p)}<div style="text-align:right"><b>Hoja ${p.i} de ${p.de}</b> · sector ${p.s}<br>escala 1:${p.esc} (${o.size}) · ${new Date().toLocaleDateString('es-AR')} · pág. ${i + 1}/${hojas.length}</div></div>
+      <div class="rmpgh"><div><b>${tit} · Sector ${p.s}</b>${pre ? ' <span class="rmpre">PRECARGA · no apto para hincar</span>' : ''}<br>${esc_(S.nombre || '')}${dist ? ` · Trina ${esc_(TRINA_DIST_DOC)}` : ''}</div>${ramCroquis(p)}<div style="text-align:right"><b>Hoja ${p.i} de ${p.de}</b> · sector ${p.s}<br>escala 1:${p.esc} (${o.size}) · ${new Date().toLocaleDateString('es-AR')} · pág. ${i + 1}/${hojas.length}</div></div>
       <svg viewBox="${p.x0.toFixed(2)} ${p.y0.toFixed(2)} ${p.W.toFixed(2)} ${p.H.toFixed(2)}" style="display:block;width:${A.W}mm;height:${A.H}mm" font-family="Arial">${g}</svg>
       <div class="rmpgf" style="height:${A.F}mm">${ley}<span class="rmnorte">▲ N</span></div></section>`;
   });
   // hojas verticales y apaisadas: se imprimen por separado y se unen en orden (Chromium no mezcla bien orientaciones)
-  ramPrintPaginas(pags.join(''), `${dist ? 'Plano de distribución de hincas' : 'Ramming plan'} ${o.sec === 'all' ? 'todos los sectores' : 'sector ' + o.sec} ${today()}.pdf`, o.size, hojas.map((p) => (p.port ? 'P' : 'L')));
+  ramPrintPaginas(pags.join(''), `${dist ? 'Plano de distribución de hincas' : 'Ramming plan' + (pre ? ' PRECARGA' : '')} ${o.sec === 'all' ? 'todos los sectores' : 'sector ' + o.sec} ${today()}.pdf`, o.size, hojas.map((p) => (p.port ? 'P' : 'L')));
 }
 const esc_ = (s) => esc(s);
 async function ramPrintPaginas(html, name, size, orden) {
