@@ -58,7 +58,7 @@ function vZanjas(el) {
   let h = `<div class="grid g4 stagger" style="margin-bottom:14px">
     ${card('Zanja BT realizada', zz.BT.realizada, zz.BT.total, `<div class="c-done" data-w="${pct(zz.BT.cerrada, zz.BT.total)}"></div><div class="c-acc" data-w="${pct(zz.BT.abierta, zz.BT.total)}"></div>`)}<span class="muted">${fmt(zz.BT.cerrada)} m cerrados · ${zz.BT.nCircZ}/${zz.BT.nCirc} circuitos con zanja${zz.BT.red ? `<br>red real según ${esc(zz.BT.red)} (la suma por circuito daría ${fmt(zz.BT.sumaCircuitos)} m)` : ""}</span></div>
     ${card('Zanja MT realizada', zz.MT.realizada, zz.MT.total, `<div class="c-done" data-w="${pct(zz.MT.cerrada, zz.MT.total)}"></div><div class="c-acc" data-w="${pct(zz.MT.abierta, zz.MT.total)}"></div>`)}<span class="muted">${fmt(zz.MT.cerrada)} m cerrados · ${zz.MT.n} zanjas</span></div>
-    ${card('PAT 25 mm² tendida', pr('PAT|25').tendido, pr('PAT|25').requerido, `<div class="c-done" data-w="${pct(pr('PAT|25').tendido, pr('PAT|25').requerido)}"></div>`)}<span class="muted">una por zanja de BT</span></div>
+    ${card('PAT 25 mm² tendida', pr('PAT|25').tendido, pr('PAT|25').requerido, `<div class="c-done" data-w="${pct(pr('PAT|25').tendido, pr('PAT|25').requerido)}"></div>`)}<span class="muted">aparte del zanjeo · <a href="#" onclick="event.preventDefault();go('patbt')">ver PAT de BT</a></span></div>
     ${card('PAT 95 mm² tendida', pr('PAT|95').tendido, pr('PAT|95').requerido, `<div class="c-done" data-w="${pct(pr('PAT|95').tendido, pr('PAT|95').requerido)}"></div>`)}<span class="muted">una por zanja de MT</span></div></div>
     <div class="tools"><div class="seg" id="fZT"><button data-v="all">BT y MT</button><button data-v="BT">BT</button><button data-v="MT">MT</button></div>
     <div class="seg" id="fZE"><button data-v="all">Todas</button><button data-v="no abierta">No abiertas</button><button data-v="abierta">Abiertas</button><button data-v="cerrar">Para cerrar</button><button data-v="cerrada">Cerradas</button><button data-v="comp">Compartidas</button></div>
@@ -223,7 +223,7 @@ async function cerrarZanjas(zids, auto) {
       <input type="date" class="pd" value="${(real && real.fecha) || today()}"></div>`;
   };
   const res = await modal({ title: ok.length === 1 ? `Cerrar zanja ${esc(ok[0].titulo)}` : `Cerrar ${ok.length} zanjas`, wide: true,
-    sub: (auto ? 'Están tendidos todos los circuitos de la zanja. ' : '') + 'Cerrar la zanja confirma que la PAT está tendida.',
+    sub: (auto ? 'Están tendidos todos los circuitos de la zanja. ' : '') + (ok.some((z) => z.pat) ? 'Cerrar la zanja confirma que la PAT está tendida.' : 'La PAT de BT se carga aparte, en PAT de BT.'),
     body: `<div class="muted phase-row prh" style="grid-template-columns:minmax(150px,1fr) 70px 200px 96px 130px"><span>Zanja</span><span>PAT</span><span>Bobina</span><span>Largo (m)</span><span>Fecha</span></div>${ok.map(fila).join('')}
       ${inc.length ? `<p class="hint" style="color:var(--warn)">No se cierran (faltan circuitos por tender): ${inc.map((z) => esc(z.titulo)).join(', ')}.</p>` : ''}
       <p class="hint">Si la PAT ya se cargó (botón <b>Cargar PAT</b> en Zanjas, o un parte de campo) solo se confirma. Si no, cargá ahora los metros tendidos: se propone el largo de la zanja y la bobina del plan.${ok.some((z) => z.tramoDe && z.tramoDe.estado === 'cerrada') ? ' En un <b>tramo reabierto</b> de una zanja compartida, poné 0 si la PAT ya estaba tendida; si se tendió PAT nueva, cargá los metros y se suman a la de la zanja compartida.' : ''}</p>`,

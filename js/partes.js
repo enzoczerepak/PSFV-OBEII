@@ -8,7 +8,7 @@ function recibirParte(p, autor) {
   toast(`📱 Nuevo parte de campo de ${autor}: ${parteTxt(p)}`, { ms: 9000, action: ['Ver', () => go('partes')] });
   badgePartes();
 }
-const parteTxt = (p) => p.tipo === 'fund' ? `${p.sts} · ${p.n} ${p.accion === 'fin' ? 'terminada' : 'iniciada'}` : p.tipo === 'sala' ? `Edificio O&M · ${p.n}${p.els && p.els[0] !== 'G' ? ' (' + p.els.join(', ') + ')' : ''} ${p.accion === 'fin' ? 'terminada' : 'iniciada'}` : p.tipo === 'tendido' ? `${p.designacion} · ${p.fases.length} conductor${p.fases.length > 1 ? 'es' : ''}` : p.tipo === 'pat' ? `PAT ${p.titulo} · ${fmt(p.metros, 1)} m` : p.tipo === 'zanja' ? `zanja ${p.titulo} · ${fmt(p.largo, 1)} m` : 'observación';
+const parteTxt = (p) => p.tipo === 'patbt' ? `PAT de BT · ${p.desc}${p.metros ? ' · ' + p.metros + ' m' : ''}${p.saltos ? ' · ' + p.saltos + ' saltos' : ''}${p.jab ? ' · ' + p.jab + ' jabalinas' : ''}` : p.tipo === 'fund' ? `${p.sts} · ${p.n} ${p.accion === 'fin' ? 'terminada' : 'iniciada'}` : p.tipo === 'sala' ? `Edificio O&M · ${p.n}${p.els && p.els[0] !== 'G' ? ' (' + p.els.join(', ') + ')' : ''} ${p.accion === 'fin' ? 'terminada' : 'iniciada'}` : p.tipo === 'tendido' ? `${p.designacion} · ${p.fases.length} conductor${p.fases.length > 1 ? 'es' : ''}` : p.tipo === 'pat' ? `PAT ${p.titulo} · ${fmt(p.metros, 1)} m` : p.tipo === 'zanja' ? `zanja ${p.titulo} · ${fmt(p.largo, 1)} m` : 'observación';
 function badgePartes() {
   const n = (S.partes || []).filter((p) => p.estado === 'pendiente').length;
   const b = $('#nav button[data-view="partes"]'); if (!b) return;
@@ -20,7 +20,7 @@ function vPartes(el) {
   const lista = (S.partes || []).slice().sort((a, b) => String(b.recibido).localeCompare(String(a.recibido))).filter((p) => (f === 'pend' ? p.estado === 'pendiente' : f === 'ok' ? p.estado !== 'pendiente' : true));
   const pend = (S.partes || []).filter((p) => p.estado === 'pendiente');
   actions(pend.length > 1 && !window.READONLY ? [['Aprobar todos los válidos', 'btn pri', aprobarTodos]] : []);
-  const TIPO = { tendido: ['Tendido', '#00939a'], pat: ['PAT', '#6a5acd'], zanja: ['Zanja', '#c97b12'], fund: ['Civil · STS', '#f2b33d'], sala: ['Civil · O&M', '#b294ff'], obs: ['Observación', '#7a8aa3'] };
+  const TIPO = { tendido: ['Tendido', '#00939a'], pat: ['PAT', '#6a5acd'], patbt: ['PAT de BT', '#6a5acd'], zanja: ['Zanja', '#c97b12'], fund: ['Civil · STS', '#f2b33d'], sala: ['Civil · O&M', '#b294ff'], obs: ['Observación', '#7a8aa3'] };
   let h = `<div class="tools"><div class="seg" id="pF"><button data-v="pend">Pendientes (${pend.length})</button><button data-v="ok">Resueltos</button><button data-v="all">Todos</button></div></div>`;
   if (!lista.length) h += `<div class="card empty"><b>${f === 'pend' ? 'No hay partes pendientes' : 'Sin partes'}</b>Los capataces cargan desde el celular en <b>campo.html</b>, en el mismo sitio del visor. Esta PC los recibe cada minuto si el programa está abierto.</div>`;
   lista.forEach((p) => {
@@ -37,6 +37,8 @@ function vPartes(el) {
       const rz = R.zlist.find((z) => z.id === p.zanja), bobs = rz && rz.pat ? R.bobinas.filter((b) => b.key === rz.pat.key) : [];
       cuerpo = `<div class="muted">Zanja ${esc(p.titulo)}${rz ? ` · largo ${fmt(rz.largo, 1)} m · PAT ${rz.pat ? rz.pat.seccion + ' mm²' : '–'}${rz.pat && rz.pat.completo ? ' · <b style="color:var(--bad)">ya registrada</b>' : ''}` : ' · <b style="color:var(--bad)">zanja inexistente</b>'}</div>
         <div class="pt-row">Metros ${pe ? `<input type="number" step="0.1" class="pm" value="${p.metros}" style="width:100px">` : `<b>${fmt(p.metros, 1)}</b>`} &nbsp; Bobina ${pe ? `<select class="pb"><option value="">Sin bobina registrada</option>${bobs.map((b) => `<option ${b.codigo === p.bobina ? 'selected' : ''}>${esc(b.codigo)}</option>`).join('')}</select>` : `<b>${esc(p.bobina || 'sin bobina')}</b>`}</div>`;
+    } else if (p.tipo === 'patbt') {
+      cuerpo = `<div class="muted">Cu desnudo 25 mm² · tramo <b>${esc(p.desc)}</b></div><div class="pt-row">${p.metros ? `Metros <b>${fmt(p.metros, 1)}</b> · ${p.bobina ? 'bobina ' + esc(p.bobina) : 'sin bobina'}` : ''}${p.saltos ? ` · <b>${p.saltos}</b> saltos` : ''}${p.jab ? ` · <b>${p.jab}</b> jabalinas` : ''}</div>`;
     } else if (p.tipo === 'zanja') {
       const rz = R.zlist.find((z) => z.id === p.zanja);
       cuerpo = `<div class="muted">Zanja ${esc(p.titulo)}${rz ? ` · largo actual ${fmt(rz.largo, 1)} m (plano)` : ''}</div><div class="pt-row">Largo real ${pe ? `<input type="number" step="0.1" class="pm" value="${p.largo}" style="width:100px">` : `<b>${fmt(p.largo, 1)} m</b>`}${rz ? ` <span class="muted">dif. ${fmt(p.largo - rz.largo, 1)} m</span>` : ''}</div>`;
@@ -67,6 +69,13 @@ function aplicarParte(p, box) {
     c.real = Object.assign({}, c.real); fases.forEach((x) => { c.real[x.f] = { bobina: x.bobina, metros: Math.round(x.metros * 100) / 100, fecha: p.fecha, por: p.autor }; });
     const z = S.zanjas.find((zz) => zz.id === c.zanjaId); if (z && z.estado === 'no abierta') z.estado = 'abierta';
     p.fases = fases; return null;
+  }
+  if (p.tipo === 'patbt') {
+    const P = (S.patBT = S.patBT || { reg: [] }); P.reg = P.reg || [];
+    if (p.bobina && !R.bobinas.some((b) => b.key === 'PAT|25' && b.codigo === p.bobina)) return `la bobina ${p.bobina} no es de PAT 25 mm²`;
+    if (Number(p.metros) > 0) P.reg.push({ id: uid('pb'), tipo: 'c', f: p.fecha, desc: p.desc, metros: Math.round(Number(p.metros) * 10) / 10, bobina: p.bobina || '', por: p.autor, parte: p.id });
+    if (p.saltos || p.jab) P.reg.push({ id: uid('pb'), tipo: 'a', f: p.fecha, desc: p.desc, saltos: p.saltos || 0, jab: p.jab || 0, por: p.autor, parte: p.id });
+    return null;
   }
   if (p.tipo === 'pat') {
     const rz = R.zlist.find((z) => z.id === p.zanja); if (!rz || !rz.pat) return 'la zanja no existe o no lleva PAT';

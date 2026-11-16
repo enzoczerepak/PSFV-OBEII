@@ -7,7 +7,7 @@ function zanjaCard(cat) {
     <div class="zn"><b>${fmt(z.realizada)}</b> / ${fmt(z.total)} m<br><b class="zpct">${fmt(z.total ? z.realizada / z.total * 100 : 0, 1)} %</b></div></div>`;
 }
 function patCard() {
-  return R.resumen.filter((r) => r.cat === 'PAT').map((r) => `<div class="zrow"><div class="zl"><b>PAT ${r.seccion} mm²</b><span class="muted">${r.seccion === 25 ? 'zanjas BT' : 'zanjas MT'}</span></div>
+  return R.resumen.filter((r) => r.cat === 'PAT').map((r) => `<div class="zrow"><div class="zl"><b>PAT ${r.seccion} mm²</b><span class="muted">${r.seccion === 25 ? 'por tramo · plano de PAT' : 'zanjas MT'}</span></div>
     <div class="bar"><div class="c-done" data-w="${pct(r.tendido, r.requerido)}"></div></div><div class="zn"><b>${fmt(r.tendido)}</b> / ${fmt(r.requerido)} m</div></div>`).join('');
 }
 // Encabezado del inicio: cielo según la hora, el sol recorre su arco y los trackers lo siguen (±60°)

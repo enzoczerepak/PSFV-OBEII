@@ -4,7 +4,7 @@
 const MENU = [
   ['resumen', 'Inicio', 'inicio'], ['campo', 'Carga rápida', 'llave'], ['pdia', 'Parte diario', 'dia'], ['avance', 'Avance de obra', 'avance'], ['plano', 'Plano de obra', 'plano'], ['partes', 'Partes de campo', 'partes'],
   ['crono', 'Cronograma', 'crono'], ['hist', 'Historial de cambios', 'libro'],
-  { s: 'cables', t: 'Tendido de cables', ico: 'cable', grupos: true, items: [['cables', 'Resumen de tendido', 'barras'], ['diario', 'Tendido por fecha', 'dia'], ['zanjas', 'Zanjas', 'zanja'], ['bobinas', 'Bobinas', 'bobina'], ['propuesta', 'Propuesta de tendido', 'lista'], ['puntas', 'Puntas de cable', 'punta']] },
+  { s: 'cables', t: 'Tendido de cables', ico: 'cable', grupos: true, items: [['cables', 'Resumen de tendido', 'barras'], ['diario', 'Tendido por fecha', 'dia'], ['zanjas', 'Zanjas', 'zanja'], ['patbt', 'PAT de BT', 'punta'], ['bobinas', 'Bobinas', 'bobina'], ['propuesta', 'Propuesta de tendido', 'lista'], ['puntas', 'Puntas de cable', 'punta']] },
   ['fo', 'Fibra óptica', 'fibra'], ['lmt', 'Línea aérea MT (LMT)', 'poste'], ['fundaciones', 'Fundaciones STS', 'sts'], ['sala', 'Edificio O&M (sala de celdas)', 'edificio'],
   { s: 'trk', t: 'Trackers', ico: 'trackers', items: ['Materiales', ['trec', 'Recepción de materiales', 'lista'], ['tent', 'Entregas y remitos', 'camion'], ['trecl', 'Reclamos al fabricante', 'libro'], ['tstk', 'Stock en obra', 'barras'],
     'Hincado', ['hincado', 'Avance de hincado', 'barras'], ['htrk', 'Distribución por tracker', 'trackers'], ['hram', 'Ramming plan', 'hinca'], ['hcat', 'Catálogo y distribución', 'libro'],

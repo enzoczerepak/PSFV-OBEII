@@ -161,7 +161,11 @@
       z.parcial = z.estado === 'abierta' && z.abiertoM < z.largo - 0.01;
     });
     const zMap = new Map(zlist.map((z) => [z.id, z]));
-    const circuitos = (state.circuitos || []).map((c, i) => {
+    // PAT de BT por tramo (independiente de las zanjas de cables): cada tramo cargado es un conductor ya tendido
+    const PB = state.patBT || {}, pbReg = (PB.reg || []).filter((x) => x.tipo === 'c' && Number(x.metros) > 0);
+    const pbCirc = pbReg.map((x) => ({ id: 'pb-' + x.id, cat: 'PAT', formacion: PAT_SEC.BT, fases: 1, cantidad: Number(x.metros), designacion: 'PAT BT · ' + (x.desc || 'tramo'),
+      desde: x.desc || 'tramo de PAT', hasta: '', patBT: x.id, real: { C: x.bobina ? { bobina: x.bobina, metros: Number(x.metros), fecha: x.f || '' } : { sinBobina: true, metros: Number(x.metros), fecha: x.f || '' } } }));
+    const circuitos = (state.circuitos || []).concat(pbCirc).map((c, i) => {
       const cat = catDe(c), seccion = parseSeccion(c.formacion);
       const real = c.real || {}, fz = fasesDe(c);
       const nReal = fz.filter((f) => real[f] && (real[f].bobina || real[f].sinBobina)).length;
@@ -370,10 +374,15 @@
     if (paraCerrar) alerts.push({ tipo: 'ok', txt: `${paraCerrar} zanja${paraCerrar > 1 ? "s" : ""} con todos sus circuitos tendidos: se pueden cerrar (ahí se registra la PAT)` });
 
     resumen.forEach((r) => { r.desvio = r2(r.tendido - r.tendidoTeo); r.desvioPct = r.tendidoTeo > 0 ? r.desvio / r.tendidoTeo : 0; });
+    // PAT 25 (BT): el requerido es el conductor del plano de PAT (sin saltos), no la suma por zanja
+    const rp = resumen.find((r) => r.key === 'PAT|25');
+    if (rp) { const req = Number((PB.cfg || {}).req) || PATBT_DEF.req; rp.requerido = r2(Math.max(req, rp.tendido)); rp.balance = r2(rp.stock - rp.requerido); rp.patBT = true; rp.tendidoTeo = 0; rp.desvio = 0; rp.desvioPct = 0; }
     return { params: p, bobinas, circuitos, piezas, resumen, alerts, zanjas, zlist, compromiso, mejoras, nManuales: manuales.length };
   }
 
   const PAT_SEC = { BT: '1x25 mm² Cu desnudo', MT: '1x95 mm² Cu desnudo' };
+  // PAT de BT según el plano OBEII-EL-PL-400 r1: conductor sin saltos (m), saltos y jabalinas (accesorios)
+  const PATBT_DEF = { req: 6290, saltos: 406, jab: 41 };
   function tituloZanja(z, miembros) {
     if (z.nombre) return z.nombre;
     if (!miembros.length) return z.id;
@@ -418,6 +427,8 @@
     state.zanjas.forEach((z) => {
       const miembros = cs.filter((c) => c.zanjaId === z.id);
       let pt = pats.get(z.id);
+      // BT: la PAT va aparte, por tramo (vista PAT de BT); solo se conserva la que ya se cargó en una zanja
+      if (catDe(z) === 'BT' && !(pt && pt.real && pt.real.C && (pt.real.C.metros > 0))) { if (pt) cs.splice(cs.indexOf(pt), 1); return; }
       if (!pt) { pt = { id: 'pat-' + z.id, cat: 'PAT', vinculo: z.id, formacion: PAT_SEC[catDe(z)], fases: 1, real: {} }; cs.push(pt); }
       Object.assign(pt, { designacion: 'PAT ' + miembros.map((c) => c.designacion).join(' + '), desde: miembros.map((c) => c.desde).join(' + '),
         hasta: [...new Set(miembros.map((c) => c.hasta))].join(' / '), cantidad: pt.largoManual > 0 ? pt.largoManual : Number(z.largo) || 0 });
@@ -526,6 +537,6 @@
     return lotes;
   }
 
-  const Engine = { calcular, propuesta, sincronizarPAT, unirZanjas, sumarTramo, separarCircuito, tituloZanja, PAT_SEC, parseSeccion, fasesDe, CATS, ZANJA, PRYSALAC, RETENAX, ficha };
+  const Engine = { PATBT_DEF, calcular, propuesta, sincronizarPAT, unirZanjas, sumarTramo, separarCircuito, tituloZanja, PAT_SEC, parseSeccion, fasesDe, CATS, ZANJA, PRYSALAC, RETENAX, ficha };
   if (typeof module !== 'undefined' && module.exports) module.exports = Engine; else root.Engine = Engine;
 })(typeof window !== 'undefined' ? window : globalThis);

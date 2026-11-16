@@ -38,6 +38,7 @@ function normalizar(st) {
   if (typeof Sync !== 'undefined' && Sync.rescatar) Sync.rescatar(st); // usuarios / historial / montaje que una versión anterior guardó aparte
   st.params = Object.assign({ margen: 0, minUtil: 30, cola: 0, holgura: 8 }, st.params || {});
   st.fundaciones = st.fundaciones || {};
+  st.patBT = st.patBT || { reg: [] }; st.patBT.reg = st.patBT.reg || [];
   normalizarHincado(st);
   st.cronoTareas = st.cronoTareas || [];
   st.partes = st.partes || [];
@@ -246,6 +247,7 @@ const VIEWS = {
   maqev: ['Paradas y mantenimientos', () => 'Horas de parada y de mantenimiento de cada equipo, con motivo y observaciones'],
   maqeq: ['Equipos', () => 'Máquinas de la obra: N° de interno, descripción, marca, modelo y horas acumuladas'],
   hincado: ['Avance de hincado', () => 'Trackers e hincas por sector y configuración de la discretización Trina · recepciones verificadas'],
+  patbt: ['PAT de BT', () => 'Puesta a tierra de BT (Cu desnudo 25 mm²) por tramo, aparte del zanjeo · saltos y jabalinas según plano OBEII-EL-PL-400 r1'],
   hram: ['Ramming plan', () => 'Cota de terreno, altura libre y empotramiento de cada hinca · plano y programa de hincado · parámetros configurables'],
   htrk: ['Distribución de hincas por tracker', () => 'Qué hinca va en cada posición de cada tracker, por color y código · registro de hincado'],
   hrec: ['Recepción de hincas', () => 'Cada entrega se verifica contra el manual de Trina: código, color de punta, largo y perfil'],
@@ -261,7 +263,7 @@ const VIEWS = {
   fundaciones: ['Fundaciones STS', () => `Avance de las bases de ${STSL.length === 1 ? 'la STS' : `las ${STSL.length} STS`} por etapa: iniciá y finalizá cada etapa con su fecha`],
   puntas: ['Puntas de cable', () => 'Terminales colocados en cada extremo: lado inversor y lado STS en BT; entre STS, sala de celdas, piquete y ET en MT'],
   propuesta: ['Propuesta de tendido', () => 'Lotes de zanjas por zona, del tamaño de una bobina, en el orden sugerido para abrir'],
-  zanjas: ['Zanjas', () => 'Estado de cada zanja (BT y MT). Se tiende de a un circuito; la PAT se carga por zanja y al cerrar se confirma (si no se cargó, se pide ahí). Las compartidas admiten cierre parcial'],
+  zanjas: ['Zanjas', () => 'Estado de cada zanja (BT y MT). Se tiende de a un circuito; la PAT de MT se carga por zanja y al cerrar se confirma (la de BT va aparte, en PAT de BT). Las compartidas admiten cierre parcial'],
   'BT-plan': ['Plan de corte', () => 'Cables de aluminio inversor → STS · los cortes listos quedan fijos en su bobina'],
   'BT-circ': ['Circuitos', () => 'Tendidos inversor → STS: zanja y registro de lo ejecutado'],
   'MT-plan': ['Plan de corte', () => 'Cables de media tensión entre STS, sala de celdas y LMT · los cortes listos quedan fijos en su bobina'],
@@ -336,7 +338,7 @@ function render(anim) {
   const [cat, kind] = view.split('-');
   if (kind === 'plan') vPlan(el, cat);
   else if (kind === 'circ') vCircuitos(el, cat);
-  else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hram: vRam, hrec: vHRec, hcat: vHCat, fo: vFibra, lmt: vLMT, sala: vSala, trec: vTrkRec, tent: vTrkEnt, trecl: vTrkRecl, hist: vHist, pdia: vPdia, campo: vCampo, ctend: vCTend, tarm: (e) => vMont(e, 'arm'), tpan: (e) => vMont(e, 'pan'), tstk: vStock, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
+  else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hram: vRam, hrec: vHRec, hcat: vHCat, fo: vFibra, lmt: vLMT, sala: vSala, trec: vTrkRec, tent: vTrkEnt, trecl: vTrkRecl, hist: vHist, pdia: vPdia, campo: vCampo, ctend: vCTend, tarm: (e) => vMont(e, 'arm'), tpan: (e) => vMont(e, 'pan'), tstk: vStock, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, patbt: vPatBT, bobinas: vBobinas, ajustes: vAjustes })[view](el);
   if (typeof menuArchivar === 'function') menuArchivar();
   if (anim) { void el.offsetWidth; el.classList.add('enter'); el.scrollTop = 0; countUp(el); }
   else {

@@ -7,7 +7,7 @@
   // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
   const PROTO = 5; // 3: cada cambio lleva la revisión del servidor sobre la que se hizo · 4: al actualizar, el cliente primero toma todo del servidor · 5: tipos de 2 letras (usuarios, historial, montaje) y fin del reenvío sin fin
   // 'hc' catálogo y distribución de hincas, 'ht:' hincado por tracker, 'hr:' recepciones de hincas
-  const nuevo = (k) => k.startsWith('hl:') || k.startsWith('us:') || k.startsWith('mo:') || k === 'tb' || k.startsWith('te:') || k.startsWith('tn:') || k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('la:') || k.startsWith('sv:');
+  const nuevo = (k) => k === 'pk' || k.startsWith('pb:') || k.startsWith('hl:') || k.startsWith('us:') || k.startsWith('mo:') || k === 'tb' || k.startsWith('te:') || k.startsWith('tn:') || k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('la:') || k.startsWith('sv:');
   const conocido = (k) => k === 'cfg' || k === 'comp' || k === 'km' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
 
   // JSON con claves ordenadas: el orden interno de los campos no cuenta como cambio
@@ -39,6 +39,8 @@
     if (S.lmt) { if (S.lmt.cfg) m.set('lc', S.lmt.cfg); Object.entries(S.lmt.av || {}).forEach(([k, v]) => { if (v) m.set('lv:' + k, v); }); }
     // trackers: BOM del fabricante ('tb'), entregas recibidas ('te:') y reclamos al fabricante ('tn:')
     if (S.trackers) { if (S.trackers.bom) m.set('tb', S.trackers.bom); (S.trackers.ent || []).forEach((x) => m.set('te:' + x.id, x)); (S.trackers.recl || []).forEach((x) => m.set('tn:' + x.id, x)); }
+    // PAT de BT por tramo: criterio ('pk') y un registro por tramo o carga de accesorios ('pb:')
+    if (S.patBT) { if (S.patBT.cfg) m.set('pk', S.patBT.cfg); (S.patBT.reg || []).forEach((x) => m.set('pb:' + x.id, x)); }
     // registros de versiones más nuevas: se guardan tal cual para no borrarlos
     Object.entries(S.__otros || {}).forEach(([k, v]) => m.set(k, v));
     return m;
@@ -103,6 +105,13 @@
       if (k === 'tb') { if (!d && v) T.bom = v; return; }
       const col = k.startsWith('te:') ? T.ent : T.recl, id = k.slice(3), i = col.findIndex((x) => x.id === id);
       if (d) { if (i >= 0) col.splice(i, 1); } else if (i >= 0) col[i] = v; else col.push(v);
+      return;
+    }
+    if (k === 'pk' || k.startsWith('pb:')) {
+      const P = (S.patBT = S.patBT || { reg: [] }); P.reg = P.reg || [];
+      if (k === 'pk') { if (!d && v) P.cfg = v; return; }
+      const id = k.slice(3), i = P.reg.findIndex((x) => x.id === id);
+      if (d) { if (i >= 0) P.reg.splice(i, 1); } else if (i >= 0) P.reg[i] = v; else P.reg.push(v);
       return;
     }
     if (k.startsWith('sv:')) { S.sala = S.sala || {}; S.sala.av = S.sala.av || {}; const e = k.slice(3); if (d) delete S.sala.av[e]; else S.sala.av[e] = v; return; }

@@ -195,8 +195,17 @@
         });
         h += `<p class="hint">Cargá los metros reales tirados de cada conductor (la bobina propuesta es la del plan). Las fases ya registradas aparecen bloqueadas.</p>`;
       }
+    } else if (t === 'pat' && (ui.patT || 'bt') === 'bt') {
+      const bobs = R.bobinas.filter((b) => b.key === 'PAT|25');
+      h += `<div class="chips" style="margin:0 0 8px"><button data-pt="bt" class="on">PAT de BT (por tramo)</button><button data-pt="mt">PAT en zanja de MT</button></div>
+        <div class="muted">Cu desnudo 25 mm² · va aparte del zanjeo de cables</div>
+        <label>Tramo (por dónde va)<input type="text" id="fPd" placeholder="Ej.: fila TRK 204–229 · STS 4 → INV 4.12"></label>
+        <div class="dos"><label>Metros de PAT<input type="number" inputmode="decimal" step="0.1" id="fPm" value=""></label>
+        <label>Bobina<select id="fPb"><option value="">Sin bobina / no sé</option>${bobs.map((b) => `<option value="${esc(b.codigo)}">${esc(b.codigo)}</option>`).join('')}</select></label></div>
+        <div class="dos"><label>Saltos instalados<input type="number" inputmode="numeric" step="1" id="fPs" value=""></label><label>Jabalinas<input type="number" inputmode="numeric" step="1" id="fPj" value=""></label></div>`;
     } else if (t === 'pat') {
       const z = R.zlist.find((x) => x.id === ui.zanja);
+      h += `<div class="chips" style="margin:0 0 8px"><button data-pt="bt">PAT de BT (por tramo)</button><button data-pt="mt" class="on">PAT en zanja de MT</button></div>`;
       h += `<label>Zanja<select id="fZ"><option value="">Elegí la zanja…</option>${optZ(ui.zanja, (x) => x.pat)}</select></label>`;
       if (z && z.pat) {
         const bobs = R.bobinas.filter((b) => b.key === z.pat.key);
@@ -215,6 +224,7 @@
       <button class="b pri" id="fEnv">Enviar parte</button></div></div>`;
     v.innerHTML = h;
     $$('[data-k]', v).forEach((b) => { b.onclick = () => { ui.carga = b.dataset.k; render(); }; });
+    $$('[data-pt]', v).forEach((b) => { b.onclick = () => { ui.patT = b.dataset.pt; render(); }; });
     const fc = $('#fC', v); if (fc) fc.onchange = () => { ui.circ = fc.value; render(); };
     const fz = $('#fZ', v); if (fz && t !== 'obs') fz.onchange = () => { ui.zanja = fz.value; render(); };
     $$('.fon', v).forEach((c) => { c.onchange = () => c.closest('.fase').classList.toggle('off', !c.checked); });
@@ -232,6 +242,12 @@
       if (fases.some((f) => !(f.metros > 0))) return toast('Completá los metros de cada conductor marcado', true);
       if (fases.some((f) => f.metros > c.lenFase * 1.5 || f.metros < c.lenFase * 0.5)) { if (!confirm('Algún valor difiere mucho de la lista (' + fm(c.lenFase) + ' m). ¿Enviar igual?')) return; }
       p = { tipo: 'tendido', circuito: c.id, designacion: c.designacion, desde: c.desde, hasta: c.hasta, cat: c.cat, fases };
+    } else if (t === 'pat' && (ui.patT || 'bt') === 'bt') {
+      const n = (id) => Number(String($(id, v).value).replace(',', '.')) || 0;
+      const m = n('#fPm'), sa = Math.round(n('#fPs')), ja = Math.round(n('#fPj')), d = $('#fPd', v).value.trim();
+      if (!d) return toast('Escribí por dónde va el tramo', true);
+      if (!(m > 0) && !sa && !ja) return toast('Cargá los metros de PAT (o los saltos / jabalinas)', true);
+      p = { tipo: 'patbt', desc: d, metros: m, bobina: $('#fPb', v).value, saltos: sa, jab: ja };
     } else if (t === 'pat') {
       const z = R.zlist.find((x) => x.id === ui.zanja); if (!z) return toast('Elegí la zanja', true);
       const m = Number(String($('#fPm', v).value).replace(',', '.')); if (!(m > 0)) return toast('Cargá los metros de PAT', true);
@@ -337,7 +353,7 @@
     const h0 = ls.get(KH, []);
     if (!h0.length) { v.innerHTML = '<div class="card empty"><b>Todavía no enviaste partes</b></div>'; return; }
     const ST = { cola: ['cola', 'en cola'], pend: ['pend', 'pendiente de aprobación'], ok: ['ok', 'aprobado'], no: ['no', 'rechazado'] };
-    const desc = (p) => p.tipo === 'fund' ? `${esc(p.sts)} · ${esc(p.n)} · ${p.accion === 'fin' ? 'terminada' : 'iniciada'}` : p.tipo === 'sala' ? `Edificio O&M · ${esc(p.n)}${p.els && p.els[0] !== 'G' ? ' · ' + p.els.map(esc).join(', ') : ''} · ${p.accion === 'fin' ? 'terminada' : 'iniciada'}${p.pct ? ' (' + p.pct + ' %)' : ''}` : p.tipo === 'tendido' ? `${esc(p.designacion)} · ${p.fases.map((f) => `${lbl(f.f)} ${fm(f.metros)} m (${esc(f.bobina)})`).join(' · ')}` : p.tipo === 'pat' ? `PAT · ${esc(p.titulo)} · ${fm(p.metros)} m` : p.tipo === 'zanja' ? `Zanja ${esc(p.titulo)} · largo real ${fm(p.largo)} m` : `Observación${p.titulo ? ' · ' + esc(p.titulo) : ''}`;
+    const desc = (p) => p.tipo === 'patbt' ? `PAT de BT · ${esc(p.desc)}${p.metros ? ' · ' + fm(p.metros) + ' m' : ''}${p.saltos ? ' · ' + p.saltos + ' saltos' : ''}${p.jab ? ' · ' + p.jab + ' jabalinas' : ''}` : p.tipo === 'fund' ? `${esc(p.sts)} · ${esc(p.n)} · ${p.accion === 'fin' ? 'terminada' : 'iniciada'}` : p.tipo === 'sala' ? `Edificio O&M · ${esc(p.n)}${p.els && p.els[0] !== 'G' ? ' · ' + p.els.map(esc).join(', ') : ''} · ${p.accion === 'fin' ? 'terminada' : 'iniciada'}${p.pct ? ' (' + p.pct + ' %)' : ''}` : p.tipo === 'tendido' ? `${esc(p.designacion)} · ${p.fases.map((f) => `${lbl(f.f)} ${fm(f.metros)} m (${esc(f.bobina)})`).join(' · ')}` : p.tipo === 'pat' ? `PAT · ${esc(p.titulo)} · ${fm(p.metros)} m` : p.tipo === 'zanja' ? `Zanja ${esc(p.titulo)} · largo real ${fm(p.largo)} m` : `Observación${p.titulo ? ' · ' + esc(p.titulo) : ''}`;
     v.innerHTML = h0.map((p) => { const e = est(p), r = (S.partes || []).find((x) => x.id === p.id); return `<div class="card parte"><b>${desc(p)}</b><span class="st ${ST[e][0]}">${ST[e][1]}</span><span class="muted" style="grid-column:1/-1">${new Date(p.fecha + 'T12:00').toLocaleDateString('es-AR')}${p.obs ? ' · «' + esc(p.obs) + '»' : ''}${r && r.motivo ? ' · Oficina: ' + esc(r.motivo) : ''}</span></div>`; }).join('') + '<p class="hint">El estado se actualiza solo cuando la oficina aprueba o rechaza cada parte.</p>';
   }
   $$('#tabs button').forEach((b) => { b.onclick = () => { tab = b.dataset.t; render(); }; });
