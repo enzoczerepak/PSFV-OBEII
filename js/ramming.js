@@ -69,7 +69,7 @@ function ramPrograma() {
 function vRam(el) {
   const P = ramP(), C = ramCalc(), HA = (S.hincado || {}).avance || {};
   if (!window.COTAS_HINCAS) { el.innerHTML = '<div class="card empty"><b>Faltan las cotas de las hincas</b></div>'; return; }
-  actions([['Exportar Excel', 'btn', ramExcel], ['PDF por sector', 'btn', ramPdf]]);
+  actions([['Plano DXF (AutoCAD)', 'btn pri', ramExportDxf], ['Exportar Excel', 'btn', ramExcel], ['PDF por sector', 'btn', ramPdf]]);
   const cnt = {}; C.L.forEach((r) => (cnt[r.est] = (cnt[r.est] || 0) + 1));
   const hF = C.L.reduce((a, r) => a + (r.fuera || 0), 0), nH = C.L.reduce((a, r) => a + r.n, 0);
   const PG = ramPrograma();
@@ -204,4 +204,47 @@ function ramPdf() {
       <table class="tbl" style="font-size:8.5pt"><tr><th>Hinca</th>${r.H.map((x, k) => `<th>${k + 1}</th>`).join('')}</tr><tr><td>Altura libre (m)</td>${r.H.map((x) => `<td${x.est !== 'ok' ? ' style="color:#c00;font-weight:700"' : ''}>${fmt(x.rev, 2)}</td>`).join('')}</tr><tr><td>Cabeza (m)</td>${r.H.map((x) => `<td>${fmt(x.cab, 2)}</td>`).join('')}</tr></table></div>`; });
   });
   printHTML(h, `Ramming plan ${today()}.pdf`, true);
+}
+
+// ---------- DXF (R12, abre en AutoCAD y se guarda como DWG). Coordenadas reales del replanteo: se superpone al layout ----------
+const RAM_ACI = { Rojo: 1, Azul: 5, Verde: 3, Violeta: 200, Magenta: 6, Negro: 250, Gris: 8, Blanco: 7, 'Sin marca': 9 };
+function ramDxf() {
+  const C = ramCalc(), HA = (S.hincado || {}).avance || {}, P = ramP(), o = [];
+  const g = (...kv) => { for (let i = 0; i < kv.length; i += 2) o.push(String(kv[i]), String(kv[i + 1])); };
+  const num = (v) => (Math.round(v * 1000) / 1000).toFixed(3);
+  const lay = new Map([['RAM-TRACKER', 8], ['RAM-TRACKER-ID', 7], ['RAM-ALTURA-LIBRE', 4], ['RAM-FUERA', 1], ['RAM-SALTO', 30], ['RAM-HINCADO', 200],
+    ['HINCA-OK', 3], ['HINCA-FUERA', 1], ['HINCA-SALTO', 30], ['HINCA-SIN-CODIGO', 9]]);
+  C.L.forEach((r) => r.H.forEach((h) => { const k = h.cod && hcat(h.cod); if (k) lay.set('HINCA-' + String(k.color || 'SIN-COLOR').toUpperCase().replace(/[^A-Z0-9]+/g, '-'), RAM_ACI[k.color] || 7); }));
+  g(0, 'SECTION', 2, 'HEADER', 9, '$ACADVER', 1, 'AC1009', 9, '$DWGCODEPAGE', 3, 'ANSI_1252', 0, 'ENDSEC');
+  g(0, 'SECTION', 2, 'TABLES', 0, 'TABLE', 2, 'LAYER', 70, lay.size + 1, 0, 'LAYER', 2, '0', 70, 0, 62, 7, 6, 'CONTINUOUS');
+  lay.forEach((c, n) => g(0, 'LAYER', 2, n, 70, 0, 62, c, 6, 'CONTINUOUS')); g(0, 'ENDTAB', 0, 'ENDSEC');
+  // bloque HINCA: círculo (color por capa) + atributos para extracción de datos
+  const TAGS = [['TRACKER', 'Tracker'], ['N', 'Hinca N° (norte a sur)'], ['CODIGO', 'Código Trina'], ['COLOR', 'Color Trina'], ['Z_TERRENO', 'Cota terreno (m)'], ['Z_CABEZA', 'Cota cabeza (m)'], ['ALTURA_LIBRE', 'Altura libre (m)'], ['EMPOTRAMIENTO', 'Empotramiento (m)'], ['ESTADO', 'Estado']];
+  g(0, 'SECTION', 2, 'BLOCKS', 0, 'BLOCK', 8, '0', 2, 'HINCA', 70, 2, 10, 0, 20, 0, 30, 0, 3, 'HINCA', 0, 'CIRCLE', 8, '0', 62, 0, 10, 0, 20, 0, 30, 0, 40, 0.12);
+  TAGS.forEach(([t, p], i) => g(0, 'ATTDEF', 8, '0', 10, 0.3, 20, -0.15 - i * 0.3, 30, 0, 40, 0.2, 1, '', 3, p, 2, t, 70, 1));
+  g(0, 'ENDBLK', 8, '0', 0, 'ENDSEC', 0, 'SECTION', 2, 'ENTITIES');
+  C.L.forEach((r) => {
+    if (!r.n) return; const H = r.H, a = H[0], z = H[H.length - 1], hecho = !!HA[r.t.id];
+    g(0, 'LINE', 8, hecho ? 'RAM-HINCADO' : 'RAM-TRACKER', 10, num(a.x), 20, num(a.y), 30, 0, 11, num(z.x), 21, num(z.y), 31, 0);
+    g(0, 'TEXT', 8, 'RAM-TRACKER-ID', 10, num(a.x), 20, num(a.y + 1.2), 30, 0, 40, 0.8, 1, r.t.id, 72, 1, 11, num(a.x), 21, num(a.y + 1.2), 31, 0);
+    H.forEach((h, k) => {
+      const kk = h.cod && hcat(h.cod), est = h.est === 'corto' ? 'Perfil corto' : h.est === 'alto' ? 'Terreno alto' : h.salto ? 'Salto' : 'OK';
+      const capa = kk ? 'HINCA-' + String(kk.color || 'SIN-COLOR').toUpperCase().replace(/[^A-Z0-9]+/g, '-') : h.est !== 'ok' ? 'HINCA-FUERA' : h.salto ? 'HINCA-SALTO' : 'HINCA-OK';
+      g(0, 'INSERT', 8, capa, 66, 1, 2, 'HINCA', 10, num(h.x), 20, num(h.y), 30, 0);
+      const vals = [r.t.id, k + 1, h.cod || '', kk ? kk.color : '', num(h.z), num(h.cab), num(h.rev), num(h.emb), est];
+      TAGS.forEach(([t], i) => g(0, 'ATTRIB', 8, capa, 10, num(h.x + 0.3), 20, num(h.y - 0.15 - i * 0.3), 30, 0, 40, 0.2, 1, vals[i], 2, t, 70, 1));
+      g(0, 'SEQEND', 8, capa);
+      g(0, 'TEXT', 8, 'RAM-ALTURA-LIBRE', 10, num(h.x + 0.25), 20, num(h.y - 0.1), 30, 0, 40, 0.22, 1, `${k + 1}: ${h.rev.toFixed(2)}${kk ? ' ' + String(h.cod).replace(/^26050-/, '') : ''}`);
+      if (h.est !== 'ok') g(0, 'CIRCLE', 8, 'RAM-FUERA', 10, num(h.x), 20, num(h.y), 30, 0, 40, 0.35);
+      else if (h.salto) g(0, 'CIRCLE', 8, 'RAM-SALTO', 10, num(h.x), 20, num(h.y), 30, 0, 40, 0.35);
+    });
+  });
+  g(0, 'ENDSEC', 0, 'EOF');
+  const s = o.join('\r\n') + '\r\n', b = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); b[i] = c < 256 ? c : 63; }
+  return b;
+}
+async function ramExportDxf() {
+  const p = await window.api.saveBinary(ramDxf(), `Ramming plan ${today()}.dxf`, 'dxf', 'Dibujo DXF (AutoCAD)');
+  if (p) toast('Plano DXF exportado: abrilo en AutoCAD y guardalo como DWG', { action: ['Abrir carpeta', () => window.api.showItem ? window.api.showItem(p) : window.api.openPath(p)] });
 }
