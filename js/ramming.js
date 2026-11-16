@@ -100,12 +100,50 @@ function ramPlano(b, C, PG) {
     : `<span><i style="background:hsl(130,60%,55%)"></i>${RAMUI.color === 'pend' ? 'Plano' : 'Parejo'}</span><span><i style="background:hsl(65,60%,50%)"></i>Medio</span><span><i style="background:hsl(0,60%,45%)"></i>${RAMUI.color === 'pend' ? 'En la pendiente máxima' : '1 m o más de ondulación'}</span>`;
   const sel = RAMUI.sel && C.map.get(RAMUI.sel);
   b.innerHTML = `<div class="rmgrid"><div class="card rmplano"><div class="tools" style="margin:0 0 8px"><div class="seg" id="rmC"><button data-v="estado">Estado</button><button data-v="pend">Pendiente</button><button data-v="ond">Ondulación</button><button data-v="prog">Programa</button><button data-v="hinc">Avance</button></div></div>
-      <svg viewBox="0 0 ${P.W} ${P.H}" class="rmsvg">${P.trk.map((t) => { const r = C.map.get(t.id); return `<rect data-t="${t.id}" x="${t.x}" y="${t.y}" width="${t.w}" height="${t.h}" fill="${ramColor(r, PG, HA)}" class="${RAMUI.sel === t.id ? 'on' : ''}"><title>${t.id} · ${(RAM_EST[r.est] || RAM_EST.sin)[0]}${r.n ? ` · pendiente ${fmt(r.pend, 1)} % · ondulación ${fmt(r.ond, 2)} m` : ''}</title></rect>`; }).join('')}</svg>
-      <div class="legend rmleg">${leg}</div><p class="hint" style="margin:6px 0 0">Tocá un tracker para ver su perfil y las alturas de cada hinca.</p></div>
+      <div class="rmwrap"><svg viewBox="${ramVB().join(' ')}" class="rmsvg ${ramZcls()}" preserveAspectRatio="xMidYMid meet">${P.trk.map((t) => { const r = C.map.get(t.id); return `<rect data-t="${t.id}" x="${t.x}" y="${t.y}" width="${t.w}" height="${t.h}" fill="${ramColor(r, PG, HA)}" class="${RAMUI.sel === t.id ? 'on' : ''}"><title>${t.id} · ${(RAM_EST[r.est] || RAM_EST.sin)[0]}${r.n ? ` · pendiente ${fmt(r.pend, 1)} % · ondulación ${fmt(r.ond, 2)} m` : ''}</title></rect>`; }).join('')}
+        <g class="rmz1">${P.trk.map((t) => `<text x="${t.x + t.w / 2}" y="${t.y - 0.8}" class="rmtid">${t.id.replace('TRK-', '')}</text>`).join('')}</g>
+        <g class="rmz1">${ramHincasSVG(C, HA)}</g></svg>
+        <div class="rmzb"><button class="btn sm" data-z="in" title="Acercar">＋</button><button class="btn sm" data-z="out" title="Alejar">－</button><button class="btn sm" data-z="fit" title="Ver todo el parque">⤢</button>${RAMUI.sel ? '<button class="btn sm" data-z="sel" title="Ir al tracker elegido">◎</button>' : ''}</div></div>
+      <div class="legend rmleg">${leg}</div><p class="hint" style="margin:6px 0 0">Rueda del mouse o ＋/－ para hacer zoom, arrastrá para moverte. Al acercarte aparecen el número de tracker y cada hinca con su color; más cerca, el número y la altura libre de cada hinca. Tocá un tracker para ver su perfil.</p></div>
     <div class="card rmdet">${sel ? ramDetalle(sel, PG) : '<div class="empty" style="padding:30px 10px"><b>Elegí un tracker en el plano</b><p class="muted">Vas a ver el perfil del terreno, la línea de cabezas y la altura libre y el empotramiento de cada hinca.</p></div>'}</div></div>`;
   segBind('#rmC', RAMUI.color, (v) => { RAMUI.color = v; render(false); });
-  $$('.rmsvg rect', b).forEach((r) => { r.onclick = () => { RAMUI.sel = r.dataset.t; render(false); }; });
+  ramZoomBind(b);
 }
+// ---------- zoom del plano ----------
+const ramVB = () => { const P = window.PLANO; return RAMUI.vb || [0, 0, P.W, P.H]; };
+const ramZcls = () => { const w = ramVB()[2], W = window.PLANO.W; return w < W / 14 ? 'z1 z2' : w < W / 4 ? 'z1' : ''; };
+// hincas en coordenadas del plano: X real − origen; Y real ubicada dentro del rectángulo de su tracker (norte arriba)
+function ramHincasSVG(C, HA) {
+  const X0 = 7393788.009;
+  return window.PLANO.trk.map((t) => { const r = C.map.get(t.id); if (!r || !r.n) return '';
+    const ys = r.H.map((h) => h.y), yN = Math.max(...ys), off = (t.h - (yN - Math.min(...ys))) / 2, hecho = !!HA[t.id];
+    return r.H.map((h, k) => { const x = h.x - X0, y = t.y + off + (yN - h.y), c = hecho ? '#7c5cbf' : h.est !== 'ok' ? '#d64545' : h.salto ? '#f0a23b' : '#1f7a46';
+      return `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="0.42" fill="${c}" class="rmh"><title>${t.id} · hinca ${k + 1} · terreno ${fmt(h.z, 2)} m · altura libre ${fmt(h.rev, 2)} m · empotramiento ${fmt(h.emb, 2)} m${h.cod ? ' · ' + h.cod : ''}</title></circle><text x="${(x + 0.7).toFixed(2)}" y="${(y + 0.25).toFixed(2)}" class="rmhl">${k + 1}·${h.rev.toFixed(2)}</text>`; }).join(''); }).join('');
+}
+function ramZoomBind(b) {
+  const svg = $('.rmsvg', b); if (!svg) return; const P = window.PLANO;
+  const set = (vb) => { const minW = 12, maxW = P.W * 1.2; const k = Math.max(minW, Math.min(maxW, vb[2])) / vb[2];
+    const cx = vb[0] + vb[2] / 2, cy = vb[1] + vb[3] / 2, w = vb[2] * k, h = vb[3] * k; RAMUI.vb = [cx - w / 2, cy - h / 2, w, h];
+    svg.setAttribute('viewBox', RAMUI.vb.join(' ')); svg.setAttribute('class', 'rmsvg ' + ramZcls()); };
+  const pt = (e) => { const r = svg.getBoundingClientRect(), vb = ramVB(), s = Math.max(vb[2] / r.width, vb[3] / r.height);
+    return [vb[0] + vb[2] / 2 + (e.clientX - r.left - r.width / 2) * s, vb[1] + vb[3] / 2 + (e.clientY - r.top - r.height / 2) * s, s]; };
+  const zoom = (f, cx, cy) => { const vb = ramVB(); if (cx == null) { cx = vb[0] + vb[2] / 2; cy = vb[1] + vb[3] / 2; }
+    set([cx - (cx - vb[0]) * f, cy - (cy - vb[1]) * f, vb[2] * f, vb[3] * f]); };
+  svg.addEventListener('wheel', (e) => { e.preventDefault(); const [x, y] = pt(e); zoom(e.deltaY > 0 ? 1.25 : 0.8, x, y); }, { passive: false });
+  let drag = null, movido = false;
+  svg.addEventListener('mousedown', (e) => { if (e.button) return; drag = { x: e.clientX, y: e.clientY, vb: ramVB().slice(), s: pt(e)[2] }; movido = false; });
+  window.addEventListener('mousemove', (e) => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 4) movido = true;
+    if (movido) { const v = drag.vb; RAMUI.vb = [v[0] - dx * drag.s, v[1] - dy * drag.s, v[2], v[3]]; svg.setAttribute('viewBox', RAMUI.vb.join(' ')); svg.classList.add('arr'); } });
+  window.addEventListener('mouseup', () => { if (drag) { drag = null; svg.classList.remove('arr'); } });
+  svg.addEventListener('click', (e) => { if (movido) { movido = false; return; } const t = e.target.closest('[data-t]');
+    const id = t ? t.dataset.t : ramTrkEn(e); if (id) { RAMUI.sel = id; render(false); } });
+  svg.addEventListener('dblclick', (e) => { const [x, y] = pt(e); zoom(0.5, x, y); });
+  $$('[data-z]', b).forEach((bt) => { bt.onclick = () => { const z = bt.dataset.z;
+    if (z === 'in') zoom(0.6); else if (z === 'out') zoom(1.6); else if (z === 'fit') { RAMUI.vb = null; set([0, 0, P.W, P.H]); }
+    else if (z === 'sel') { const t = P.trk.find((x) => x.id === RAMUI.sel); if (t) set([t.x + t.w / 2 - 45, t.y + t.h / 2 - 35, 60, 70]); } }; });
+}
+// tracker bajo una hinca clickeada: el rectángulo que la contiene
+function ramTrkEn(e) { const els = document.elementsFromPoint(e.clientX, e.clientY); const r = els.find((x) => x.dataset && x.dataset.t); return r ? r.dataset.t : null; }
 function ramPerfilSVG(r) {
   const H = r.H; if (!H.length) return '';
   const W = 520, Hh = 180, pad = 28, dMax = H[H.length - 1].d || 1;
@@ -144,7 +182,7 @@ function ramTabla(b, C, PG) {
       <td>${HA[r.t.id] ? `<span class="tpos">✓ ${fechaCorta(HA[r.t.id].f)}</span>` : p ? `${fechaCorta(p.f)} · H${p.maq}` : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
   segBind('#rmS', RAMUI.s, (v) => { RAMUI.s = v; render(false); }); segBind('#rmF', RAMUI.f, (v) => { RAMUI.f = v; render(false); });
   const q = $('#rmQ', b); q.oninput = () => { RAMUI.q = q.value.trim(); clearTimeout(q._t); q._t = setTimeout(() => render(false), 300); };
-  $$('tr[data-t]', b).forEach((tr) => { tr.onclick = () => { RAMUI.sel = tr.dataset.t; RAMUI.tab = 'plano'; render(false); }; });
+  $$('tr[data-t]', b).forEach((tr) => { tr.onclick = () => { RAMUI.sel = tr.dataset.t; RAMUI.tab = 'plano'; const t = window.PLANO.trk.find((x) => x.id === tr.dataset.t); if (t) RAMUI.vb = [t.x + t.w / 2 - 45, t.y + t.h / 2 - 35, 60, 70]; render(false); }; });
 }
 function ramProg(b, C, PG) {
   const P = ramP(), HA = (S.hincado || {}).avance || {};

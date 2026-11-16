@@ -1361,3 +1361,16 @@ body.ro .solo-pc { display: none !important; }
 .rmform label.rmchk input { width: auto; margin-top: 3px; }
 .rmform label.rmchk small { display: block; }
 .rmform label.rmchk { grid-column: 1 / -1; }
+.rmwrap { position: relative; }
+.rmzb { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 4px; }
+.rmzb .btn { width: 32px; padding: 4px 0; font-size: 15px; background: var(--card, #fff); }
+.rmsvg { cursor: grab; user-select: none; }
+.rmsvg.arr { cursor: grabbing; }
+.rmsvg rect { vector-effect: non-scaling-stroke; }
+.rmsvg .rmz1, .rmsvg .rmhl { display: none; }
+.rmsvg.z1 .rmz1 { display: inline; }
+.rmsvg.z2 .rmhl { display: inline; }
+.rmsvg.z1 rect { fill-opacity: .45; }
+.rmtid { font-size: 2.4px; text-anchor: middle; fill: #26323d; font-weight: 600; pointer-events: none; }
+.rmhl { font-size: .62px; fill: #26323d; pointer-events: none; }
+.rmh { stroke: #fff; stroke-width: .08; }
