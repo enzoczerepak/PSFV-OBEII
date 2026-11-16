@@ -415,12 +415,26 @@
       vistos.add(c.vinculo); return true;
     });
     const pats = new Map(cs.filter((c) => c.vinculo).map((c) => [c.vinculo, c]));
+    // PAT de BT por la red real de zanjas (plano de canalización): las zanjas abiertas/cerradas usan su largo; el resto de
+    // la red se reparte entre las zanjas sin abrir, cada tramo una sola vez (los circuitos que van juntos comparten la PAT)
+    const CB = typeof window !== 'undefined' && window.CANAL_BT, patBT = new Map();
+    if (CB && CB.grupos) {
+      const zEst = new Map(state.zanjas.map((z) => [z.id, z.estado || 'no abierta']));
+      const zDe = new Map(), orden = new Map();
+      cs.filter(baseCirc).forEach((c, i) => { if (catDe(c) === 'BT') { zDe.set(c.desde, c.zanjaId); orden.set(c.desde, i); } });
+      CB.grupos.forEach(([L, ks]) => {
+        const zs = ks.map((k) => zDe.get(k)).filter(Boolean);
+        if (!zs.length || zs.some((zid) => zEst.get(zid) !== 'no abierta')) return; // ya cubierto por una zanja abierta
+        const k0 = ks.filter((k) => zDe.has(k)).sort((a, b) => orden.get(a) - orden.get(b))[0], zid = zDe.get(k0);
+        patBT.set(zid, (patBT.get(zid) || 0) + L);
+      });
+    }
     state.zanjas.forEach((z) => {
       const miembros = cs.filter((c) => c.zanjaId === z.id);
       let pt = pats.get(z.id);
       if (!pt) { pt = { id: 'pat-' + z.id, cat: 'PAT', vinculo: z.id, formacion: PAT_SEC[catDe(z)], fases: 1, real: {} }; cs.push(pt); }
       Object.assign(pt, { designacion: 'PAT ' + miembros.map((c) => c.designacion).join(' + '), desde: miembros.map((c) => c.desde).join(' + '),
-        hasta: [...new Set(miembros.map((c) => c.hasta))].join(' / '), cantidad: pt.largoManual > 0 ? pt.largoManual : Number(z.largo) || 0 });
+        hasta: [...new Set(miembros.map((c) => c.hasta))].join(' / '), cantidad: pt.largoManual > 0 ? pt.largoManual : CB && catDe(z) === 'BT' && (z.estado || 'no abierta') === 'no abierta' ? Math.round((patBT.get(z.id) || 0) * 10) / 10 : Number(z.largo) || 0 });
       if (!pt.formacion) pt.formacion = PAT_SEC[catDe(z)];
     });
     state.circuitos = cs;

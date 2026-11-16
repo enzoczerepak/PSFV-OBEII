@@ -43,7 +43,10 @@ async function updObligatoria() {
   if (window.VISOR || !window.api.updEstado) return false;
   if (updObligPend) return updObligPend;
   updObligPend = (async () => {
-    try { if (!UPD) UPD = await window.api.updEstado(); } catch (_) { return false; }
+    // antes de entrar se busca de verdad: Descargas de esta PC y, en los clientes, el servidor (hasta 8 s; si está bajando, se espera)
+    try { UPD = (await Promise.race([window.api.updRevisar ? window.api.updRevisar() : null, new Promise((r) => setTimeout(() => r(null), 8000))])) || (await window.api.updEstado()); }
+    catch (_) { try { UPD = await window.api.updEstado(); } catch (__) { return false; } }
+    updBarra();
     if (!UPD || (!UPD.listo && !UPD.bajando)) return false;
     for (;;) {
       const u = UPD || {};

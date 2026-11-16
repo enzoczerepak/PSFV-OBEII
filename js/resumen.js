@@ -68,8 +68,10 @@ function vCables(el) {
   actions([['Exportar Excel', 'btn', exportExcel], ['Ir a zanjas', 'btn pri', () => go('zanjas')]]);
   const cnt = (cat) => { const cs = R.circuitos.filter((c) => c.cat === cat); return [cs.filter((c) => c.completo).length, cs.length, cs.filter((c) => c.estado === 'listo para tender').length]; };
   let h = `<div class="grid g3 stagger" style="margin-bottom:16px">
-    <div class="card"><h3>Tendido</h3><table class="kt"><tr><th></th><th>Tendidos</th><th>Listos</th></tr>
-      ${catsUso().map((c) => { const [a, b, l] = cnt(c); return `<tr><td>${ctag(c)}<b>${CATN[c]}</b></td><td><span class="mini ok"><div data-w="${pct(a, b)}" style="width:0"></div></span> ${a}/${b}</td><td>${l}</td></tr>`; }).join('')}</table></div>
+    <div class="card"><h3>Tendido</h3><table class="kt"><tr><th></th><th>Tendidos</th><th title="Circuitos con la zanja abierta y el corte asignado, que todavía no se tendieron" style="line-height:1.15">Listos para<br>tender</th></tr>
+      ${catsUso().map((c) => { if (c === 'PAT') { const rs = R.resumen.filter((r) => r.cat === 'PAT'), t = rs.reduce((x, r) => x + (r.tendido || 0), 0), q = rs.reduce((x, r) => x + (r.requerido || 0), 0);
+        return `<tr title="La PAT va una por zanja: en BT se cuenta sobre la red real de zanjas, cada tramo una sola vez"><td>${ctag(c)}<b>${CATN[c]}</b></td><td><span class="mini ok"><div data-w="${pct(t, q)}" style="width:0"></div></span> ${fmt(t)}/${fmt(q)} m</td><td>—</td></tr>`; }
+        const [a, b, l] = cnt(c); return `<tr><td>${ctag(c)}<b>${CATN[c]}</b></td><td><span class="mini ok"><div data-w="${pct(a, b)}" style="width:0"></div></span> ${a}/${b}</td><td>${l}</td></tr>`; }).join('')}</table></div>
     <div class="card"><h3>Zanja realizada</h3>${zanjaCard('BT')}${zanjaCard('MT')}<div class="legend" style="margin-top:6px"><span><i class="c-done"></i>Cerrada</span><span><i class="c-acc"></i>Abierta</span></div></div>
     <div class="card"><h3>Alertas</h3><div class="alerts">${R.alerts.length ? R.alerts.map((a) => `<div class="alert ${a.tipo}">${esc(a.txt)}</div>`).join('') : '<div class="alert ok">Sin observaciones</div>'}</div></div>
   </div><div class="grid g3 stagger" style="margin-bottom:16px"><div class="card"><h3>PAT tendida</h3>${patCard()}</div>`;

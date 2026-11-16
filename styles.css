@@ -1386,3 +1386,4 @@ body.ro .solo-pc { display: none !important; }
 .rmnorte { margin-left: auto; font-weight: 700; }
 .zpct { color: var(--ink); font-weight: 700; }
 .kpi .zpct { font-size: 15px; }
+.kt .mini { width: 46px; } .kt td, .kt th { padding-left: 4px; padding-right: 4px; }
