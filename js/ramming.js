@@ -76,7 +76,7 @@ function ramPrograma() {
 function vRam(el) {
   const P = ramP(), C = ramCalc(), HA = (S.hincado || {}).avance || {};
   if (!window.COTAS_HINCAS) { el.innerHTML = '<div class="card empty"><b>Faltan las cotas de las hincas</b></div>'; return; }
-  actions([['Plano DXF (AutoCAD)', 'btn pri', ramExportDxf], ['Exportar Excel', 'btn', ramExcel], ['PDF por sector', 'btn', ramPdf]]);
+  actions([['Imprimir plano de hincado', 'btn pri', ramImprimir], ['Plano DXF (AutoCAD)', 'btn', ramExportDxf], ['Exportar Excel', 'btn', ramExcel], ['Tabla PDF por sector', 'btn', ramPdf]]);
   const cnt = {}; C.L.forEach((r) => (cnt[r.est] = (cnt[r.est] || 0) + 1));
   const hF = C.L.reduce((a, r) => a + (r.fuera || 0), 0), nH = C.L.reduce((a, r) => a + r.n, 0);
   const PG = ramPrograma();
@@ -313,4 +313,96 @@ function ramDxf() {
 async function ramExportDxf() {
   const p = await window.api.saveBinary(ramDxf(), `Ramming plan ${today()}.dxf`, 'dxf', 'Dibujo DXF (AutoCAD)');
   if (p) toast('Plano DXF exportado: abrilo en AutoCAD y guardalo como DWG', { action: ['Abrir carpeta', () => window.api.showItem ? window.api.showItem(p) : window.api.openPath(p)] });
+}
+
+// ---------- plano de hincado imprimible (por sector, en hojas A3/A4 a escala) ----------
+const RAMPR = { sec: 'all', size: 'A3', esc: 400, color: 'auto', rot: 'auto', hech: true };
+const RAM_X0 = 7393788.009;
+// posición de cada hinca en coordenadas del plano (m, norte arriba), dentro del rectángulo de su tracker
+function ramPilesLocal(t, r) {
+  const ys = r.H.map((h) => h.y), yN = Math.max(...ys), off = (t.h - (yN - Math.min(...ys))) / 2;
+  return r.H.map((h, k) => ({ h, k, x: h.x - RAM_X0, y: t.y + off + (yN - h.y) }));
+}
+const ramCodCorto = (c) => String(c || '').replace(/^26050-/, '').replace(/^MS\d-/, '');
+async function ramImprimir() {
+  const C = ramCalc(), secs = [...new Set(C.L.map((r) => r.t.s))].sort(), hayCod = C.L.some((r) => r.conCod);
+  const pr = modal({
+    title: 'Imprimir plano de hincado',
+    sub: 'Una hoja por sector y zona, a escala, con cada hinca y su rótulo. Sale en PDF para imprimir.',
+    body: `<div class="form">
+      <label>Sector<select id="pS"><option value="all">Todos (un juego de hojas por sector)</option>${secs.map((s) => `<option value="${s}" ${RAMPR.sec === s ? 'selected' : ''}>Sector ${s}</option>`).join('')}</select></label>
+      <label>Hoja<select id="pT"><option value="A3" ${RAMPR.size === 'A3' ? 'selected' : ''}>A3 apaisada</option><option value="A4" ${RAMPR.size === 'A4' ? 'selected' : ''}>A4 apaisada</option></select></label>
+      <label>Escala<select id="pE">${[250, 400, 600].map((e) => `<option value="${e}" ${RAMPR.esc === e ? 'selected' : ''}>1:${e}${e === 250 ? ' · grande, más hojas' : e === 600 ? ' · compacta' : ''}</option>`).join('')}</select></label>
+      <label>Color de cada hinca<select id="pC"><option value="auto">${hayCod ? 'Color Trina' : 'Color Trina (cuando esté la distribución) · hoy: estado'}</option><option value="est" ${RAMPR.color === 'est' ? 'selected' : ''}>Estado del ramming plan</option></select></label>
+      <label>Rótulo de cada hinca<select id="pR"><option value="auto">Código Trina + altura libre</option><option value="cod" ${RAMPR.rot === 'cod' ? 'selected' : ''}>Solo código</option><option value="alt" ${RAMPR.rot === 'alt' ? 'selected' : ''}>Cota de cabeza + altura libre</option></select></label>
+      <label class="rmchk" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="pH" ${RAMPR.hech ? 'checked' : ''} style="width:auto"><span>Tachar con una cruz las hincas de trackers ya hincados</span></label></div>
+      <p class="hint" id="pInf"></p>`,
+    buttons: [['Cancelar', 'btn', () => null], ['Generar PDF', 'btn pri', (m) => ramLeerPr(m)]] });
+  setTimeout(() => { const m = $('#modal .mbox'); if (!m || !$('#pS', m)) return; const upd = () => { const o = ramLeerPr(m); $('#pInf', m).textContent = `Salen ${ramHojas(C, o).length} hojas ${o.size} apaisadas a escala 1:${o.esc}.`; }; $$('select,input', m).forEach((i) => (i.onchange = upd)); upd(); }, 0);
+  const o = await pr; if (!o) return; Object.assign(RAMPR, o); ramPdfPlano(RAMPR);
+}
+function ramLeerPr(m) { return { sec: $('#pS', m).value, size: $('#pT', m).value, esc: Number($('#pE', m).value), color: $('#pC', m).value, rot: $('#pR', m).value, hech: $('#pH', m).checked }; }
+// hojas: filas de trackers (agrupadas por altura) empaquetadas en la altura útil de la hoja, y cortadas en franjas de ancho útil
+function ramHojas(C, o) {
+  const [pw, ph] = o.size === 'A3' ? [420, 297] : [297, 210], esc = o.esc / 1000;
+  const W = (pw - 16) * esc, H = (ph - 16 - 22 - 14) * esc; // márgenes, encabezado y referencias
+  const hojas = [], secs = o.sec === 'all' ? [...new Set(C.L.map((r) => r.t.s))].sort() : [o.sec];
+  secs.forEach((s) => {
+    const T = C.L.filter((r) => r.t.s === s && r.n).map((r) => r.t).sort((a, b) => a.y - b.y);
+    const filas = []; T.forEach((t) => { const f = filas.find((f) => Math.abs(f.y0 - t.y) < 8); if (f) { f.t.push(t); f.y1 = Math.max(f.y1, t.y + t.h); } else filas.push({ y0: t.y, y1: t.y + t.h, t: [t] }); });
+    filas.sort((a, b) => a.y0 - b.y0);
+    const grupos = []; filas.forEach((f) => { const g = grupos[grupos.length - 1]; if (g && Math.max(g.y1, f.y1) - g.y0 + 6 <= H) { g.t.push(...f.t); g.y1 = Math.max(g.y1, f.y1); } else grupos.push({ y0: f.y0, y1: f.y1, t: f.t.slice() }); });
+    grupos.forEach((g) => { const xs = g.t.map((t) => t.x), x0 = Math.min(...xs) - 4, x1 = Math.max(...xs) + 8;
+      for (let x = x0; x < x1; x += W - 2) { const tt = g.t.filter((t) => t.x + t.w / 2 >= x && t.x + t.w / 2 < x + W - 2); if (!tt.length) continue;
+        hojas.push({ s, x0: x, y0: g.y0 - 4, W, H, t: tt.sort((a, b) => a.x - b.x) }); } });
+  });
+  return hojas;
+}
+function ramPdfPlano(o) {
+  const C = ramCalc(), HA = (S.hincado || {}).avance || {}, hojas = ramHojas(C, o), [pw, ph] = o.size === 'A3' ? [420, 297] : [297, 210];
+  const esc = o.esc / 1000;
+  const lado = 1.9, txt = Math.max(0.55, Math.min(1.0, 2.6 * esc));
+  const colEst = (h) => (h.est !== 'ok' ? '#d64545' : h.salto ? '#f0a23b' : '#58b368');
+  const usados = new Map();
+  const pags = hojas.map((p, i) => {
+    let g = '';
+    p.t.forEach((t) => { const r = C.map.get(t.id); const L = ramPilesLocal(t, r), hecho = !!HA[t.id];
+      const top = Math.min(...L.map((q) => q.y)), bot = Math.max(...L.map((q) => q.y));
+      g += `<line x1="${L[0].x}" y1="${top}" x2="${L[0].x}" y2="${bot}" stroke="#d09060" stroke-width="0.12"/>`;
+      g += `<text x="${L[0].x}" y="${top - lado / 2 - txt * 1.9}" font-size="${txt * 1.05}" text-anchor="middle" font-weight="700">${t.id.replace('TRK-', 'TR ')}</text>`;
+      L.forEach(({ h, k, x, y }) => {
+        const kk = h.cod && hcat(h.cod), trina = o.color === 'auto' && kk;
+        const fill = trina ? (HCOL[kk.color] && HCOL[kk.color] !== 'transparent' ? HCOL[kk.color] : '#ffffff') : colEst(h);
+        usados.set(trina ? 'c:' + kk.color + '|' + ramCodCorto(h.cod) : 'e:' + (h.est !== 'ok' ? 'f' : h.salto ? 's' : 'o'), fill);
+        const arriba = o.rot === 'alt' ? h.cab.toFixed(2) : kk ? ramCodCorto(h.cod) : h.motor ? 'MOTOR' : '';
+        const abajo = o.rot === 'cod' ? '' : h.rev.toFixed(2);
+        g += `<rect x="${x - lado / 2}" y="${y - lado / 2}" width="${lado}" height="${lado}" fill="${fill}" stroke="${h.motor ? '#000' : '#555'}" stroke-width="${h.motor ? 0.25 : 0.08}"/>`;
+        if (h.motor && !kk) g += `<text x="${x}" y="${y + txt * 0.36}" font-size="${txt}" text-anchor="middle" font-weight="700" fill="#fff">M</text>`;
+        if (o.hech && hecho) g += `<path d="M${x - lado / 2} ${y - lado / 2}L${x + lado / 2} ${y + lado / 2}M${x + lado / 2} ${y - lado / 2}L${x - lado / 2} ${y + lado / 2}" stroke="#c0392b" stroke-width="0.18"/>`;
+        if (arriba) g += `<text x="${x}" y="${y - lado / 2 - txt * 0.3}" font-size="${txt}" text-anchor="middle"${h.motor ? ' font-weight="700"' : ''}>${esc_(arriba)}</text>`;
+        if (abajo) g += `<text x="${x}" y="${y + lado / 2 + txt * 0.95}" font-size="${txt * 0.9}" text-anchor="middle" fill="${h.est !== 'ok' ? '#c0392b' : '#333'}">${abajo}</text>`;
+      });
+    });
+    return `<section class="rmpg" style="width:${pw}mm;height:${ph}mm">
+      <div class="rmpgh"><div><b>Plano de hincado · Sector ${p.s}</b> · ${esc_(S.nombre || '')}</div><div>Hoja ${i + 1} de ${hojas.length} · escala 1:${o.esc} · ${new Date().toLocaleDateString('es-AR')}</div></div>
+      <svg viewBox="${p.x0} ${p.y0} ${p.W} ${p.H}" style="width:${pw - 16}mm;height:${(ph - 52)}mm" font-family="Arial">${g}
+</svg>
+      <div class="rmpgf">${RAMPR_LEY(o)}<span class="rmnorte">▲ N</span></div></section>`;
+  });
+  function RAMPR_LEY() { return [...usados.entries()].map(([k, c]) => { const t = k.startsWith('c:') ? `${k.slice(2).split('|')[1]} (${k.slice(2).split('|')[0]})` : { 'e:o': 'Dentro de tolerancia', 'e:s': 'Salto con la hinca vecina', 'e:f': 'Fuera de tolerancia' }[k];
+    return `<span><i style="background:${c}"></i>${esc_(t)}</span>`; }).join('') + `<span><i style="background:#fff;border:2px solid #000"></i>Hinca motor${C.L.some((r) => r.conCod) ? ' (M)' : ''}</span>${o.hech ? '<span>✕ Tracker hincado</span>' : ''}<span>Rótulo: ${o.rot === 'alt' ? 'arriba cota de cabeza, abajo altura libre (m)' : o.rot === 'cod' ? 'código Trina · borde grueso = hinca motor' : 'arriba código Trina, abajo altura libre (m) · borde grueso = hinca motor'}</span>`; }
+  const html = `<style>@page { size: ${o.size} landscape; margin: 0 }</style>${pags.join('')}`;
+  ramPrintPaginas(html, `Plano de hincado ${o.sec === 'all' ? 'todos los sectores' : 'sector ' + o.sec} ${today()}.pdf`, o.size);
+}
+const esc_ = (s) => esc(s);
+async function ramPrintPaginas(html, name, size) {
+  const pa = $('#printArea'); pa.innerHTML = html;
+  document.body.classList.add('pr-land', 'imprimiendo', 'pr-plano');
+  await new Promise((r) => requestAnimationFrame(() => r()));
+  document.documentElement.style.background = document.body.style.background = '#fff';
+  const p = await window.api.printPDF(name, { landscape: true, size });
+  document.body.classList.remove('imprimiendo', 'pr-plano');
+  document.documentElement.style.background = document.body.style.background = '';
+  pa.innerHTML = '';
+  if (p) toast('PDF guardado', { action: ['Abrir', () => window.api.openPath(p)] });
 }
