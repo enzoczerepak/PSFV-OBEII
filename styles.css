@@ -1374,3 +1374,4 @@ body.ro .solo-pc { display: none !important; }
 .rmtid { font-size: 2.4px; text-anchor: middle; fill: #26323d; font-weight: 600; pointer-events: none; }
 .rmhl { font-size: .62px; fill: #26323d; pointer-events: none; }
 .rmh { stroke: #fff; stroke-width: .08; }
+.rmform .rmsub { grid-column: 1 / -1; margin: 6px 0 0; font-size: 13px; color: var(--mute); text-transform: uppercase; letter-spacing: .04em; }

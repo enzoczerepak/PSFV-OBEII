@@ -2,17 +2,21 @@
    empotramiento con parámetros configurables, plano de hincado y programa por hincadora.
    Parámetros en S.hincado.ram (se sincronizan con el catálogo, clave 'hc'). */
 const RAM_DEF = {
-  revNom: 1.25,     // altura libre nominal de la cabeza de hinca sobre el terreno (m)
+  revNom: 1.315,    // hinca general (Standard/Damper): altura libre nominal (m), manual Trina
   revMin: 1.00,     // altura libre mínima (despeje del módulo / ajuste) (m)
-  largo: 3.46,      // largo del perfil (m) si no hay código por posición
-  embMin: 2.00,     // empotramiento mínimo (m) si no hay código por posición
+  largo: 3.515,     // hinca general: largo del perfil (m) si no hay código por posición (PW610-1A, suelo N)
+  embMin: 2.00,     // hinca general: empotramiento mínimo (m)
+  drNom: 1.23, drLargo: 3.43, drEmb: 2.00, // hinca motor (Drive): altura libre nominal, largo, empotramiento mínimo (PW614-1A, suelo N)
+  mot52: 7, mot26: 4, // posición de la hinca motor contando de norte a sur (central)
   pendMax: 10,      // pendiente N-S máxima del tracker (%)
   difMax: 0.30,     // diferencia máxima de altura libre entre hincas vecinas (m)
   usarCodigos: true,// si la distribución por posición está completa, usar largo / altura / empotramiento de cada código
   hincadoras: 2, rend: 120, inicio: null, sabado: true, orden: '1,2,3,4,5,6', sentido: 'OE',
 };
 const RAMUI = { tab: 'plano', color: 'estado', sel: null, s: 'all', q: '', f: 'all' };
-const ramP = () => { const H = S.hincado || (S.hincado = {}); H.ram = Object.assign({}, RAM_DEF, H.ram || {}); return H.ram; };
+const ramP = () => { const H = S.hincado || (S.hincado = {}); const r = H.ram || {};
+  if (r.revNom === 1.25 && r.largo === 3.46) { r.revNom = 1.315; r.largo = 3.515; } // valores provisorios anteriores (mezcla motor/general)
+  H.ram = Object.assign({}, RAM_DEF, r); return H.ram; };
 const ramZ = (id) => (window.COTAS_HINCAS && window.COTAS_HINCAS.z[id]) || null;
 
 // ---------- cálculo por tracker ----------
@@ -21,8 +25,11 @@ function ramTracker(t, P) {
   const cods = posDe(t), conCod = P.usarCodigos && cods.length === rp.p.length && cods.every(Boolean);
   // de norte a sur (y decreciente); la distancia se mide desde la primera hinca
   const H = rp.p.map((p, i) => ({ i, x: p[0], y: p[1], z: zs[i], cod: conCod ? cods[i] : '' })).sort((a, b) => b.y - a.y);
-  const y0 = H[0].y; H.forEach((h) => { h.d = y0 - h.y; const k = h.cod && hcat(h.cod);
-    h.nom = k ? k.sobre / 1000 : P.revNom; h.L = k ? k.largo / 1000 : P.largo; h.emin = k ? k.mrl / 1000 : P.embMin; h.rmin = Math.min(P.revMin, h.nom); h.rmax = h.L - h.emin; });
+  const y0 = H[0].y, mot = t.t === '1P26' ? P.mot26 : P.mot52;
+  H.forEach((h, i) => { h.d = y0 - h.y; const k = h.cod && hcat(h.cod);
+    h.motor = k ? /drive/i.test(k.tipo || '') : i + 1 === Number(mot);
+    h.nom = k ? k.sobre / 1000 : h.motor ? P.drNom : P.revNom; h.L = k ? k.largo / 1000 : h.motor ? P.drLargo : P.largo;
+    h.emin = k ? k.mrl / 1000 : h.motor ? P.drEmb : P.embMin; h.rmin = Math.min(P.revMin, h.nom); h.rmax = h.L - h.emin; });
   // recta del terreno (mínimos cuadrados) y pendiente limitada a la máxima
   const n = H.length, md = H.reduce((a, h) => a + h.d, 0) / n, mz = H.reduce((a, h) => a + h.z, 0) / n;
   const sdd = H.reduce((a, h) => a + (h.d - md) ** 2, 0) || 1, pend = H.reduce((a, h) => a + (h.d - md) * (h.z - mz), 0) / sdd;
@@ -118,7 +125,7 @@ function ramHincasSVG(C, HA) {
   return window.PLANO.trk.map((t) => { const r = C.map.get(t.id); if (!r || !r.n) return '';
     const ys = r.H.map((h) => h.y), yN = Math.max(...ys), off = (t.h - (yN - Math.min(...ys))) / 2, hecho = !!HA[t.id];
     return r.H.map((h, k) => { const x = h.x - X0, y = t.y + off + (yN - h.y), c = hecho ? '#7c5cbf' : h.est !== 'ok' ? '#d64545' : h.salto ? '#f0a23b' : '#1f7a46';
-      return `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="0.42" fill="${c}" class="rmh"><title>${t.id} · hinca ${k + 1} · terreno ${fmt(h.z, 2)} m · altura libre ${fmt(h.rev, 2)} m · empotramiento ${fmt(h.emb, 2)} m${h.cod ? ' · ' + h.cod : ''}</title></circle><text x="${(x + 0.7).toFixed(2)}" y="${(y + 0.25).toFixed(2)}" class="rmhl">${k + 1}·${h.rev.toFixed(2)}</text>`; }).join(''); }).join('');
+      return `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="0.42" fill="${c}" class="rmh"><title>${t.id} · hinca ${k + 1}${h.motor ? ' (motor)' : ''} · terreno ${fmt(h.z, 2)} m · altura libre ${fmt(h.rev, 2)} m · empotramiento ${fmt(h.emb, 2)} m${h.cod ? ' · ' + h.cod : ''}</title></circle><text x="${(x + 0.7).toFixed(2)}" y="${(y + 0.25).toFixed(2)}" class="rmhl">${k + 1}${h.motor ? 'M' : ''}·${h.rev.toFixed(2)}</text>`; }).join(''); }).join('');
 }
 function ramZoomBind(b) {
   const svg = $('.rmsvg', b); if (!svg) return; const P = window.PLANO;
@@ -152,9 +159,9 @@ function ramPerfilSVG(r) {
   const terr = H.map((h) => `${X(h.d).toFixed(1)},${Y(h.z).toFixed(1)}`).join(' ');
   return `<svg viewBox="0 0 ${W} ${Hh}" class="rmperf"><polyline points="${pad},${Hh - pad + 6} ${terr} ${W - pad},${Hh - pad + 6}" fill="#efe6d6" stroke="#a0855b" stroke-width="1.5"/>
     <line x1="${X(0)}" y1="${Y(H[0].cab)}" x2="${X(dMax)}" y2="${Y(H[H.length - 1].cab)}" stroke="#1f4e5a" stroke-width="2.5"/>
-    ${H.map((h) => `<line x1="${X(h.d)}" y1="${Y(h.z)}" x2="${X(h.d)}" y2="${Y(h.cab)}" stroke="${h.est === 'ok' ? (h.salto ? '#f0a23b' : '#2f9e5b') : '#d64545'}" stroke-width="3"/><circle cx="${X(h.d)}" cy="${Y(h.cab)}" r="2.6" fill="#1f4e5a"/>`).join('')}
+    ${H.map((h) => `<line x1="${X(h.d)}" y1="${Y(h.z)}" x2="${X(h.d)}" y2="${Y(h.cab)}" stroke="${h.est === 'ok' ? (h.salto ? '#f0a23b' : '#2f9e5b') : '#d64545'}" stroke-width="3"/>${h.motor ? `<rect x="${X(h.d) - 4}" y="${Y(h.cab) - 4}" width="8" height="8" fill="#1f4e5a"/>` : `<circle cx="${X(h.d)}" cy="${Y(h.cab)}" r="2.6" fill="#1f4e5a"/>`}`).join('')}
     <text x="${pad}" y="13" font-size="10" fill="#6b7785">N · ${fmt(H[0].z, 2)} m</text><text x="${W - pad}" y="13" font-size="10" fill="#6b7785" text-anchor="end">S · ${fmt(H[H.length - 1].z, 2)} m</text>
-    <text x="${W / 2}" y="${Hh - 6}" font-size="10" fill="#6b7785" text-anchor="middle">${fmt(dMax, 1)} m · terreno (marrón), cabezas (azul), altura libre por hinca</text></svg>`;
+    <text x="${W / 2}" y="${Hh - 6}" font-size="10" fill="#6b7785" text-anchor="middle">${fmt(dMax, 1)} m · terreno (marrón), cabezas (azul), altura libre por hinca · ■ hinca motor</text></svg>`;
 }
 function ramDetalle(r, PG) {
   const HA = (S.hincado || {}).avance || {}, p = PG.plan.get(r.t.id), e = RAM_EST[r.est] || RAM_EST.sin;
@@ -163,8 +170,8 @@ function ramDetalle(r, PG) {
     <div class="rmkv"><span>Pendiente del terreno <b>${fmt(r.pend, 1)} %</b>${Math.abs(r.pTub - r.pend) > 0.05 ? ` → tubo ${fmt(r.pTub, 1)} %` : ''}</span><span>Ondulación <b>${fmt(r.ond, 2)} m</b></span><span>Altura libre <b>${fmt(r.rmin, 2)}–${fmt(r.rmax, 2)} m</b></span>${Math.abs(r.sh) > 0.005 ? `<span>Línea de cabezas corrida <b>${r.sh > 0 ? '+' : ''}${fmt(r.sh, 2)} m</b></span>` : ''}
       <span>${HA[r.t.id] ? `Hincado el <b>${fechaCorta(HA[r.t.id].f)}</b>` : p ? `Programado <b>${fechaCorta(p.f)}</b> · hincadora ${p.maq}` : ''}</span></div>
     ${ramPerfilSVG(r)}
-    <div class="tblwrap" style="max-height:300px"><table class="tbl rmtb"><thead><tr><th>#</th><th class="n">Dist. (m)</th><th class="n">Terreno (m)</th><th class="n">Cabeza (m)</th><th class="n">Altura libre (m)</th><th class="n">Empotr. (m)</th>${r.conCod ? '<th>Código</th>' : ''}<th></th></tr></thead><tbody>
-    ${r.H.map((h, k) => `<tr class="${h.est !== 'ok' ? 'bad' : h.salto ? 'warn' : ''}"><td>${k + 1}</td><td class="n">${fmt(h.d, 2)}</td><td class="n">${fmt(h.z, 3)}</td><td class="n">${fmt(h.cab, 3)}</td><td class="n"><b>${fmt(h.rev, 3)}</b></td><td class="n">${fmt(h.emb, 2)}</td>${r.conCod ? `<td>${chipH(h.cod, true)}</td>` : ''}<td>${h.est === 'corto' ? '<span class="tneg">perfil corto</span>' : h.est === 'alto' ? '<span class="tneg">terreno alto</span>' : h.salto ? '<span style="color:#b7791f">salto</span>' : '✓'}</td></tr>`).join('')}</tbody></table></div>
+    <div class="tblwrap" style="max-height:300px"><table class="tbl rmtb"><thead><tr><th>#</th><th class="n">Dist. (m)</th><th class="n">Terreno (m)</th><th class="n">Cabeza (m)</th><th class="n">Altura libre (m)</th><th class="n">Empotr. (m)</th><th>Tipo</th>${r.conCod ? '<th>Código</th>' : ''}<th></th></tr></thead><tbody>
+    ${r.H.map((h, k) => `<tr class="${h.est !== 'ok' ? 'bad' : h.salto ? 'warn' : ''}"><td>${k + 1}</td><td class="n">${fmt(h.d, 2)}</td><td class="n">${fmt(h.z, 3)}</td><td class="n">${fmt(h.cab, 3)}</td><td class="n"><b>${fmt(h.rev, 3)}</b></td><td class="n">${fmt(h.emb, 2)}</td><td>${h.motor ? '<b>Motor</b>' : 'General'}</td>${r.conCod ? `<td>${chipH(h.cod, true)}</td>` : ''}<td>${h.est === 'corto' ? '<span class="tneg">perfil corto</span>' : h.est === 'alto' ? '<span class="tneg">terreno alto</span>' : h.salto ? '<span style="color:#b7791f">salto</span>' : '✓'}</td></tr>`).join('')}</tbody></table></div>
     <p class="hint">Hincas de norte a sur. La cabeza sigue una recta (el tubo de torsión). <b>Perfil corto</b>: el terreno está tan bajo que el perfil no llega al empotramiento mínimo. <b>Terreno alto</b>: la altura libre queda por debajo de la mínima.</p>`;
 }
 function ramTabla(b, C, PG) {
@@ -198,13 +205,21 @@ function ramPar(b) {
   const P = ramP(), ro = window.READONLY, cods = Object.keys(S.hincado.matriz || {}).every((k) => matrizOk(k));
   const f = (k, lbl, u, st, help) => `<label title="${esc(help || '')}">${lbl}<span class="rmin"><input type="number" step="${st}" data-k="${k}" value="${P[k]}" ${ro ? 'disabled' : ''}><em>${u}</em></span>${help ? `<small class="muted">${help}</small>` : ''}</label>`;
   b.innerHTML = `<div class="grid g2"><div class="card"><h3>Geometría y tolerancias</h3><div class="form rmform">
-      ${f('revNom', 'Altura libre nominal de la cabeza', 'm', '0.01', 'Altura de la cabeza de hinca sobre el terreno en condición nominal.')}
+      <h4 class="rmsub">Hinca general (Standard / Damper)</h4>
+      ${f('revNom', 'Altura libre nominal', 'm', '0.005', 'Manual Trina: 1,315 m.')}
+      ${f('largo', 'Largo del perfil', 'm', '0.005', 'Ej.: PW610-1A suelo N = 3,515 m.')}
+      ${f('embMin', 'Empotramiento mínimo', 'm', '0.05', 'Altura libre máxima = largo − empotramiento mínimo.')}
+      <h4 class="rmsub">Hinca motor (Drive)</h4>
+      ${f('drNom', 'Altura libre nominal', 'm', '0.005', 'Manual Trina: 1,23–1,26 m (más baja: el motor ocupa esa altura).')}
+      ${f('drLargo', 'Largo del perfil', 'm', '0.005', 'Ej.: PW614-1A suelo N = 3,43 m.')}
+      ${f('drEmb', 'Empotramiento mínimo', 'm', '0.05', '')}
+      ${f('mot52', 'Posición de la hinca motor en 1P52', 'de 13', '1', 'Contando de norte a sur. Central = 7.')}
+      ${f('mot26', 'Posición de la hinca motor en 1P26', 'de 7', '1', 'Contando de norte a sur. Central = 4.')}
+      <h4 class="rmsub">Tolerancias</h4>
       ${f('revMin', 'Altura libre mínima', 'm', '0.01', 'Por debajo de esto el terreno está muy alto (despeje del módulo / ajuste de la cabeza).')}
-      ${f('largo', 'Largo del perfil', 'm', '0.005', 'Se usa cuando no hay código de hinca por posición.')}
-      ${f('embMin', 'Empotramiento mínimo', 'm', '0.05', 'Del estudio geotécnico / Trina. Altura libre máxima = largo − empotramiento mínimo.')}
       ${f('pendMax', 'Pendiente N-S máxima del tracker', '%', '0.5', 'Si el terreno tiene más, el tubo se limita a esta pendiente y el tracker queda para revisar.')}
       ${f('difMax', 'Salto máximo de altura libre entre hincas vecinas', 'm', '0.05', 'Se marca como aviso.')}
-      <label class="rmchk"><input type="checkbox" data-k="usarCodigos" ${P.usarCodigos ? 'checked' : ''} ${ro ? 'disabled' : ''} style="width:auto"><span>Usar largo, altura y empotramiento de cada código de hinca${cods ? '' : '<small class="muted">La distribución por posición todavía no está completa en Catálogo y distribución: mientras tanto se usan los valores de arriba.</small>'}</span></label></div></div>
+      <label class="rmchk"><input type="checkbox" data-k="usarCodigos" ${P.usarCodigos ? 'checked' : ''} ${ro ? 'disabled' : ''} style="width:auto"><span>Usar largo, altura y empotramiento de cada código de hinca (cuando esté cargada la distribución de Trina, reemplaza a los valores de arriba)${cods ? '' : '<small class="muted">La distribución por posición todavía no está completa en Catálogo y distribución: mientras tanto se usan los valores de arriba, motor y general por separado.</small>'}</span></label></div></div>
     <div class="card"><h3>Programa</h3><div class="form rmform">
       ${f('hincadoras', 'Hincadoras trabajando', '', '1')}
       ${f('rend', 'Rendimiento por hincadora', 'hincas/día', '5')}
@@ -221,8 +236,8 @@ function ramPar(b) {
 }
 async function ramExcel() {
   const C = ramCalc(), PG = ramPrograma(), P = ramP(), HA = (S.hincado || {}).avance || {};
-  const a = [['Tracker', 'Frame', 'Sector', 'Tipo', 'Hinca (N→S)', 'X', 'Y', 'Terreno (m)', 'Cabeza (m)', 'Altura libre (m)', 'Empotramiento (m)', 'Código', 'Estado']];
-  C.L.forEach((r) => r.H.forEach((h, k) => a.push([r.t.id, repDe(r.t.id).fr, r.t.s, r.t.t, k + 1, h.x, h.y, +h.z.toFixed(3), +h.cab.toFixed(3), +h.rev.toFixed(3), +h.emb.toFixed(3), h.cod || '', h.est === 'ok' ? (h.salto ? 'salto' : 'ok') : h.est === 'corto' ? 'perfil corto' : 'terreno alto'])));
+  const a = [['Tracker', 'Frame', 'Sector', 'Tipo', 'Hinca (N→S)', 'X', 'Y', 'Terreno (m)', 'Cabeza (m)', 'Altura libre (m)', 'Empotramiento (m)', 'Tipo', 'Código', 'Estado']];
+  C.L.forEach((r) => r.H.forEach((h, k) => a.push([r.t.id, repDe(r.t.id).fr, r.t.s, r.t.t, k + 1, h.x, h.y, +h.z.toFixed(3), +h.cab.toFixed(3), +h.rev.toFixed(3), +h.emb.toFixed(3), h.motor ? 'Motor' : 'General', h.cod || '', h.est === 'ok' ? (h.salto ? 'salto' : 'ok') : h.est === 'corto' ? 'perfil corto' : 'terreno alto'])));
   const t = [['Tracker', 'Sector', 'Tipo', 'Estado', 'Pendiente terreno (%)', 'Pendiente tubo (%)', 'Ondulación (m)', 'Altura libre mín (m)', 'Altura libre máx (m)', 'Corrimiento línea (m)', 'Hincas fuera', 'Hincado', 'Programado', 'Hincadora']];
   C.L.forEach((r) => { const p = PG.plan.get(r.t.id); t.push([r.t.id, r.t.s, r.t.t, (RAM_EST[r.est] || RAM_EST.sin)[0], r.n ? +r.pend.toFixed(2) : '', r.n ? +r.pTub.toFixed(2) : '', r.n ? +r.ond.toFixed(3) : '', r.n ? +r.rmin.toFixed(3) : '', r.n ? +r.rmax.toFixed(3) : '', r.n ? +r.sh.toFixed(3) : '', r.fuera || 0, HA[r.t.id] ? HA[r.t.id].f : '', p ? p.f : '', p ? p.maq : '']); });
   const par = [['Parámetro', 'Valor']].concat(Object.entries(P).map(([k, v]) => [k, v]));
@@ -270,7 +285,7 @@ function ramDxf() {
   g(0, 'TABLE', 2, 'STYLE', 70, 1, 0, 'STYLE', 2, 'STANDARD', 70, 0, 40, 0, 41, 1, 50, 0, 71, 0, 42, 0.2, 3, 'txt', 4, '', 0, 'ENDTAB');
   g(0, 'ENDSEC');
   // bloque HINCA: círculo (color por capa) + atributos para extracción de datos
-  const TAGS = [['TRACKER', 'Tracker'], ['N', 'Hinca N° (norte a sur)'], ['CODIGO', 'Código Trina'], ['COLOR', 'Color Trina'], ['Z_TERRENO', 'Cota terreno (m)'], ['Z_CABEZA', 'Cota cabeza (m)'], ['ALTURA_LIBRE', 'Altura libre (m)'], ['EMPOTRAMIENTO', 'Empotramiento (m)'], ['ESTADO', 'Estado']];
+  const TAGS = [['TRACKER', 'Tracker'], ['N', 'Hinca N° (norte a sur)'], ['TIPO', 'Motor o general'], ['CODIGO', 'Código Trina'], ['COLOR', 'Color Trina'], ['Z_TERRENO', 'Cota terreno (m)'], ['Z_CABEZA', 'Cota cabeza (m)'], ['ALTURA_LIBRE', 'Altura libre (m)'], ['EMPOTRAMIENTO', 'Empotramiento (m)'], ['ESTADO', 'Estado']];
   g(0, 'SECTION', 2, 'BLOCKS', 0, 'BLOCK', 8, '0', 2, 'HINCA', 70, 2, 10, 0, 20, 0, 30, 0, 3, 'HINCA', 0, 'CIRCLE', 8, '0', 62, 0, 10, 0, 20, 0, 30, 0, 40, 0.12);
   TAGS.forEach(([t, p], i) => g(0, 'ATTDEF', 8, '0', 10, 0.3, 20, -0.15 - i * 0.3, 30, 0, 40, 0.2, 1, '', 3, p, 2, t, 70, 1));
   g(0, 'ENDBLK', 8, '0', 0, 'ENDSEC', 0, 'SECTION', 2, 'ENTITIES');
@@ -282,10 +297,10 @@ function ramDxf() {
       const kk = h.cod && hcat(h.cod), est = h.est === 'corto' ? 'Perfil corto' : h.est === 'alto' ? 'Terreno alto' : h.salto ? 'Salto' : 'OK';
       const capa = kk ? 'HINCA-' + String(kk.color || 'SIN-COLOR').toUpperCase().replace(/[^A-Z0-9]+/g, '-') : h.est !== 'ok' ? 'HINCA-FUERA' : h.salto ? 'HINCA-SALTO' : 'HINCA-OK';
       g(0, 'INSERT', 8, capa, 66, 1, 2, 'HINCA', 10, num(h.x), 20, num(h.y), 30, 0);
-      const vals = [r.t.id, k + 1, h.cod || '', kk ? kk.color : '', num(h.z), num(h.cab), num(h.rev), num(h.emb), est];
+      const vals = [r.t.id, k + 1, h.motor ? 'Motor' : 'General', h.cod || '', kk ? kk.color : '', num(h.z), num(h.cab), num(h.rev), num(h.emb), est];
       TAGS.forEach(([t], i) => g(0, 'ATTRIB', 8, capa, 10, num(h.x + 0.3), 20, num(h.y - 0.15 - i * 0.3), 30, 0, 40, 0.2, 1, vals[i], 2, t, 70, 1));
       g(0, 'SEQEND', 8, capa);
-      g(0, 'TEXT', 8, 'RAM-ALTURA-LIBRE', 10, num(h.x + 0.25), 20, num(h.y - 0.1), 30, 0, 40, 0.22, 1, `${k + 1}: ${h.rev.toFixed(2)}${kk ? ' ' + String(h.cod).replace(/^26050-/, '') : ''}`);
+      g(0, 'TEXT', 8, 'RAM-ALTURA-LIBRE', 10, num(h.x + 0.25), 20, num(h.y - 0.1), 30, 0, 40, 0.22, 1, `${k + 1}${h.motor ? 'M' : ''}: ${h.rev.toFixed(2)}${kk ? ' ' + String(h.cod).replace(/^26050-/, '') : ''}`);
       if (h.est !== 'ok') g(0, 'CIRCLE', 8, 'RAM-FUERA', 10, num(h.x), 20, num(h.y), 30, 0, 40, 0.35);
       else if (h.salto) g(0, 'CIRCLE', 8, 'RAM-SALTO', 10, num(h.x), 20, num(h.y), 30, 0, 40, 0.35);
     });
