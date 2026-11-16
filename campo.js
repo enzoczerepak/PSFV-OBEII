@@ -57,7 +57,7 @@
     $('#hSalir').onclick = salir;
     $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
     $('#hNom').textContent = ses.nombre.split(/\s+/).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
-    render(); setInterval(refrescar, 60000); setInterval(vaciarCola, 30000); window.addEventListener('online', vaciarCola); vaciarCola();
+    render(); setInterval(refrescar, 30000); setInterval(vaciarCola, 30000); window.addEventListener('online', vaciarCola); vaciarCola();
   }
   async function refrescar() {
     try { const d = await W.bajar(); if (d.actualizado === (D && D.actualizado)) return; await cargar(d, ses.id, ses.k, ses.nombre); render(); } catch (_) { /* sin red */ }
@@ -116,14 +116,26 @@
     if (t.sinMargen) return `<div class="tolb">${teoB}${m(t.bob ? 'Tope de bobina' : 'Sin margen', 'no pasarse de ' + fm(Math.min(t.L, t.max)) + ' m', 'bad')}</div>${bobTxt(t)}`;
     return `<div class="tolb">${teoB}${m('Seguro hasta', fm(t.seg) + ' m', 'ok')}${m('Riesgo hasta', fm(t.max) + ' m', 'warn')}</div>${bobTxt(t)}`;
   };
+  // tendidos ya cargados por cualquier capataz y todavía sin aprobar en la oficina: 'circuito|fase' → quién
+  // (los de otros llegan con los datos publicados por la PC; los propios, desde lo enviado en este celular)
+  function reportados() {
+    const m = new Map();
+    (S.partes || []).filter((p) => p.tipo === 'tendido' && p.estado === 'pendiente').forEach((p) => (p.fases || []).forEach((f) => m.set(p.circuito + '|' + f.f, p.autor || 'otro capataz')));
+    ls.get(KH, []).filter((p) => p.tipo === 'tendido' && (est(p) === 'cola' || est(p) === 'pend')).forEach((p) => (p.fases || []).forEach((f) => m.set(p.circuito + '|' + f.f, 'vos')));
+    return m;
+  }
   function vPlan(v) {
-    const cat = ui.cat, H = hoy(), modo = ui.modo || 'inv';
-    const enviadosHoy = new Set(ls.get(KH, []).filter((p) => p.tipo === 'tendido' && est(p) !== 'no' && est(p) !== 'ok').flatMap((p) => p.fases.map((f) => p.circuito + '|' + f.f)));
-    const ps = R.piezas.filter((p) => p.cat === cat && p.bobina && (p.estado === 'listo' || (p.estado === 'ejecutado' && p.fecha === H)));
+    const cat = ui.cat, H = hoy(), modo = ui.modo || 'inv', REP = reportados();
+    const enviadosHoy = new Set(REP.keys());
+    const repCat = [...REP.entries()].filter(([k]) => { const c = circ(k.split('|')[0]); return c && c.cat === cat; });
+    // lo ya cargado por alguien desaparece de la lista (hasta que la oficina lo apruebe o lo rechace)
+    const ps = R.piezas.filter((p) => p.cat === cat && p.bobina && ((p.estado === 'listo' && !REP.has(p.cid + '|' + p.fase)) || (p.estado === 'ejecutado' && p.fecha === H)));
     const porB = new Map(); ps.forEach((p) => { if (!porB.has(p.bobina)) porB.set(p.bobina, []); porB.get(p.bobina).push(p); });
     let h = `<div class="chips">${['BT', 'MT', 'PAT', ...(S.circuitos.some((x) => x.cat === 'LA') ? ['LA'] : [])].map((c) => `<button data-c="${c}" class="${c === cat ? 'on' : ''}">${c}</button>`).join('')}
 </div><div class="seg2"><button data-m="inv" class="${modo === 'inv' ? 'on' : ''}">Por inversor</button><button data-m="bob" class="${modo === 'bob' ? 'on' : ''}">Por bobina</button></div>`;
-    if (!porB.size) h += `<div class="card empty"><b>Sin cortes listos en ${cat}</b><br>Los cortes aparecen cuando la oficina abre las zanjas.</div>`;
+    if (repCat.length) { const quien = new Map(); repCat.forEach(([k, a]) => { const c = circ(k.split('|')[0]); const d = destino(c); const x = quien.get(d) || { a, f: [] }; x.f.push(lbl(k.split('|')[1])); quien.set(d, x); });
+      h += `<details class="card repc"><summary>✓ ${quien.size} tendido${quien.size === 1 ? '' : 's'} ya cargado${quien.size === 1 ? '' : 's'}, esperando aprobación</summary>${[...quien.entries()].map(([d, x]) => `<div class="repr"><b>${esc(d)}</b> <span class="muted">${x.f.join(', ')} · ${esc(x.a)}</span></div>`).join('')}</details>`; }
+    if (!porB.size) h += `<div class="card empty"><b>Sin cortes listos en ${cat}</b><br>${repCat.length ? 'Lo listo ya fue cargado: falta que la oficina lo apruebe.' : 'Los cortes aparecen cuando la oficina abre las zanjas.'}</div>`;
     else if (modo === 'inv') {
       // bobinas a llevar hoy
       const bobs = [...porB.entries()].map(([cod, arr]) => [cod, arr.filter((p) => p.estado === 'listo').reduce((a, p) => a + p.len, 0), (R.bobinas.find((x) => x.codigo === cod && x.cat === cat) || {}).saldoActual]).filter((x) => x[1] > 0).sort((a, b) => a[0].localeCompare(b[0], 'es', { numeric: true }));
@@ -167,7 +179,8 @@
     const zanjasAb = R.zlist.filter((z) => z.estado !== 'cerrada' || (z.pat && !z.pat.completo)).sort((a, b) => (a.estado === 'abierta' ? 0 : 1) - (b.estado === 'abierta' ? 0 : 1) || a.titulo.localeCompare(b.titulo, 'es', { numeric: true }));
     const optZ = (sel, f) => zanjasAb.filter(f || (() => true)).map((z) => `<option value="${z.id}" ${z.id === sel ? 'selected' : ''}>${esc(z.titulo)}${z.estado === 'abierta' ? ' · abierta' : z.estado === 'cerrada' ? ' · cerrada' : ''}</option>`).join('');
     if (t === 'tendido') {
-      const cs = R.circuitos.filter((c) => c.cat !== 'PAT' && !c.completo).sort((a, b) => (a.listo === b.listo ? a.cat.localeCompare(b.cat) || a.idx - b.idx : a.listo ? -1 : 1));
+      const REP = reportados();
+      const cs = R.circuitos.filter((c) => c.cat !== 'PAT' && !c.completo && !c.fz.every((f) => (c.fasesInfo[f] || {}).estado === 'ejecutado' || REP.has(c.id + '|' + f))).sort((a, b) => (a.listo === b.listo ? a.cat.localeCompare(b.cat) || a.idx - b.idx : a.listo ? -1 : 1));
       const c = circ(ui.circ) || null;
       h += `<label>Inversor a tender<select id="fC"><option value="">Elegí el inversor / circuito…</option>${cs.map((x) => `<option value="${x.id}" ${c && x.id === c.id ? 'selected' : ''}>${x.listo ? '● ' : ''}${esc(destino(x))}${x.cat === 'BT' ? ' → ' + esc(x.hasta) : ''} · ${esc(x.designacion)}</option>`).join('')}</select></label>`;
       if (c) {
@@ -175,10 +188,10 @@
         h += `<div class="invh"><span class="tag t-${c.cat}">${c.cat}</span><b class="invn">${esc(destino(c))}</b>${c.cat === 'BT' ? `<span class="muted">→ ${esc(c.hasta)}</span>` : ''}</div>${(() => { const ts = c.fz.filter((f) => (c.fasesInfo[f] || {}).estado !== 'ejecutado').map((f) => tolP(c, { fase: f, bobina: (c.fasesInfo[f] || {}).bobina, len: c.lenFase })).filter(Boolean);
           return tolBox(c, c.lenFase, ts.length ? ts.reduce((a, t) => (t.seg < a.seg ? t : a)) : undefined); })()}<div class="sec" style="margin-top:0">Circuito ${esc(c.designacion)} · ${c.seccion} mm²</div>`;
         c.fz.forEach((f) => {
-          const pl = c.fasesInfo[f] || {}, real = pl.estado === 'ejecutado';
-          h += `<div class="fase ${real ? 'off' : ''}" data-f="${f}"><label class="chk"><input type="checkbox" class="fon" ${real ? 'disabled' : 'checked'}><span class="fl">${lbl(f)}</span></label>
+          const pl = c.fasesInfo[f] || {}, rep = REP.get(c.id + '|' + f), real = pl.estado === 'ejecutado' || !!rep;
+          h += `<div class="fase ${real ? 'off' : ''}" data-f="${f}"${rep ? ` title="Ya la cargó ${esc(rep)}: falta aprobar"` : ''}><label class="chk"><input type="checkbox" class="fon" ${real ? 'disabled' : 'checked'}><span class="fl">${lbl(f)}${rep ? ` <small class="muted">(cargada por ${esc(rep)})</small>` : ''}</span></label>
             <select class="fb" ${real ? 'disabled' : ''}>${bobs.map((b) => `<option value="${esc(b.codigo)}" ${b.codigo === pl.bobina ? 'selected' : ''}>${esc(b.codigo)} · ${fmt(b.saldoActual, 0)} m</option>`).join('')}</select>
-            <input type="number" inputmode="numeric" step="1" class="fm" placeholder="${fm(c.lenFase)} m" value="${real ? fm(pl.len) : ''}" ${real ? 'disabled' : ''}></div>`;
+            <input type="number" inputmode="numeric" step="1" class="fm" placeholder="${fm(c.lenFase)} m" value="${pl.estado === 'ejecutado' ? fm(pl.len) : ''}" ${real ? 'disabled' : ''}></div>`;
         });
         h += `<p class="hint">Cargá los metros reales tirados de cada conductor (la bobina propuesta es la del plan). Las fases ya registradas aparecen bloqueadas.</p>`;
       }

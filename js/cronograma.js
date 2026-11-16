@@ -261,7 +261,7 @@ async function revisarBuzon() {
     if (hechos.length) { await window.api.webBuzonBorrar(hechos); publicarWeb(false); }
   } catch (_) { /* reintenta */ } finally { buzonBusy = false; }
 }
-setInterval(revisarBuzon, 60000); setTimeout(revisarBuzon, 15000);
+setInterval(revisarBuzon, 30000); setTimeout(revisarBuzon, 15000);
 async function exportCrono() {
   const C = cronoCalc();
   const p = await window.api.saveBinary(IO.exportCrono(C, S.cronoMeta || {}), `Cronograma ${today()}.xlsx`, 'xlsx', 'Excel');

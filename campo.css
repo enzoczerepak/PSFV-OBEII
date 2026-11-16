@@ -116,3 +116,6 @@ nav#tabs button.on { color: var(--acc); }
 .cvel.ok { background: #e3f6ee; color: #1f9d6b; } .cvel.cur { background: #fff4d9; }
 .cvel.sel { border-color: var(--acc); box-shadow: 0 0 0 2px var(--acc) inset; background: #e6f6f6; }
 .cvsel { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .cvsel .b { padding: 9px; font-size: 14px; }
+.repc { padding: 10px 14px; background: #eef7f0; border-color: #cfe9d6; }
+.repc summary { cursor: pointer; font-weight: 700; font-size: 14px; color: #1f7a4d; }
+.repr { padding: 5px 0; border-top: 1px solid #d8eedf; font-size: 14px; } .repr:first-of-type { margin-top: 6px; }
