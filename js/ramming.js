@@ -215,9 +215,22 @@ function ramDxf() {
   const lay = new Map([['RAM-TRACKER', 8], ['RAM-TRACKER-ID', 7], ['RAM-ALTURA-LIBRE', 4], ['RAM-FUERA', 1], ['RAM-SALTO', 30], ['RAM-HINCADO', 200],
     ['HINCA-OK', 3], ['HINCA-FUERA', 1], ['HINCA-SALTO', 30], ['HINCA-SIN-CODIGO', 9]]);
   C.L.forEach((r) => r.H.forEach((h) => { const k = h.cod && hcat(h.cod); if (k) lay.set('HINCA-' + String(k.color || 'SIN-COLOR').toUpperCase().replace(/[^A-Z0-9]+/g, '-'), RAM_ACI[k.color] || 7); }));
-  g(0, 'SECTION', 2, 'HEADER', 9, '$ACADVER', 1, 'AC1009', 9, '$DWGCODEPAGE', 3, 'ANSI_1252', 0, 'ENDSEC');
-  g(0, 'SECTION', 2, 'TABLES', 0, 'TABLE', 2, 'LAYER', 70, lay.size + 1, 0, 'LAYER', 2, '0', 70, 0, 62, 7, 6, 'CONTINUOUS');
-  lay.forEach((c, n) => g(0, 'LAYER', 2, n, 70, 0, 62, c, 6, 'CONTINUOUS')); g(0, 'ENDTAB', 0, 'ENDSEC');
+  // extensión del dibujo, para que AutoCAD abra centrado en el parque y no en el origen
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  C.L.forEach((r) => r.H.forEach((h) => { x0 = Math.min(x0, h.x); y0 = Math.min(y0, h.y); x1 = Math.max(x1, h.x); y1 = Math.max(y1, h.y); }));
+  x0 -= 20; y0 -= 20; x1 += 20; y1 += 20;
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, alto = Math.max(y1 - y0, (x1 - x0) / 1.6) * 1.05;
+  g(0, 'SECTION', 2, 'HEADER', 9, '$ACADVER', 1, 'AC1009', 9, '$DWGCODEPAGE', 3, 'ANSI_1252', 9, '$INSBASE', 10, 0, 20, 0, 30, 0,
+    9, '$EXTMIN', 10, num(x0), 20, num(y0), 30, 0, 9, '$EXTMAX', 10, num(x1), 20, num(y1), 30, 0,
+    9, '$LIMMIN', 10, num(x0), 20, num(y0), 9, '$LIMMAX', 10, num(x1), 20, num(y1), 9, '$TEXTSTYLE', 7, 'STANDARD', 9, '$CLAYER', 8, '0', 0, 'ENDSEC');
+  g(0, 'SECTION', 2, 'TABLES');
+  g(0, 'TABLE', 2, 'VPORT', 70, 1, 0, 'VPORT', 2, '*ACTIVE', 70, 0, 10, 0, 20, 0, 11, 1, 21, 1, 12, num(cx), 22, num(cy), 13, 0, 23, 0, 14, 1, 24, 1, 15, 0, 25, 0,
+    16, 0, 26, 0, 36, 1, 17, 0, 27, 0, 37, 0, 40, num(alto), 41, 1.6, 42, 50, 43, 0, 44, 0, 50, 0, 51, 0, 71, 0, 72, 1000, 73, 1, 74, 3, 75, 0, 76, 0, 77, 0, 78, 0, 0, 'ENDTAB');
+  g(0, 'TABLE', 2, 'LTYPE', 70, 1, 0, 'LTYPE', 2, 'CONTINUOUS', 70, 0, 3, 'Solid line', 72, 65, 73, 0, 40, 0, 0, 'ENDTAB');
+  g(0, 'TABLE', 2, 'LAYER', 70, lay.size + 1, 0, 'LAYER', 2, '0', 70, 0, 62, 7, 6, 'CONTINUOUS');
+  lay.forEach((c, n) => g(0, 'LAYER', 2, n, 70, 0, 62, c, 6, 'CONTINUOUS')); g(0, 'ENDTAB');
+  g(0, 'TABLE', 2, 'STYLE', 70, 1, 0, 'STYLE', 2, 'STANDARD', 70, 0, 40, 0, 41, 1, 50, 0, 71, 0, 42, 0.2, 3, 'txt', 4, '', 0, 'ENDTAB');
+  g(0, 'ENDSEC');
   // bloque HINCA: círculo (color por capa) + atributos para extracción de datos
   const TAGS = [['TRACKER', 'Tracker'], ['N', 'Hinca N° (norte a sur)'], ['CODIGO', 'Código Trina'], ['COLOR', 'Color Trina'], ['Z_TERRENO', 'Cota terreno (m)'], ['Z_CABEZA', 'Cota cabeza (m)'], ['ALTURA_LIBRE', 'Altura libre (m)'], ['EMPOTRAMIENTO', 'Empotramiento (m)'], ['ESTADO', 'Estado']];
   g(0, 'SECTION', 2, 'BLOCKS', 0, 'BLOCK', 8, '0', 2, 'HINCA', 70, 2, 10, 0, 20, 0, 30, 0, 3, 'HINCA', 0, 'CIRCLE', 8, '0', 62, 0, 10, 0, 20, 0, 30, 0, 40, 0.12);
