@@ -1387,3 +1387,5 @@ body.ro .solo-pc { display: none !important; }
 .zpct { color: var(--ink); font-weight: 700; }
 .kpi .zpct { font-size: 15px; }
 .kt .mini { width: 46px; } .kt td, .kt th { padding-left: 4px; padding-right: 4px; }
+.hc2 { display: inline-flex; flex-direction: column; width: 10px; height: 12px; border: 1px solid #8a93a0; border-radius: 2px; overflow: hidden; vertical-align: -2px; margin-right: 4px; }
+.hc2 i { flex: 1; display: block; }

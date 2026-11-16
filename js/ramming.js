@@ -92,9 +92,11 @@ function vRam(el) {
   const b = $('#rmB', el);
   ({ plano: ramPlano, trk: ramTabla, prog: ramProg, par: ramPar })[RAMUI.tab](b, C, PG);
 }
+const ramDosCol = (k) => { const t = HCOL[hColSup(k)] || '#fff', b = HCOL[k.color] && HCOL[k.color] !== 'transparent' ? HCOL[k.color] : '#fff';
+  return `<svg viewBox="0 0 10 10" width="12" height="12" style="vertical-align:-2px;margin-right:4px"><rect x=".5" y=".5" width="9" height="9" fill="#fff" stroke="#666"/><path d="M.5 .5H9.5L5 5Z" fill="${t}" stroke="#888" stroke-width=".4"/><path d="M.5 9.5H9.5L5 5Z" fill="${b}" stroke="#888" stroke-width=".4"/></svg>`; };
 function ramLeyTrina(C) {
-  const m = new Map(); C.L.forEach((r) => r.H.forEach((h) => { const k = h.cod && hcat(h.cod); if (k) m.set(ramCodCorto(h.cod), HCOL[k.color] || '#fff'); }));
-  return m.size ? [...m.entries()].sort().map(([c, col]) => `<span><i style="background:${col};border:1px solid #888"></i>${esc(c)}</span>`).join('')
+  const m = new Map(); C.L.forEach((r) => r.H.forEach((h) => { const k = h.cod && hcat(h.cod); if (k) m.set(ramCodCorto(h.cod), k); }));
+  return m.size ? '<span class="muted">Triángulo de arriba: color de la cabeza · de abajo: color de la punta ·</span>' + [...m.entries()].sort().map(([c, k]) => `<span title="${esc(hColTxt(k))}">${ramDosCol(k)}${esc(c)}</span>`).join('')
     : '<span><b>Sin distribución de Trina cargada:</b> las hincas se pintan por estado (<i style="background:#58b368"></i>bien <i style="background:#f0a23b"></i>salto <i style="background:#d64545"></i>fuera) hasta que cargues los códigos por posición en Catálogo y distribución.</span>';
 }
 function ramColor(r, PG, HA) {
@@ -133,11 +135,17 @@ const RAM_LADO = 1.9;
 const ramColEst = (h) => (h.est !== 'ok' ? '#d64545' : h.salto ? '#f0a23b' : '#58b368');
 function ramPilaSVG(h, x, y, o, hecho, txt) {
   const kk = h.cod && hcat(h.cod), trina = o.color !== 'est' && kk, L = RAM_LADO, a = L / 2;
-  const fill = trina ? (HCOL[kk.color] && HCOL[kk.color] !== 'transparent' ? HCOL[kk.color] : '#ffffff') : ramColEst(h);
+  const hx = (c) => (HCOL[c] && HCOL[c] !== 'transparent' ? HCOL[c] : '#ffffff');
+  const fill = trina ? hx(kk.color) : ramColEst(h), sup = trina ? hx(hColSup(kk)) : null;
   const arriba = o.rot === 'alt' ? h.cab.toFixed(2) : kk ? ramCodCorto(h.cod) : h.motor ? 'MOTOR' : '';
   const abajo = o.rot === 'cod' ? '' : h.rev.toFixed(2);
-  let g = `<rect x="${(x - a).toFixed(2)}" y="${(y - a).toFixed(2)}" width="${L}" height="${L}" fill="${fill}" stroke="${h.motor ? '#000' : '#555'}" stroke-width="${h.motor ? 0.25 : 0.08}" class="rmh"/>`;
-  if (h.motor && !kk) g += `<text x="${x}" y="${(y + txt * 0.36).toFixed(2)}" font-size="${txt}" text-anchor="middle" font-weight="700" fill="#fff" class="rmhm">M</text>`;
+  // color Trina: cuadrado con triángulo superior (color de la cabeza) e inferior (color de la punta), como el DXF
+  const stroke = `stroke="${h.motor ? '#000' : '#555'}" stroke-width="${h.motor ? 0.25 : 0.08}"`;
+  let g = trina ? `<rect x="${(x - a).toFixed(2)}" y="${(y - a).toFixed(2)}" width="${L}" height="${L}" fill="#fff" ${stroke} class="rmh"/>`
+      + `<path d="M${(x - a).toFixed(2)} ${(y - a).toFixed(2)}H${(x + a).toFixed(2)}L${x.toFixed(2)} ${y.toFixed(2)}Z" fill="${sup}" stroke="#777" stroke-width="0.04"/>`
+      + `<path d="M${(x - a).toFixed(2)} ${(y + a).toFixed(2)}H${(x + a).toFixed(2)}L${x.toFixed(2)} ${y.toFixed(2)}Z" fill="${fill}" stroke="#777" stroke-width="0.04"/>`
+      + `<rect x="${(x - a).toFixed(2)}" y="${(y - a).toFixed(2)}" width="${L}" height="${L}" fill="none" ${stroke}/>`
+    : `<rect x="${(x - a).toFixed(2)}" y="${(y - a).toFixed(2)}" width="${L}" height="${L}" fill="${fill}" ${stroke} class="rmh"/>`;
   if (hecho) g += `<path d="M${x - a} ${y - a}L${x + a} ${y + a}M${x + a} ${y - a}L${x - a} ${y + a}" stroke="#c0392b" stroke-width="0.18" class="rmhm"/>`;
   if (arriba) g += `<text x="${x}" y="${(y - a - txt * 0.3).toFixed(2)}" font-size="${txt}" text-anchor="middle"${h.motor ? ' font-weight="700"' : ''} class="rmhl">${esc(arriba)}</text>`;
   if (abajo) g += `<text x="${x}" y="${(y + a + txt * 0.95).toFixed(2)}" font-size="${(txt * 0.9).toFixed(2)}" text-anchor="middle" fill="${h.est !== 'ok' ? '#c0392b' : '#333'}" class="rmhl">${abajo}</text>`;
@@ -258,8 +266,8 @@ function ramPar(b) {
 }
 async function ramExcel() {
   const C = ramCalc(), PG = ramPrograma(), P = ramP(), HA = (S.hincado || {}).avance || {};
-  const a = [['Tracker', 'Frame', 'Sector', 'Tipo', 'Hinca (N→S)', 'X', 'Y', 'Terreno (m)', 'Cabeza (m)', 'Altura libre (m)', 'Empotramiento (m)', 'Tipo', 'Código', 'Estado']];
-  C.L.forEach((r) => r.H.forEach((h, k) => a.push([r.t.id, repDe(r.t.id).fr, r.t.s, r.t.t, k + 1, h.x, h.y, +h.z.toFixed(3), +h.cab.toFixed(3), +h.rev.toFixed(3), +h.emb.toFixed(3), h.motor ? 'Motor' : 'General', h.cod || '', h.est === 'ok' ? (h.salto ? 'salto' : 'ok') : h.est === 'corto' ? 'perfil corto' : 'terreno alto'])));
+  const a = [['Tracker', 'Frame', 'Sector', 'Tipo', 'Hinca (N→S)', 'X', 'Y', 'Terreno (m)', 'Cabeza (m)', 'Altura libre (m)', 'Empotramiento (m)', 'Tipo', 'Código', 'Color arriba', 'Color abajo', 'Estado']];
+  C.L.forEach((r) => r.H.forEach((h, k) => a.push([r.t.id, repDe(r.t.id).fr, r.t.s, r.t.t, k + 1, h.x, h.y, +h.z.toFixed(3), +h.cab.toFixed(3), +h.rev.toFixed(3), +h.emb.toFixed(3), h.motor ? 'Motor' : 'General', h.cod || '', h.cod && hcat(h.cod) ? hColSup(hcat(h.cod)) || 'sin color' : '', h.cod && hcat(h.cod) ? hcat(h.cod).color : '', h.est === 'ok' ? (h.salto ? 'salto' : 'ok') : h.est === 'corto' ? 'perfil corto' : 'terreno alto'])));
   const t = [['Tracker', 'Sector', 'Tipo', 'Estado', 'Pendiente terreno (%)', 'Pendiente tubo (%)', 'Ondulación (m)', 'Altura libre mín (m)', 'Altura libre máx (m)', 'Corrimiento línea (m)', 'Hincas fuera', 'Hincado', 'Programado', 'Hincadora']];
   C.L.forEach((r) => { const p = PG.plan.get(r.t.id); t.push([r.t.id, r.t.s, r.t.t, (RAM_EST[r.est] || RAM_EST.sin)[0], r.n ? +r.pend.toFixed(2) : '', r.n ? +r.pTub.toFixed(2) : '', r.n ? +r.ond.toFixed(3) : '', r.n ? +r.rmin.toFixed(3) : '', r.n ? +r.rmax.toFixed(3) : '', r.n ? +r.sh.toFixed(3) : '', r.fuera || 0, HA[r.t.id] ? HA[r.t.id].f : '', p ? p.f : '', p ? p.maq : '']); });
   const par = [['Parámetro', 'Valor']].concat(Object.entries(P).map(([k, v]) => [k, v]));
@@ -282,14 +290,16 @@ function ramPdf() {
 }
 
 // ---------- DXF (R12, abre en AutoCAD y se guarda como DWG). Coordenadas reales del replanteo: se superpone al layout ----------
-const RAM_ACI = { Rojo: 1, Azul: 5, Verde: 3, Violeta: 200, Magenta: 6, Negro: 250, Gris: 8, Blanco: 7, 'Sin marca': 9 };
+const RAM_ACI = { Rojo: 1, Azul: 5, Verde: 3, Violeta: 202, Magenta: 6, Negro: 250, Gris: 8, Blanco: 7, 'Sin marca': 9 };
 function ramDxf() {
   const C = ramCalc(), HA = (S.hincado || {}).avance || {}, P = ramP(), o = [];
   const g = (...kv) => { for (let i = 0; i < kv.length; i += 2) o.push(String(kv[i]), String(kv[i + 1])); };
   const num = (v) => (Math.round(v * 1000) / 1000).toFixed(3);
   const lay = new Map([['RAM-TRACKER', 8], ['RAM-TRACKER-ID', 7], ['RAM-ALTURA-LIBRE', 4], ['RAM-FUERA', 1], ['RAM-SALTO', 30], ['RAM-HINCADO', 200],
     ['HINCA-OK', 3], ['HINCA-FUERA', 1], ['HINCA-SALTO', 30], ['HINCA-SIN-CODIGO', 9]]);
-  C.L.forEach((r) => r.H.forEach((h) => { const k = h.cod && hcat(h.cod); if (k) lay.set('HINCA-' + String(k.color || 'SIN-COLOR').toUpperCase().replace(/[^A-Z0-9]+/g, '-'), RAM_ACI[k.color] || 7); }));
+  const capaCod = (c) => 'HINCA-' + ramCodCorto(c).toUpperCase().replace(/[^A-Z0-9]+/g, '-');
+  C.L.forEach((r) => r.H.forEach((h) => { const k = h.cod && hcat(h.cod); if (k) lay.set(capaCod(h.cod), 7); }));
+  lay.set('HINCA-MOTOR', 7); lay.set('HINCA-CODIGO', 7);
   // extensión del dibujo, para que AutoCAD abra centrado en el parque y no en el origen
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   C.L.forEach((r) => r.H.forEach((h) => { x0 = Math.min(x0, h.x); y0 = Math.min(y0, h.y); x1 = Math.max(x1, h.x); y1 = Math.max(y1, h.y); }));
@@ -307,24 +317,33 @@ function ramDxf() {
   g(0, 'TABLE', 2, 'STYLE', 70, 1, 0, 'STYLE', 2, 'STANDARD', 70, 0, 40, 0, 41, 1, 50, 0, 71, 0, 42, 0.2, 3, 'txt', 4, '', 0, 'ENDTAB');
   g(0, 'ENDSEC');
   // bloque HINCA: círculo (color por capa) + atributos para extracción de datos
-  const TAGS = [['TRACKER', 'Tracker'], ['N', 'Hinca N° (norte a sur)'], ['TIPO', 'Motor o general'], ['CODIGO', 'Código Trina'], ['COLOR', 'Color Trina'], ['Z_TERRENO', 'Cota terreno (m)'], ['Z_CABEZA', 'Cota cabeza (m)'], ['ALTURA_LIBRE', 'Altura libre (m)'], ['EMPOTRAMIENTO', 'Empotramiento (m)'], ['ESTADO', 'Estado']];
-  g(0, 'SECTION', 2, 'BLOCKS', 0, 'BLOCK', 8, '0', 2, 'HINCA', 70, 2, 10, 0, 20, 0, 30, 0, 3, 'HINCA', 0, 'CIRCLE', 8, '0', 62, 0, 10, 0, 20, 0, 30, 0, 40, 0.12);
+  const TAGS = [['TRACKER', 'Tracker'], ['N', 'Hinca N° (norte a sur)'], ['TIPO', 'Motor o general'], ['CODIGO', 'Código Trina'], ['COLOR_ARRIBA', 'Color cabeza'], ['COLOR', 'Color punta'], ['Z_TERRENO', 'Cota terreno (m)'], ['Z_CABEZA', 'Cota cabeza (m)'], ['ALTURA_LIBRE', 'Altura libre (m)'], ['EMPOTRAMIENTO', 'Empotramiento (m)'], ['ESTADO', 'Estado']];
+  g(0, 'SECTION', 2, 'BLOCKS', 0, 'BLOCK', 8, '0', 2, 'HINCA', 70, 2, 10, 0, 20, 0, 30, 0, 3, 'HINCA', 0, 'POINT', 8, '0', 62, 0, 10, 0, 20, 0, 30, 0);
   TAGS.forEach(([t, p], i) => g(0, 'ATTDEF', 8, '0', 10, 0.3, 20, -0.15 - i * 0.3, 30, 0, 40, 0.2, 1, '', 3, p, 2, t, 70, 1));
   g(0, 'ENDBLK', 8, '0', 0, 'ENDSEC', 0, 'SECTION', 2, 'ENTITIES');
   C.L.forEach((r) => {
     if (!r.n) return; const H = r.H, a = H[0], z = H[H.length - 1], hecho = !!HA[r.t.id];
     g(0, 'LINE', 8, hecho ? 'RAM-HINCADO' : 'RAM-TRACKER', 10, num(a.x), 20, num(a.y), 30, 0, 11, num(z.x), 21, num(z.y), 31, 0);
-    g(0, 'TEXT', 8, 'RAM-TRACKER-ID', 10, num(a.x), 20, num(a.y + 1.2), 30, 0, 40, 0.8, 1, r.t.id, 72, 1, 11, num(a.x), 21, num(a.y + 1.2), 31, 0);
+    g(0, 'TEXT', 8, 'RAM-TRACKER-ID', 10, num(a.x), 20, num(a.y + 2.3), 30, 0, 40, 0.8, 1, r.t.id, 72, 1, 11, num(a.x), 21, num(a.y + 2.3), 31, 0);
     H.forEach((h, k) => {
       const kk = h.cod && hcat(h.cod), est = h.est === 'corto' ? 'Perfil corto' : h.est === 'alto' ? 'Terreno alto' : h.salto ? 'Salto' : 'OK';
-      const capa = kk ? 'HINCA-' + String(kk.color || 'SIN-COLOR').toUpperCase().replace(/[^A-Z0-9]+/g, '-') : h.est !== 'ok' ? 'HINCA-FUERA' : h.salto ? 'HINCA-SALTO' : 'HINCA-OK';
+      const capa = kk ? capaCod(h.cod) : h.est !== 'ok' ? 'HINCA-FUERA' : h.salto ? 'HINCA-SALTO' : 'HINCA-OK';
+      // moño: cuadrado con triángulo superior (color de la cabeza) e inferior (color de la punta); norte arriba (+Y)
+      const A = RAM_LADO / 2, X = h.x, Y = h.y, P = (dx, dy) => [num(X + dx), num(Y + dy)];
+      const tri = (sg, col) => { const [ax, ay] = P(-A, sg * A), [bx, by] = P(A, sg * A), [cx, cy] = P(0, 0);
+        if (col && RAM_ACI[col] && col !== 'Blanco' && col !== 'Sin marca') g(0, 'SOLID', 8, capa, 62, RAM_ACI[col], 10, ax, 20, ay, 30, 0, 11, bx, 21, by, 31, 0, 12, cx, 22, cy, 32, 0, 13, cx, 23, cy, 33, 0);
+        [[ax, ay, bx, by], [bx, by, cx, cy], [cx, cy, ax, ay]].forEach(([x1, y1, x2, y2]) => g(0, 'LINE', 8, capa, 62, 8, 10, x1, 20, y1, 30, 0, 11, x2, 21, y2, 31, 0)); };
+      if (kk) { tri(1, hColSup(kk)); tri(-1, kk.color); }
+      const sq = (d, ly) => { const c = [P(-d, -d), P(d, -d), P(d, d), P(-d, d)]; c.forEach((p, i) => { const q = c[(i + 1) % 4]; g(0, 'LINE', 8, ly, 10, p[0], 20, p[1], 30, 0, 11, q[0], 21, q[1], 31, 0); }); };
+      sq(A, capa); if (h.motor) { sq(A + 0.08, 'HINCA-MOTOR'); sq(A + 0.16, 'HINCA-MOTOR'); }
+      if (kk) g(0, 'TEXT', 8, 'HINCA-CODIGO', 10, num(X), 20, num(Y + A + 0.25), 30, 0, 40, 0.5, 1, ramCodCorto(h.cod), 72, 1, 11, num(X), 21, num(Y + A + 0.25), 31, 0);
       g(0, 'INSERT', 8, capa, 66, 1, 2, 'HINCA', 10, num(h.x), 20, num(h.y), 30, 0);
-      const vals = [r.t.id, k + 1, h.motor ? 'Motor' : 'General', h.cod || '', kk ? kk.color : '', num(h.z), num(h.cab), num(h.rev), num(h.emb), est];
+      const vals = [r.t.id, k + 1, h.motor ? 'Motor' : 'General', h.cod || '', kk ? hColSup(kk) || 'sin color' : '', kk ? kk.color : '', num(h.z), num(h.cab), num(h.rev), num(h.emb), est];
       TAGS.forEach(([t], i) => g(0, 'ATTRIB', 8, capa, 10, num(h.x + 0.3), 20, num(h.y - 0.15 - i * 0.3), 30, 0, 40, 0.2, 1, vals[i], 2, t, 70, 1));
       g(0, 'SEQEND', 8, capa);
-      g(0, 'TEXT', 8, 'RAM-ALTURA-LIBRE', 10, num(h.x + 0.25), 20, num(h.y - 0.1), 30, 0, 40, 0.22, 1, `${k + 1}${h.motor ? 'M' : ''}: ${h.rev.toFixed(2)}${kk ? ' ' + String(h.cod).replace(/^26050-/, '') : ''}`);
-      if (h.est !== 'ok') g(0, 'CIRCLE', 8, 'RAM-FUERA', 10, num(h.x), 20, num(h.y), 30, 0, 40, 0.35);
-      else if (h.salto) g(0, 'CIRCLE', 8, 'RAM-SALTO', 10, num(h.x), 20, num(h.y), 30, 0, 40, 0.35);
+      g(0, 'TEXT', 8, 'RAM-ALTURA-LIBRE', 10, num(X), 20, num(Y - A - 0.6), 30, 0, 40, 0.4, 1, `${k + 1}${h.motor ? 'M' : ''} · ${h.rev.toFixed(2)}`, 72, 1, 11, num(X), 21, num(Y - A - 0.6), 31, 0);
+      if (h.est !== 'ok') g(0, 'CIRCLE', 8, 'RAM-FUERA', 10, num(X), 20, num(Y), 30, 0, 40, A * 1.6);
+      else if (h.salto) g(0, 'CIRCLE', 8, 'RAM-SALTO', 10, num(X), 20, num(Y), 30, 0, 40, A * 1.6);
     });
   });
   g(0, 'ENDSEC', 0, 'EOF');
@@ -393,7 +412,7 @@ function ramPdfPlano(o) {
       g += `<text x="${L[0].x}" y="${top - lado / 2 - txt * 1.9}" font-size="${txt * 1.05}" text-anchor="middle" font-weight="700">${t.id.replace('TRK-', 'TR ')}</text>`;
       L.forEach(({ h, x, y }) => {
         const kk = h.cod && hcat(h.cod), trina = o.color === 'auto' && kk;
-        usados.set(trina ? 'c:' + kk.color + '|' + ramCodCorto(h.cod) : 'e:' + (h.est !== 'ok' ? 'f' : h.salto ? 's' : 'o'), trina ? (HCOL[kk.color] && HCOL[kk.color] !== 'transparent' ? HCOL[kk.color] : '#ffffff') : ramColEst(h));
+        usados.set(trina ? 'c:' + ramCodCorto(h.cod) : 'e:' + (h.est !== 'ok' ? 'f' : h.salto ? 's' : 'o'), trina ? kk : ramColEst(h));
         g += ramPilaSVG(h, x, y, o, o.hech && hecho, txt);
       });
     });
@@ -403,8 +422,8 @@ function ramPdfPlano(o) {
 </svg>
       <div class="rmpgf">${RAMPR_LEY(o)}<span class="rmnorte">▲ N</span></div></section>`;
   });
-  function RAMPR_LEY() { return [...usados.entries()].map(([k, c]) => { const t = k.startsWith('c:') ? `${k.slice(2).split('|')[1]} (${k.slice(2).split('|')[0]})` : { 'e:o': 'Dentro de tolerancia', 'e:s': 'Salto con la hinca vecina', 'e:f': 'Fuera de tolerancia' }[k];
-    return `<span><i style="background:${c}"></i>${esc_(t)}</span>`; }).join('') + `<span><i style="background:#fff;border:2px solid #000"></i>Hinca motor${C.L.some((r) => r.conCod) ? ' (M)' : ''}</span>${o.hech ? '<span>✕ Tracker hincado</span>' : ''}<span>Rótulo: ${o.rot === 'alt' ? 'arriba cota de cabeza, abajo altura libre (m)' : o.rot === 'cod' ? 'código Trina · borde grueso = hinca motor' : 'arriba código Trina, abajo altura libre (m) · borde grueso = hinca motor'}</span>`; }
+  function RAMPR_LEY() { return [...usados.entries()].map(([k, c]) => k.startsWith('c:') ? `<span>${ramDosCol(c)}${esc_(k.slice(2))} (arriba ${esc_(hColSup(c) || 'sin color')}, abajo ${esc_(c.color)})</span>`
+    : `<span><i style="background:${c}"></i>${esc_({ 'e:o': 'Dentro de tolerancia', 'e:s': 'Salto con la hinca vecina', 'e:f': 'Fuera de tolerancia' }[k])}</span>`).join('') + `<span><i style="background:#fff;border:2px solid #000"></i>Hinca motor${C.L.some((r) => r.conCod) ? ' (M)' : ''}</span>${o.hech ? '<span>✕ Tracker hincado</span>' : ''}<span>Rótulo: ${o.rot === 'alt' ? 'arriba cota de cabeza, abajo altura libre (m)' : o.rot === 'cod' ? 'código Trina · borde grueso = hinca motor' : 'arriba código Trina, abajo altura libre (m) · borde grueso = hinca motor'}</span>`; }
   const html = `<style>@page { size: ${o.size} landscape; margin: 0 }</style>${pags.join('')}`;
   ramPrintPaginas(html, `Plano de hincado ${o.sec === 'all' ? 'todos los sectores' : 'sector ' + o.sec} ${today()}.pdf`, o.size);
 }

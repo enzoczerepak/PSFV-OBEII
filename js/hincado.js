@@ -41,7 +41,11 @@ function normalizarHincado(st) {
   H.avance = H.avance || {}; H.recep = H.recep || [];
 }
 const hcat = (c) => (S.hincado.catalogo || []).find((x) => x.codigo === c);
-const chipH = (c, small) => { const k = hcat(c); const col = k ? k.color : ''; return `<span class="hchip${small ? ' sm' : ''}" title="${esc(c)}${k ? ' · ' + k.tipo + ' · ' + k.perfil + ' · ' + fmt(k.largo) + ' mm · ' + col : ''}"><i class="hc" style="--hc:${HCOL[col] || '#ccc'}" data-c="${esc(col)}"></i>${esc(String(c || '–').replace(/^26050-/, ''))}</span>`; };
+// color de la cabeza (arriba) según Trina CIV-DW-26050-2402-0B: hinca general rojo en suelo normal y azul en blando;
+// la hinca motor no lleva color arriba. El color del catálogo es el de la punta (abajo) e identifica el código.
+const hColSup = (k) => (!k ? '' : /drive/i.test(k.tipo || '') ? '' : k.suelo === 'B' ? 'Azul' : 'Rojo');
+const hColTxt = (k) => (!k ? '' : `arriba ${hColSup(k) || 'sin color'} · abajo ${k.color}`);
+const chipH = (c, small) => { const k = hcat(c); const col = k ? k.color : ''; return `<span class="hchip${small ? ' sm' : ''}" title="${esc(c)}${k ? ' · ' + k.tipo + ' · ' + k.perfil + ' · ' + fmt(k.largo) + ' mm · ' + hColTxt(k) : ''}"><i class="hc2"><i style="background:${HCOL[hColSup(k)] || '#fff'}"></i><i style="background:${HCOL[col] || '#ccc'}"></i></i>${esc(String(c || '–').replace(/^26050-/, ''))}</span>`; };
 const colorChip = (col) => `<span class="hcol"><i class="hc" style="--hc:${HCOL[col] || '#ccc'}" data-c="${esc(col)}"></i>${esc(col)}</span>`;
 // posiciones de un tracker según la matriz de su configuración
 const posDe = (t) => { const m = S.hincado.matriz[cfgDe(t)] || {}; return Array.from({ length: m.n || 0 }, (_, i) => (m.pos || [])[i] || ''); };
@@ -266,9 +270,9 @@ function vHCat(el) {
           <td><div class="mpos">${Array.from({ length: m.n }, (_, i) => { const c = (m.pos || [])[i] || ''; return `<label class="mp"><span>${i + 1}</span><i class="hc" style="--hc:${HCOL[(hcat(c) || {}).color] || '#eee'}" data-c="${esc((hcat(c) || {}).color || '')}"></i><select data-i="${i}" ${window.READONLY ? 'disabled' : ''}>${opts(sl, c)}</select></label>`; }).join('')}</div></td>
           <td style="white-space:nowrap">${window.READONLY ? '' : `<button class="btn sm ghost" data-a="all" title="Poner el mismo código en todas las posiciones vacías">Rellenar</button> <button class="btn sm ghost" data-a="copy" title="Copiar desde otra configuración">Copiar…</button>`}</td></tr>`; }).join('')}
       </tbody></table></div></div>
-    <div class="card"><h3>Catálogo de hincas · Trina CIV-DW-26050-2402-0B</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Código</th><th>Tipo</th><th>Suelo</th><th>Perfil</th><th class="n">Largo total</th><th class="n">Sobre terreno</th><th class="n">NRL</th><th class="n">MRL</th><th>Color de punta</th><th class="n">Requeridas</th></tr></thead><tbody>
+    <div class="card"><h3>Catálogo de hincas · Trina CIV-DW-26050-2402-0B</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Código</th><th>Tipo</th><th>Suelo</th><th>Perfil</th><th class="n">Largo total</th><th class="n">Sobre terreno</th><th class="n">NRL</th><th class="n">MRL</th><th>Color arriba (cabeza)</th><th>Color abajo (punta)</th><th class="n">Requeridas</th></tr></thead><tbody>
       ${H.catalogo.map((k) => `<tr data-c="${esc(k.codigo)}"><td><b>${esc(k.codigo)}</b></td><td>${esc(k.tipo)}</td><td>${k.suelo === 'B' ? 'Blando' : 'Normal'}</td><td>${esc(k.perfil)}</td><td class="n">${fmt(k.largo)}</td><td class="n">${fmt(k.sobre)}</td><td class="n">${fmt(k.nrl)}</td><td class="n">${fmt(k.mrl)}</td>
-        <td>${window.READONLY ? colorChip(k.color) : `<select class="kc">${Object.keys(HCOL).map((c) => `<option ${c === k.color ? 'selected' : ''}>${c}</option>`).join('')}</select>`}</td><td class="n">${I && I.req[k.codigo] ? fmt(I.req[k.codigo]) : ''}</td></tr>`).join('')}
+        <td>${hColSup(k) ? colorChip(hColSup(k)) : '<span class="muted">sin color</span>'}</td><td>${window.READONLY ? colorChip(k.color) : `<select class="kc">${Object.keys(HCOL).map((c) => `<option ${c === k.color ? 'selected' : ''}>${c}</option>`).join('')}</select>`}</td><td class="n">${I && I.req[k.codigo] ? fmt(I.req[k.codigo]) : ''}</td></tr>`).join('')}
       </tbody></table></div>
       <p class="hint">Medidas en mm. NRL: largo nominal de hincado · MRL: mínimo. Regulación en obra ±200 mm según Trina. Colores leídos del plano de Trina; si el fabricante cambia un color, corregilo acá y la verificación de recepciones se actualiza.</p></div>`;
   $$('tr[data-k]', el).forEach((tr) => {
