@@ -101,12 +101,12 @@ function hincPrecargaHTML(I) {
   return `<div class="card hpre"><div class="hpreh"><span class="pill p-warn">PRECARGA</span><b>Hincado en condición de precarga</b><span class="muted">· la distribución de hincas por tracker todavía no está determinada</span></div>
     <div class="hprec"><div><h4>Datos cargados</h4><ul>
       <li>✓ Catálogo de hincas: Trina <b>CIV-DW-26050-2402-0B</b> "Post details" (rev. 0B, 25/08/2026) · ${S.hincado.catalogo.length} códigos con perfil, largos y color de punta.</li>
-      ${I.RP ? `<li>✓ Replanteo de hincas: <b>OBEII-CI-LI-211 r3</b> (21/10/2026) · ${fmt(I.RP.nHincas)} hincas en ${fmt(I.RP.nFrames)} frames, con coordenadas: 13 por tracker 1P52 y 7 por 1P26.${I.repObs.mix.length || I.repObs.dif.length || I.repObs.extra.length ? ` <a href="#" data-go="htrk">${I.repObs.n} trackers a revisar</a>` : ''}</li>` : ''}
+      ${I.RP ? `<li>✓ Replanteo de hincas: <b>${esc(I.RP.fuente.split(' · ')[0])}</b>, con la numeración de mesas OBEII-GR-PL-003 r1 · ${fmt(I.RP.nHincas)} hincas en ${fmt(I.RP.nFrames)} frames, con coordenadas: 13 por tracker 1P52 y 7 por 1P26.${I.repObs.mix.length || I.repObs.dif.length || I.repObs.extra.length ? ` <a href="#" data-go="htrk">${I.repObs.n} trackers a revisar</a>` : ''}</li>` : ''}
       <li>✓ Discretización: Trina <b>TT-OPP-094140_5</b> "General Layout Discretization" (opción 3, rev. 02) · ${fmt(I.trk.length)} trackers en ${I.usadas.length} configuraciones (zona y suelo).</li></ul></div>
     <div><h4>Documentos que faltan para determinar</h4><ol>
       <li><b>Distribución de hincas por tracker</b> (Trina, probablemente CIV-DW-26050-2401 · "Post layout" / "Pile distribution" / "Ramming plan"): cantidad de hincas y código en cada posición para las ${I.usadas.length} configuraciones. <span class="muted">Faltan ${inc} de ${I.usadas.length}.</span></li>
       ${I.RP ? '' : '<li><b>Replanteo de estructuras · hincado de perfiles</b> (OBEII-CI-PL-211-rA): posición de cada hinca en obra.</li>'}
-      <li><b>Confirmación de la discretización</b> contra el layout vigente (OBEII-GR-PL-001-r4)${rev.length ? `: ${rev.length} trackers no coinciden (${rev.join(', ')})` : ''}.</li>
+      <li><b>Confirmación de la discretización</b> (zona borde/interior/exterior y suelo)${rev.length ? `: ${rev.length} trackers se movieron en el replanteo r4 y conservan la de su número anterior (${rev[0]} … ${rev[rev.length - 1]})` : ''}.</li>
       <li><b>Packing list / remitos de Trina</b> por código: para controlar cantidades en la recepción.</li></ol></div></div>
     <p class="hint" style="margin:6px 0 0">Hasta tener el punto 1 se registra el avance por tracker (con la cantidad de hincas del replanteo) y las recepciones verificadas contra el catálogo, pero no se calculan las hincas requeridas por código, el stock ni la secuencia de colores. La distribución se carga en <a href="#" data-go="hcat">Catálogo y distribución</a>.</p></div>`;
 }
@@ -122,7 +122,7 @@ async function hincAvisoEntrada() {
       <p><b>Faltan para determinar:</b></p><ol>
         <li>Distribución de hincas por tracker de Trina (probablemente CIV-DW-26050-2401): ${inc} de ${I.usadas.length} configuraciones sin cargar.</li>
         ${I.RP ? '' : '<li>Replanteo de estructuras · hincado de perfiles (OBEII-CI-PL-211-rA).</li>'}
-        <li>Confirmación de la discretización contra el layout vigente (${I.trk.filter((t) => t.rev).length} trackers a verificar).</li>
+        <li>Confirmación de la discretización de los ${I.trk.filter((t) => t.rev).length} trackers que se movieron en el replanteo r4.</li>
         <li>Packing list / remitos de Trina por código.</li></ol></div></div>`,
     buttons: [['Ver detalle', 'btn', () => 'det'], ['Entendido', 'btn pri', () => null]] }).then((r) => { if (r === 'det') go('hincado'); });
   hincAvisoVisto = true;
@@ -179,7 +179,7 @@ function vHTrk(el) {
     <div class="tblwrap" style="max-height:calc(100vh - 250px)"><table class="tbl htbl"><thead><tr><th><input type="checkbox" id="selAll"></th><th>Tracker</th><th title="N° de frame en la lista de replanteo OBEII-CI-LI-211 r3">Frame</th><th>Sector</th><th>Configuración</th><th class="n">Hincas</th><th>Hincas en orden (norte → sur)</th><th>Hincado</th></tr></thead><tbody>
     ${list.map((t) => { const ps = posDe(t), av = H.avance[t.id], k = cfgDe(t);
       const r = repDe(t.id) || {}, rTit = r.mix ? `En la lista de replanteo las hincas de este tracker figuran repartidas entre los frames ${r.mix.join(', ')}: la numeración de frames de la lista está corrida en este sector` : r.dif ? `El replanteo tiene ${r.n} hincas en la posición de este tracker y el layout espera ${r.dif}` : '';
-      return `<tr data-id="${t.id}" class="${ui.sel.has(t.id) ? 'sel' : ''}"><td><input type="checkbox" class="sel" ${ui.sel.has(t.id) ? 'checked' : ''}></td><td><b>${t.id}</b>${t.rev ? ' <span class="pill p-warn" title="La discretización no coincide con el layout en este tracker: verificar">verificar</span>' : ''}</td><td>${r.fr ? esc(r.fr) : '–'}${rTit ? ` <span class="pill p-warn" title="${esc(rTit)}">revisar</span>` : ''}</td><td>${t.s}</td>
+      return `<tr data-id="${t.id}" class="${ui.sel.has(t.id) ? 'sel' : ''}"><td><input type="checkbox" class="sel" ${ui.sel.has(t.id) ? 'checked' : ''}></td><td><b>${t.id}</b>${t.rev ? ' <span class="pill p-warn" title="Se movió en el replanteo r4 (numeración r1): verificar su zona (borde/interior/exterior) y suelo">verificar</span>' : ''}</td><td>${r.fr ? esc(r.fr) : '–'}${rTit ? ` <span class="pill p-warn" title="${esc(rTit)}">revisar</span>` : ''}</td><td>${t.s}</td>
         <td><i class="cdot" style="background:${CFGCOL[k.split('|').slice(0, 2).join('|')]}"></i>${cfgTxt(k)}</td>
         <td class="n">${r.n != null ? r.n : ''}</td><td class="hseq">${ps.some(Boolean) ? ps.map((c, i) => `<span class="hp" title="Posición ${i + 1}: ${esc(c || 'sin definir')}${c && hcat(c) ? ' · ' + hcat(c).color : ''}"><i class="hc" style="--hc:${HCOL[(hcat(c) || {}).color] || '#ddd'}" data-c="${esc((hcat(c) || {}).color || '')}"></i></span>`).join('') : '<span class="muted">distribución a cargar</span>'}</td>
         <td>${av ? `<span class="pill p-done">✓ ${fechaCorta(av.f)}</span>` : '<span class="muted">pendiente</span>'}</td></tr>`; }).join('')}

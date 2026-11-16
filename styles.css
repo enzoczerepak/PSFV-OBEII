@@ -1376,12 +1376,14 @@ body.ro .solo-pc { display: none !important; }
 .rmsvg rect.rmh { vector-effect: none; }
 .rmform .rmsub { grid-column: 1 / -1; margin: 6px 0 0; font-size: 13px; color: var(--mute); text-transform: uppercase; letter-spacing: .04em; }
 /* plano de hincado imprimible */
-@media print { body.pr-plano #printArea { padding: 0 !important; } }
-.rmpg { box-sizing: border-box; padding: 8mm; page-break-after: always; break-after: page; overflow: hidden; background: #fff; color: #222; font-family: Arial, sans-serif; }
+@media print { body.pr-plano #printArea { padding: 0 !important; } #printArea[data-solo=P] .rmpg[data-o=L], #printArea[data-solo=L] .rmpg[data-o=P] { display: none !important; } }
+.rmpg { box-sizing: border-box; padding: 8mm; page-break-after: always; break-after: page; break-inside: avoid; overflow: hidden; display: flex; flex-direction: column; background: #fff; color: #222; font-family: Arial, sans-serif; }
 .rmpg:last-child { page-break-after: auto; break-after: auto; }
-.rmpgh { display: flex; justify-content: space-between; font-size: 10pt; border-bottom: 1.2px solid #222; padding-bottom: 2mm; margin-bottom: 2mm; height: 18mm; box-sizing: border-box; align-items: flex-end; }
+.rmpgh { flex: none; overflow: hidden; display: flex; justify-content: space-between; gap: 6mm; font-size: 9pt; line-height: 1.35; border-bottom: 1.2px solid #222; padding-bottom: 1.5mm; margin-bottom: 2mm; height: 18mm; box-sizing: border-box; align-items: flex-end; }
+.rmpgh > div { flex: 1; }
+.rmcroq { flex: none; border: 0.2mm solid #999; background: #fafafa; }
 .rmpgh b { font-size: 13pt; }
-.rmpgf { display: flex; flex-wrap: wrap; gap: 1.5mm 5mm; font-size: 8pt; border-top: 1px solid #999; padding-top: 2mm; align-items: center; }
+.rmpgf { display: flex; flex-wrap: wrap; align-content: flex-start; overflow: hidden; box-sizing: border-box; gap: 1.2mm 4mm; font-size: 7pt; border-top: 1px solid #999; padding-top: 2mm; align-items: center; }
 .rmpgf i { display: inline-block; width: 3.2mm; height: 3.2mm; border: 0.3mm solid #555; margin-right: 1.2mm; vertical-align: -0.6mm; }
 .rmnorte { margin-left: auto; font-weight: 700; }
 .zpct { color: var(--ink); font-weight: 700; }
