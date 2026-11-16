@@ -7,7 +7,7 @@ const MENU = [
   { s: 'cables', t: 'Tendido de cables', ico: 'cable', grupos: true, items: [['cables', 'Resumen de tendido', 'barras'], ['diario', 'Tendido por fecha', 'dia'], ['zanjas', 'Zanjas', 'zanja'], ['bobinas', 'Bobinas', 'bobina'], ['propuesta', 'Propuesta de tendido', 'lista'], ['puntas', 'Puntas de cable', 'punta']] },
   ['fo', 'Fibra óptica', 'fibra'], ['lmt', 'Línea aérea MT (LMT)', 'poste'], ['fundaciones', 'Fundaciones STS', 'sts'], ['sala', 'Edificio O&M (sala de celdas)', 'edificio'],
   { s: 'trk', t: 'Trackers', ico: 'trackers', items: ['Materiales', ['trec', 'Recepción de materiales', 'lista'], ['tent', 'Entregas y remitos', 'camion'], ['trecl', 'Reclamos al fabricante', 'libro'], ['tstk', 'Stock en obra', 'barras'],
-    'Hincado', ['hincado', 'Avance de hincado', 'barras'], ['htrk', 'Distribución por tracker', 'trackers'], ['hcat', 'Catálogo y distribución', 'libro'],
+    'Hincado', ['hincado', 'Avance de hincado', 'barras'], ['htrk', 'Distribución por tracker', 'trackers'], ['hram', 'Ramming plan', 'hinca'], ['hcat', 'Catálogo y distribución', 'libro'],
     'Montaje', ['tarm', 'Armado de estructuras', 'llave'], ['tpan', 'Instalación de paneles', 'sol']] },
   { s: 'maqs', t: 'Maquinaria de obra', ico: 'maquina', items: [['maq', 'Horas mensuales', 'dia'], ['maqev', 'Paradas y mantenimientos', 'llave'], ['maqeq', 'Equipos', 'camion']] },
 ];

@@ -1332,3 +1332,32 @@ body.ro .solo-pc { display: none !important; }
 .mqina{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line,#d5dbe3);display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;color:var(--mute)}
 .mqi{display:inline-flex;align-items:center;gap:6px;background:#f1f4f8;border-radius:9px;padding:3px 4px 3px 10px}
 .tl-hecho{color:var(--mute,#6b7785);font-weight:600;white-space:nowrap}
+/* Ramming plan */
+.rmtabs button { padding: 7px 14px; }
+.rmgrid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(360px, 1fr); gap: 12px; align-items: start; }
+@media (max-width: 1100px) { .rmgrid { grid-template-columns: 1fr; } }
+.rmsvg { width: 100%; max-height: 66vh; background: var(--card2, #f6f7f9); border-radius: 8px; }
+.rmsvg rect { cursor: pointer; stroke: rgba(0,0,0,.12); stroke-width: .4; }
+.rmsvg rect:hover { stroke: #1f4e5a; stroke-width: 1.5; }
+.rmsvg rect.on { stroke: #111; stroke-width: 3; }
+.rmleg { margin-top: 8px; }
+.rmdh { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rmdh h3 { margin: 0; }
+.rmkv { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--mute); margin: 8px 0; }
+.rmkv b { color: var(--ink, inherit); }
+.rmperf { width: 100%; margin: 4px 0 8px; }
+.rmtb tr.bad td { background: #fdecec; }
+.rmtb tr.warn td { background: #fff6e5; }
+.rmform label { display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; }
+.rmin { display: flex; align-items: center; gap: 6px; }
+.rmin input { max-width: 160px; }
+.rmin em { font-style: normal; color: var(--mute); font-size: 12px; }
+.rmdias { display: flex; align-items: flex-end; gap: 2px; height: 140px; overflow-x: auto; padding-bottom: 18px; }
+.rmd { flex: 0 0 12px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; position: relative; }
+.rmd div { background: #1f4e5a; border-radius: 2px 2px 0 0; min-height: 2px; }
+.rmd small { position: absolute; bottom: -16px; left: 0; font-size: 8px; color: var(--mute); transform: rotate(-60deg); transform-origin: left top; white-space: nowrap; display: none; }
+.rmd:nth-child(6n+1) small { display: block; }
+.rmform label.rmchk { flex-direction: row; align-items: flex-start; gap: 8px; }
+.rmform label.rmchk input { width: auto; margin-top: 3px; }
+.rmform label.rmchk small { display: block; }
+.rmform label.rmchk { grid-column: 1 / -1; }

@@ -25,7 +25,7 @@
     // fundaciones STS: un registro por STS y etapa
     Object.entries(S.fundaciones || {}).forEach(([sts, et]) => Object.entries(et || {}).forEach(([e, v]) => { if (v) m.set('f:' + sts + '|' + e, v); }));
     if (S.hincado) {
-      m.set('hc', { catalogo: S.hincado.catalogo || [], matriz: S.hincado.matriz || {} });
+      m.set('hc', { catalogo: S.hincado.catalogo || [], matriz: S.hincado.matriz || {}, ram: S.hincado.ram || null });
       Object.entries(S.hincado.avance || {}).forEach(([id, v]) => { if (v) m.set('ht:' + id, v); });
       (S.hincado.recep || []).forEach((r) => m.set('hr:' + r.id, r));
     }
@@ -86,7 +86,7 @@
     if (k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:')) {
       const H = (S.hincado = S.hincado || { catalogo: [], matriz: {}, avance: {}, recep: [] });
       H.avance = H.avance || {}; H.recep = H.recep || [];
-      if (k === 'hc') { if (!d && v) { H.catalogo = v.catalogo; H.matriz = v.matriz; } return; }
+      if (k === 'hc') { if (!d && v) { H.catalogo = v.catalogo; H.matriz = v.matriz; if (v.ram) H.ram = v.ram; if (typeof RAMC !== 'undefined') RAMC = null; } return; }
       if (k.startsWith('ht:')) { const id = k.slice(3); if (d) delete H.avance[id]; else H.avance[id] = v; return; }
       const id = k.slice(3), i = H.recep.findIndex((x) => x.id === id);
       if (d) { if (i >= 0) H.recep.splice(i, 1); } else if (i >= 0) H.recep[i] = v; else H.recep.push(v);

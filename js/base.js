@@ -246,6 +246,7 @@ const VIEWS = {
   maqev: ['Paradas y mantenimientos', () => 'Horas de parada y de mantenimiento de cada equipo, con motivo y observaciones'],
   maqeq: ['Equipos', () => 'Máquinas de la obra: N° de interno, descripción, marca, modelo y horas acumuladas'],
   hincado: ['Avance de hincado', () => 'Trackers e hincas por sector y configuración de la discretización Trina · recepciones verificadas'],
+  hram: ['Ramming plan', () => 'Cota de terreno, altura libre y empotramiento de cada hinca · plano y programa de hincado · parámetros configurables'],
   htrk: ['Distribución de hincas por tracker', () => 'Qué hinca va en cada posición de cada tracker, por color y código · registro de hincado'],
   hrec: ['Recepción de hincas', () => 'Cada entrega se verifica contra el manual de Trina: código, color de punta, largo y perfil'],
   hcat: ['Catálogo y distribución Trina', () => 'Hincas del manual CIV-DW-26050-2402-0B y código por posición para cada configuración de tracker'],
@@ -298,7 +299,7 @@ setTimeout(() => {
   $$('#nav .grp[data-cat]').forEach((g) => { g.classList.toggle('open', ab.includes(g.dataset.cat)); const h = $('.gh', g); if (h) h.onclick = () => grpToggle(g.dataset.cat); });
 }, 0);
 let navKey = 'resumen';
-const HINC_V = ['hincado', 'hplano', 'htrk', 'hrec', 'hcat'];
+const HINC_V = ['hincado', 'hplano', 'htrk', 'hram', 'hrec', 'hcat'];
 function go(v) {
   if (window.VISOR && typeof SOLO_PC !== 'undefined' && SOLO_PC.includes(v)) v = 'resumen';
   // al entrar al menú Hincado desde otra sección, cartel de precarga
@@ -324,7 +325,7 @@ function render(anim) {
   const [t, sub] = VIEWS[view];
   const vc = view.split('-')[0];
   setTimeout(badgePartes, 0);
-  $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes', 'pdia', 'hist', 'crono', 'campo', 'ctend'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : ['trec', 'tent', 'trecl', 'tarm', 'tpan', 'tstk'].includes(view) ? 'Trackers' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'fo' ? 'Fibra óptica' : view === 'lmt' ? 'Línea aérea MT' : view === 'sala' ? 'Edificio O&M' : ['hincado', 'htrk', 'hrec', 'hcat'].includes(view) ? 'Trackers · Hincado' : MAQ_V.includes(view) ? 'Maquinaria de obra' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
+  $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes', 'pdia', 'hist', 'crono', 'campo', 'ctend'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : ['trec', 'tent', 'trecl', 'tarm', 'tpan', 'tstk'].includes(view) ? 'Trackers' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'fo' ? 'Fibra óptica' : view === 'lmt' ? 'Línea aérea MT' : view === 'sala' ? 'Edificio O&M' : ['hincado', 'htrk', 'hram', 'hrec', 'hcat'].includes(view) ? 'Trackers · Hincado' : MAQ_V.includes(view) ? 'Maquinaria de obra' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
   $('#vTitle').innerHTML = (CATN[vc] && view.includes('-') ? `<span class="cchip c-${vc}">${CATL[vc]}</span>` : '') + esc(t); $('#vSub').innerHTML = sub();
   $('#projName').textContent = S.nombre;
   const el = $('#view'), sc = el.scrollTop;
@@ -335,7 +336,7 @@ function render(anim) {
   const [cat, kind] = view.split('-');
   if (kind === 'plan') vPlan(el, cat);
   else if (kind === 'circ') vCircuitos(el, cat);
-  else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hrec: vHRec, hcat: vHCat, fo: vFibra, lmt: vLMT, sala: vSala, trec: vTrkRec, tent: vTrkEnt, trecl: vTrkRecl, hist: vHist, pdia: vPdia, campo: vCampo, ctend: vCTend, tarm: (e) => vMont(e, 'arm'), tpan: (e) => vMont(e, 'pan'), tstk: vStock, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
+  else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hram: vRam, hrec: vHRec, hcat: vHCat, fo: vFibra, lmt: vLMT, sala: vSala, trec: vTrkRec, tent: vTrkEnt, trecl: vTrkRecl, hist: vHist, pdia: vPdia, campo: vCampo, ctend: vCTend, tarm: (e) => vMont(e, 'arm'), tpan: (e) => vMont(e, 'pan'), tstk: vStock, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, bobinas: vBobinas, ajustes: vAjustes })[view](el);
   if (typeof menuArchivar === 'function') menuArchivar();
   if (anim) { void el.offsetWidth; el.classList.add('enter'); el.scrollTop = 0; countUp(el); }
   else {
