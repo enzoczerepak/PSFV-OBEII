@@ -8,14 +8,15 @@ const RAM_DEF = {
   embMin: 2.00,     // hinca general: empotramiento mínimo (m)
   drNom: 1.23, drLargo: 3.43, drEmb: 2.00, // hinca motor (Drive): altura libre nominal, largo, empotramiento mínimo (PW614-1A, suelo N)
   mot52: 7, mot26: 4, // posición de la hinca motor contando de norte a sur (central)
-  pendMax: 10,      // pendiente N-S máxima del tracker (%)
+  pendMax: 5,       // pendiente N-S máxima del tracker (%): Trina diseña estas configuraciones para 0-5 % (MEC-DW-26050-3401-0A)
   difMax: 0.30,     // diferencia máxima de altura libre entre hincas vecinas (m)
   usarCodigos: true,// si la distribución por posición está completa, usar largo / altura / empotramiento de cada código
   hincadoras: 2, rend: 120, inicio: null, sabado: true, orden: '1,2,3,4,5,6', sentido: 'OE',
 };
 const RAMUI = { tab: 'plano', color: 'trina', sel: null, s: 'all', q: '', f: 'all' };
 const ramP = () => { const H = S.hincado || (S.hincado = {}); const r = H.ram || {};
-  if (r.revNom === 1.25 && r.largo === 3.46) { r.revNom = 1.315; r.largo = 3.515; } // valores provisorios anteriores (mezcla motor/general)
+  if (r.revNom === 1.25 && r.largo === 3.46) { r.revNom = 1.315; r.largo = 3.515; }
+  if (r.pendMax === 10) r.pendMax = 5; // valor provisorio anterior: Trina diseña para 0-5 % // valores provisorios anteriores (mezcla motor/general)
   H.ram = Object.assign({}, RAM_DEF, r); return H.ram; };
 const ramZ = (id) => (window.COTAS_HINCAS && window.COTAS_HINCAS.z[id]) || null;
 
@@ -238,7 +239,7 @@ function ramPar(b) {
       ${f('mot26', 'Posición de la hinca motor en 1P26', 'de 7', '1', 'Contando de norte a sur. Central = 4.')}
       <h4 class="rmsub">Tolerancias</h4>
       ${f('revMin', 'Altura libre mínima', 'm', '0.01', 'Por debajo de esto el terreno está muy alto (despeje del módulo / ajuste de la cabeza).')}
-      ${f('pendMax', 'Pendiente N-S máxima del tracker', '%', '0.5', 'Si el terreno tiene más, el tubo se limita a esta pendiente y el tracker queda para revisar.')}
+      ${f('pendMax', 'Pendiente N-S máxima del tracker', '%', '0.5', 'Trina diseña estas configuraciones para pendiente 0–5 % (MEC-DW-26050-3401-0A). Si el terreno tiene más, el tubo se limita a esta pendiente y el tracker queda para revisar.')}
       ${f('difMax', 'Salto máximo de altura libre entre hincas vecinas', 'm', '0.05', 'Se marca como aviso.')}
       <label class="rmchk"><input type="checkbox" data-k="usarCodigos" ${P.usarCodigos ? 'checked' : ''} ${ro ? 'disabled' : ''} style="width:auto"><span>Usar largo, altura y empotramiento de cada código de hinca (cuando esté cargada la distribución de Trina, reemplaza a los valores de arriba)${cods ? '' : '<small class="muted">La distribución por posición todavía no está completa en Catálogo y distribución: mientras tanto se usan los valores de arriba, motor y general por separado.</small>'}</span></label></div></div>
     <div class="card"><h3>Programa</h3><div class="form rmform">

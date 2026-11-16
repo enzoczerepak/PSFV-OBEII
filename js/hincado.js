@@ -24,6 +24,9 @@ const HCFGS = [['1P52', 'Border'], ['1P52', 'Outer'], ['1P52', 'Inner'], ['1P26'
 const cfgDe = (t) => `${t.t}|${t.z || 'Outer'}|${t.sl || 'N'}`;
 const cfgTxt = (k) => { const [t, z, sl] = k.split('|'); return `${t} ${HZ[z] || z} · ${HSL[sl]}`; };
 const CFGCOL = { '1P52|Border': '#e15759', '1P52|Outer': '#f28e2b', '1P52|Inner': '#4e79a7', '1P26|Border': '#b07aa1', '1P26|Outer': '#59a14f' };
+// Distribución de hincas por posición (de norte a sur) según Trina MEC-DW-26050-3401-0A "Tracker General Description" (11/06/2026)
+const TRINA_DIST = {"1P52|Outer|N":["PW610-1A","PW610-2A","PW610-1A","PW610-1A","PW610-1A","PW610-1A","MS7-PW614-1A","PW610-1A","PW610-1A","PW610-1A","PW610-1A","PW610-2A","PW610-1A"],"1P52|Border|N":["PW606-1A","PW608-1A","PW606-1A","PW606-1A","PW606-1A","PW606-1A","MS5-PW608-1A","PW606-1A","PW606-1A","PW606-1A","PW606-1A","PW608-1A","PW606-1A"],"1P52|Inner|N":["PW606-2A","PW606-2A","PW606-2A","PW606-2A","PW606-2A","PW606-2A","MS5-PW608-2A","PW606-2A","PW606-2A","PW606-2A","PW606-2A","PW606-2A","PW606-2A"],"1P26|Outer|N":["PW611-1A","PW611-1A","PW611-1A","MS7-PW610-1A","PW611-1A","PW611-1A","PW611-1A"],"1P26|Border|N":["PW609-1A","PW609-1A","PW609-1A","MS5-PW609-1A","PW609-1A","PW609-1A","PW609-1A"],"1P52|Outer|B":["PW610-1B","PW610-2B","PW610-1B","PW610-1B","PW610-1B","PW610-1B","MS7-PW614-1B","PW610-1B","PW610-1B","PW610-1B","PW610-1B","PW610-2B","PW610-1B"],"1P52|Border|B":["PW606-2B","PW608-1B","PW606-1B","PW606-1B","PW606-1B","PW606-1B","MS5-PW608-1B","PW606-1B","PW606-1B","PW606-1B","PW606-1B","PW608-1B","PW606-2B"],"1P52|Inner|B":["PW606-2A","PW606-2A","PW606-2A","PW606-2A","PW606-2A","PW606-2A","MS5-PW608-2A","PW606-2A","PW606-2A","PW606-2A","PW606-2A","PW606-2A","PW606-2A"],"1P26|Outer|B":["PW611-1B","PW611-1B","PW611-1B","MS7-PW610-1B","PW611-1B","PW611-1B","PW611-1B"],"1P26|Border|B":["PW609-1B","PW609-1B","PW609-1B","MS5-PW609-1B","PW609-1B","PW609-1B","PW609-1B"]};
+const TRINA_DIST_DOC = 'MEC-DW-26050-3401-0A';
 function normalizarHincado(st) {
   const H = (st.hincado = st.hincado || {});
   H.catalogo = H.catalogo && H.catalogo.length ? H.catalogo : HCAT_SEED.map((x) => Object.assign({}, x));
@@ -32,6 +35,9 @@ function normalizarHincado(st) {
   HCFGS.forEach((k) => { const n = k.startsWith('1P52') ? 13 : 7, m = H.matriz[k];
     if (!m) H.matriz[k] = { n, pos: [], conf: false };
     else if (!m.conf && !(m.pos || []).some(Boolean) && (m.n === 12 || m.n === 10)) m.n = n; });
+  // distribución de Trina: completa las configuraciones que todavía no tienen códigos (no pisa una carga a mano)
+  HCFGS.forEach((k) => { const m = H.matriz[k], d = TRINA_DIST[k]; if (!d || !m || (m.pos || []).some(Boolean)) return;
+    H.matriz[k] = Object.assign({}, m, { n: d.length, pos: d.map((c) => '26050-' + c), conf: true, doc: TRINA_DIST_DOC }); });
   H.avance = H.avance || {}; H.recep = H.recep || [];
 }
 const hcat = (c) => (S.hincado.catalogo || []).find((x) => x.codigo === c);
