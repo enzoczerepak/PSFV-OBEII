@@ -1331,3 +1331,4 @@ body.ro .solo-pc { display: none !important; }
 .mqr{grid-template-columns:80px 1fr 150px 110px 110px auto}.mqr .mqin{padding:3px 8px;font-size:11.5px;opacity:.7}.mqr .mqin:hover{opacity:1}
 .mqina{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line,#d5dbe3);display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;color:var(--mute)}
 .mqi{display:inline-flex;align-items:center;gap:6px;background:#f1f4f8;border-radius:9px;padding:3px 4px 3px 10px}
+.tl-hecho{color:var(--mute,#6b7785);font-weight:600;white-space:nowrap}

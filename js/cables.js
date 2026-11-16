@@ -25,7 +25,9 @@ function vPlan(el, cat) {
   // largo permitido por conductor según el margen de la sección (seguro / máximo)
   const tolCol = cat !== 'PAT';
   const permTxt = (p, c) => {
-    if (p.estado === 'ejecutado') { const t = Margen.tolerancia(mgDe(c.key), c.lenFase, tolF()); const nv = t ? Margen.nivel(t, p.len) : null; return nv ? `<span class="tl-${nv}" title="tirado ${fmtM(p.len)} m">${nv === 'ok' ? '✓' : nv === 'riesgo' ? 'riesgo' : 'excedido'}</span>` : ''; }
+    // ya tendido: no es una alerta, solo cuánto se tiró de más o de menos respecto del teórico (el plan ya lo tiene en cuenta)
+    if (p.estado === 'ejecutado') { const d = p.len - (p.teorico || c.lenFase); if (!(Math.abs(d) >= 0.5)) return '<span class="tl-ok" title="Tendido igual al teórico">✓ tendido</span>';
+      return `<span class="tl-hecho" title="Tendido: ${fmtM(p.len)} m · teórico ${fmtM(p.teorico || c.lenFase)} m. Ya está descontado: el plan de lo que falta se recalculó con esto.">✓ ${d > 0 ? '+' : '−'}${fmt(Math.abs(d), 0)} m</span>`; }
     const g = mgDe(c.key); if (!g) return '<span class="muted">…</span>';
     const L0 = p.len - (Number(S.params.margen) || 0), t = Margen.topeBobina(Margen.tolerancia(g, L0, tolF()), p, R, L0); if (!t) return '';
     const bt = t.bob ? ` · bobina ${t.bob.codigo}: quedan ${fmt(t.bob.saldo, 0)} m${t.bob.n > 1 ? `, sobran ${fmt(t.bob.holg, 0)} m repartidos entre sus ${t.bob.n} cortes listos` : ''}` : '';
