@@ -54,9 +54,9 @@ function vZanjas(el) {
   list.sort((a, b) => (a.cat === b.cat ? 0 : a.cat === 'BT' ? -1 : 1) || ordZ(a) - ordZ(b));
   const zz = R.zanjas;
   const pr = (k) => R.resumen.find((r) => r.key === k) || { tendido: 0, requerido: 0 };
-  const card = (lbl, a, b, extra) => `<div class="card"><div class="kpis k1">${kpi(lbl, a, `/ ${fmt(b)} m`)}</div><div class="bar">${extra}</div>`;
+  const card = (lbl, a, b, extra) => `<div class="card"><div class="kpis k1">${kpi(lbl, a, `/ ${fmt(b)} m · <b class="zpct">${fmt(b ? a / b * 100 : 0, 1)} %</b>`)}</div><div class="bar">${extra}</div>`;
   let h = `<div class="grid g4 stagger" style="margin-bottom:14px">
-    ${card('Zanja BT realizada', zz.BT.realizada, zz.BT.total, `<div class="c-done" data-w="${pct(zz.BT.cerrada, zz.BT.total)}"></div><div class="c-acc" data-w="${pct(zz.BT.abierta, zz.BT.total)}"></div>`)}<span class="muted">${fmt(zz.BT.cerrada)} m cerrados · ${zz.BT.n} zanjas</span></div>
+    ${card('Zanja BT realizada', zz.BT.realizada, zz.BT.total, `<div class="c-done" data-w="${pct(zz.BT.cerrada, zz.BT.total)}"></div><div class="c-acc" data-w="${pct(zz.BT.abierta, zz.BT.total)}"></div>`)}<span class="muted">${fmt(zz.BT.cerrada)} m cerrados · ${zz.BT.nCircZ}/${zz.BT.nCirc} circuitos con zanja${zz.BT.red ? `<br>red real según ${esc(zz.BT.red)} (la suma por circuito daría ${fmt(zz.BT.sumaCircuitos)} m)` : ""}</span></div>
     ${card('Zanja MT realizada', zz.MT.realizada, zz.MT.total, `<div class="c-done" data-w="${pct(zz.MT.cerrada, zz.MT.total)}"></div><div class="c-acc" data-w="${pct(zz.MT.abierta, zz.MT.total)}"></div>`)}<span class="muted">${fmt(zz.MT.cerrada)} m cerrados · ${zz.MT.n} zanjas</span></div>
     ${card('PAT 25 mm² tendida', pr('PAT|25').tendido, pr('PAT|25').requerido, `<div class="c-done" data-w="${pct(pr('PAT|25').tendido, pr('PAT|25').requerido)}"></div>`)}<span class="muted">una por zanja de BT</span></div>
     ${card('PAT 95 mm² tendida', pr('PAT|95').tendido, pr('PAT|95').requerido, `<div class="c-done" data-w="${pct(pr('PAT|95').tendido, pr('PAT|95').requerido)}"></div>`)}<span class="muted">una por zanja de MT</span></div></div>

@@ -2,9 +2,9 @@
 // ======================= RESUMEN =======================
 function zanjaCard(cat) {
   const z = R.zanjas[cat];
-  return `<div class="zrow"><div class="zl"><b>${cat === 'BT' ? 'Baja tensión' : 'Media tensión'}</b><span class="muted">${z.nAbiertas + z.nCerradas}/${z.n} zanjas · ${z.nCerradas} cerradas${z.nParciales ? ` · ${z.nParciales} abierta${z.nParciales > 1 ? 's' : ''} en parte (faltan ${fmt(z.parcialFalta)} m)` : ''}</span></div>
+  return `<div class="zrow"><div class="zl"><b>${cat === 'BT' ? 'Baja tensión' : 'Media tensión'}</b><span class="muted"${z.red ? ` title="Metros de zanja de la red real según el ${esc(z.red)}: donde varios circuitos van en la misma zanja se cuenta una sola vez (la suma circuito por circuito daría ${fmt(z.sumaCircuitos)} m)"` : ''}>${z.nCircZ}/${z.nCirc} circuitos con zanja · ${z.nAbiertas + z.nCerradas} zanja${z.nAbiertas + z.nCerradas === 1 ? '' : 's'} abierta${z.nAbiertas + z.nCerradas === 1 ? '' : 's'} o cerrada${z.nAbiertas + z.nCerradas === 1 ? '' : 's'}${z.nParciales ? ` · ${z.nParciales} abierta${z.nParciales > 1 ? 's' : ''} en parte (faltan ${fmt(z.parcialFalta)} m)` : ''}</span></div>
     <div class="bar"><div class="c-done" data-w="${pct(z.cerrada, z.total)}"></div><div class="c-acc" data-w="${pct(z.abierta, z.total)}"></div></div>
-    <div class="zn"><b>${fmt(z.realizada)}</b> / ${fmt(z.total)} m</div></div>`;
+    <div class="zn"><b>${fmt(z.realizada)}</b> / ${fmt(z.total)} m<br><b class="zpct">${fmt(z.total ? z.realizada / z.total * 100 : 0, 1)} %</b></div></div>`;
 }
 function patCard() {
   return R.resumen.filter((r) => r.cat === 'PAT').map((r) => `<div class="zrow"><div class="zl"><b>PAT ${r.seccion} mm²</b><span class="muted">${r.seccion === 25 ? 'zanjas BT' : 'zanjas MT'}</span></div>

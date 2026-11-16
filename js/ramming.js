@@ -13,7 +13,7 @@ const RAM_DEF = {
   usarCodigos: true,// si la distribución por posición está completa, usar largo / altura / empotramiento de cada código
   hincadoras: 2, rend: 120, inicio: null, sabado: true, orden: '1,2,3,4,5,6', sentido: 'OE',
 };
-const RAMUI = { tab: 'plano', color: 'estado', sel: null, s: 'all', q: '', f: 'all' };
+const RAMUI = { tab: 'plano', color: 'trina', sel: null, s: 'all', q: '', f: 'all' };
 const ramP = () => { const H = S.hincado || (S.hincado = {}); const r = H.ram || {};
   if (r.revNom === 1.25 && r.largo === 3.46) { r.revNom = 1.315; r.largo = 3.515; } // valores provisorios anteriores (mezcla motor/general)
   H.ram = Object.assign({}, RAM_DEF, r); return H.ram; };
@@ -76,7 +76,7 @@ function ramPrograma() {
 function vRam(el) {
   const P = ramP(), C = ramCalc(), HA = (S.hincado || {}).avance || {};
   if (!window.COTAS_HINCAS) { el.innerHTML = '<div class="card empty"><b>Faltan las cotas de las hincas</b></div>'; return; }
-  actions([['Imprimir plano de hincado', 'btn pri', ramImprimir], ['Plano DXF (AutoCAD)', 'btn', ramExportDxf], ['Exportar Excel', 'btn', ramExcel], ['Tabla PDF por sector', 'btn', ramPdf]]);
+  actions([['PDF · plano de hincado para imprimir', 'btn', ramImprimir], ['Exportar DXF (AutoCAD)', 'btn', ramExportDxf], ['Exportar Excel', 'btn', ramExcel], ['PDF · tabla de alturas por sector', 'btn', ramPdf]]);
   const cnt = {}; C.L.forEach((r) => (cnt[r.est] = (cnt[r.est] || 0) + 1));
   const hF = C.L.reduce((a, r) => a + (r.fuera || 0), 0), nH = C.L.reduce((a, r) => a + r.n, 0);
   const PG = ramPrograma();
@@ -91,8 +91,15 @@ function vRam(el) {
   const b = $('#rmB', el);
   ({ plano: ramPlano, trk: ramTabla, prog: ramProg, par: ramPar })[RAMUI.tab](b, C, PG);
 }
+function ramLeyTrina(C) {
+  const m = new Map(); C.L.forEach((r) => r.H.forEach((h) => { const k = h.cod && hcat(h.cod); if (k) m.set(ramCodCorto(h.cod), HCOL[k.color] || '#fff'); }));
+  return m.size ? [...m.entries()].sort().map(([c, col]) => `<span><i style="background:${col};border:1px solid #888"></i>${esc(c)}</span>`).join('')
+    : '<span><b>Sin distribución de Trina cargada:</b> las hincas se pintan por estado (<i style="background:#58b368"></i>bien <i style="background:#f0a23b"></i>salto <i style="background:#d64545"></i>fuera) hasta que cargues los códigos por posición en Catálogo y distribución.</span>';
+}
 function ramColor(r, PG, HA) {
   const m = RAMUI.color;
+  if (m === 'trina' && r.conCod) return HA[r.t.id] ? '#d9d2ec' : '#e3e8ee';
+  if (m === 'trina') return (RAM_EST[r.est] || RAM_EST.sin)[1];
   if (m === 'hinc') return HA[r.t.id] ? '#7c5cbf' : '#c9d0da';
   if (m === 'pend') { if (!r.n) return '#c9d0da'; const a = Math.min(1, Math.abs(r.pend) / Math.max(1, ramP().pendMax)); return `hsl(${130 - 130 * a},60%,${55 - 10 * a}%)`; }
   if (m === 'ond') { if (!r.n) return '#c9d0da'; const a = Math.min(1, r.ond / 1); return `hsl(${130 - 130 * a},60%,${55 - 10 * a}%)`; }
@@ -101,14 +108,13 @@ function ramColor(r, PG, HA) {
 }
 function ramPlano(b, C, PG) {
   const P = window.PLANO, HA = (S.hincado || {}).avance || {};
-  const leg = RAMUI.color === 'estado' ? Object.entries(RAM_EST).map(([k, [n, c]]) => `<span><i style="background:${c}"></i>${n}</span>`).join('')
+  const leg = RAMUI.color === 'trina' ? ramLeyTrina(C) + '<span><i style="background:#fff;border:2px solid #000"></i>Hinca motor</span><span>✕ hincado</span>' : RAMUI.color === 'estado' ? Object.entries(RAM_EST).map(([k, [n, c]]) => `<span><i style="background:${c}"></i>${n}</span>`).join('')
     : RAMUI.color === 'prog' ? '<span><i style="background:#7c5cbf"></i>Hincado</span><span><i style="background:#2f9e5b"></i>Esta semana</span><span><i style="background:#7cc49a"></i>Próxima</span><span><i style="background:#f0d35b"></i>En 2 semanas</span><span><i style="background:#f0a23b"></i>En 3</span><span><i style="background:#e07b39"></i>4 o más</span>'
     : RAMUI.color === 'hinc' ? '<span><i style="background:#7c5cbf"></i>Hincado</span><span><i style="background:#c9d0da"></i>Pendiente</span>'
     : `<span><i style="background:hsl(130,60%,55%)"></i>${RAMUI.color === 'pend' ? 'Plano' : 'Parejo'}</span><span><i style="background:hsl(65,60%,50%)"></i>Medio</span><span><i style="background:hsl(0,60%,45%)"></i>${RAMUI.color === 'pend' ? 'En la pendiente máxima' : '1 m o más de ondulación'}</span>`;
   const sel = RAMUI.sel && C.map.get(RAMUI.sel);
-  b.innerHTML = `<div class="rmgrid"><div class="card rmplano"><div class="tools" style="margin:0 0 8px"><div class="seg" id="rmC"><button data-v="estado">Estado</button><button data-v="pend">Pendiente</button><button data-v="ond">Ondulación</button><button data-v="prog">Programa</button><button data-v="hinc">Avance</button></div></div>
+  b.innerHTML = `<div class="rmgrid"><div class="card rmplano"><div class="tools" style="margin:0 0 8px"><div class="seg" id="rmC"><button data-v="trina">Color Trina</button><button data-v="estado">Estado</button><button data-v="pend">Pendiente</button><button data-v="ond">Ondulación</button><button data-v="prog">Programa</button><button data-v="hinc">Avance</button></div></div>
       <div class="rmwrap"><svg viewBox="${ramVB().join(' ')}" class="rmsvg ${ramZcls()}" preserveAspectRatio="xMidYMid meet">${P.trk.map((t) => { const r = C.map.get(t.id); return `<rect data-t="${t.id}" x="${t.x}" y="${t.y}" width="${t.w}" height="${t.h}" fill="${ramColor(r, PG, HA)}" class="${RAMUI.sel === t.id ? 'on' : ''}"><title>${t.id} · ${(RAM_EST[r.est] || RAM_EST.sin)[0]}${r.n ? ` · pendiente ${fmt(r.pend, 1)} % · ondulación ${fmt(r.ond, 2)} m` : ''}</title></rect>`; }).join('')}
-        <g class="rmz1">${P.trk.map((t) => `<text x="${t.x + t.w / 2}" y="${t.y - 0.8}" class="rmtid">${t.id.replace('TRK-', '')}</text>`).join('')}</g>
         <g class="rmz1">${ramHincasSVG(C, HA)}</g></svg>
         <div class="rmzb"><button class="btn sm" data-z="in" title="Acercar">＋</button><button class="btn sm" data-z="out" title="Alejar">－</button><button class="btn sm" data-z="fit" title="Ver todo el parque">⤢</button>${RAMUI.sel ? '<button class="btn sm" data-z="sel" title="Ir al tracker elegido">◎</button>' : ''}</div></div>
       <div class="legend rmleg">${leg}</div><p class="hint" style="margin:6px 0 0">Rueda del mouse o ＋/－ para hacer zoom, arrastrá para moverte. Al acercarte aparecen el número de tracker y cada hinca con su color; más cerca, el número y la altura libre de cada hinca. Tocá un tracker para ver su perfil.</p></div>
@@ -120,12 +126,27 @@ function ramPlano(b, C, PG) {
 const ramVB = () => { const P = window.PLANO; return RAMUI.vb || [0, 0, P.W, P.H]; };
 const ramZcls = () => { const w = ramVB()[2], W = window.PLANO.W; return w < W / 14 ? 'z1 z2' : w < W / 4 ? 'z1' : ''; };
 // hincas en coordenadas del plano: X real − origen; Y real ubicada dentro del rectángulo de su tracker (norte arriba)
+// dibujo de una hinca, igual en pantalla y en el PDF: cuadrado con color Trina (o estado), código arriba, altura libre abajo,
+// borde grueso + MOTOR en la hinca motor, cruz si el tracker ya está hincado
+const RAM_LADO = 1.9;
+const ramColEst = (h) => (h.est !== 'ok' ? '#d64545' : h.salto ? '#f0a23b' : '#58b368');
+function ramPilaSVG(h, x, y, o, hecho, txt) {
+  const kk = h.cod && hcat(h.cod), trina = o.color !== 'est' && kk, L = RAM_LADO, a = L / 2;
+  const fill = trina ? (HCOL[kk.color] && HCOL[kk.color] !== 'transparent' ? HCOL[kk.color] : '#ffffff') : ramColEst(h);
+  const arriba = o.rot === 'alt' ? h.cab.toFixed(2) : kk ? ramCodCorto(h.cod) : h.motor ? 'MOTOR' : '';
+  const abajo = o.rot === 'cod' ? '' : h.rev.toFixed(2);
+  let g = `<rect x="${(x - a).toFixed(2)}" y="${(y - a).toFixed(2)}" width="${L}" height="${L}" fill="${fill}" stroke="${h.motor ? '#000' : '#555'}" stroke-width="${h.motor ? 0.25 : 0.08}" class="rmh"/>`;
+  if (h.motor && !kk) g += `<text x="${x}" y="${(y + txt * 0.36).toFixed(2)}" font-size="${txt}" text-anchor="middle" font-weight="700" fill="#fff" class="rmhm">M</text>`;
+  if (hecho) g += `<path d="M${x - a} ${y - a}L${x + a} ${y + a}M${x + a} ${y - a}L${x - a} ${y + a}" stroke="#c0392b" stroke-width="0.18" class="rmhm"/>`;
+  if (arriba) g += `<text x="${x}" y="${(y - a - txt * 0.3).toFixed(2)}" font-size="${txt}" text-anchor="middle"${h.motor ? ' font-weight="700"' : ''} class="rmhl">${esc(arriba)}</text>`;
+  if (abajo) g += `<text x="${x}" y="${(y + a + txt * 0.95).toFixed(2)}" font-size="${(txt * 0.9).toFixed(2)}" text-anchor="middle" fill="${h.est !== 'ok' ? '#c0392b' : '#333'}" class="rmhl">${abajo}</text>`;
+  return g;
+}
 function ramHincasSVG(C, HA) {
-  const X0 = 7393788.009;
+  const o = { color: RAMUI.color === 'trina' ? 'auto' : 'est', rot: 'auto' };
   return window.PLANO.trk.map((t) => { const r = C.map.get(t.id); if (!r || !r.n) return '';
-    const ys = r.H.map((h) => h.y), yN = Math.max(...ys), off = (t.h - (yN - Math.min(...ys))) / 2, hecho = !!HA[t.id];
-    return r.H.map((h, k) => { const x = h.x - X0, y = t.y + off + (yN - h.y), c = hecho ? '#7c5cbf' : h.est !== 'ok' ? '#d64545' : h.salto ? '#f0a23b' : '#1f7a46';
-      return `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="0.42" fill="${c}" class="rmh"><title>${t.id} · hinca ${k + 1}${h.motor ? ' (motor)' : ''} · terreno ${fmt(h.z, 2)} m · altura libre ${fmt(h.rev, 2)} m · empotramiento ${fmt(h.emb, 2)} m${h.cod ? ' · ' + h.cod : ''}</title></circle><text x="${(x + 0.7).toFixed(2)}" y="${(y + 0.25).toFixed(2)}" class="rmhl">${k + 1}${h.motor ? 'M' : ''}·${h.rev.toFixed(2)}</text>`; }).join(''); }).join('');
+    const L = ramPilesLocal(t, r), top = Math.min(...L.map((q) => q.y));
+    return `<g data-t="${t.id}"><title>${t.id}</title><text x="${L[0].x}" y="${(top - RAM_LADO / 2 - 0.85 * 1.55).toFixed(2)}" class="rmtid">${t.id.replace('TRK-', 'TR ')}</text>` + L.map(({ h, x, y }) => ramPilaSVG(h, x, y, o, !!HA[t.id], 0.85)).join('') + '</g>'; }).join('');
 }
 function ramZoomBind(b) {
   const svg = $('.rmsvg', b); if (!svg) return; const P = window.PLANO;
@@ -361,8 +382,7 @@ function ramHojas(C, o) {
 function ramPdfPlano(o) {
   const C = ramCalc(), HA = (S.hincado || {}).avance || {}, hojas = ramHojas(C, o), [pw, ph] = o.size === 'A3' ? [420, 297] : [297, 210];
   const esc = o.esc / 1000;
-  const lado = 1.9, txt = Math.max(0.55, Math.min(1.0, 2.6 * esc));
-  const colEst = (h) => (h.est !== 'ok' ? '#d64545' : h.salto ? '#f0a23b' : '#58b368');
+  const lado = RAM_LADO, txt = Math.max(0.55, Math.min(1.0, 2.6 * esc));
   const usados = new Map();
   const pags = hojas.map((p, i) => {
     let g = '';
@@ -370,17 +390,10 @@ function ramPdfPlano(o) {
       const top = Math.min(...L.map((q) => q.y)), bot = Math.max(...L.map((q) => q.y));
       g += `<line x1="${L[0].x}" y1="${top}" x2="${L[0].x}" y2="${bot}" stroke="#d09060" stroke-width="0.12"/>`;
       g += `<text x="${L[0].x}" y="${top - lado / 2 - txt * 1.9}" font-size="${txt * 1.05}" text-anchor="middle" font-weight="700">${t.id.replace('TRK-', 'TR ')}</text>`;
-      L.forEach(({ h, k, x, y }) => {
+      L.forEach(({ h, x, y }) => {
         const kk = h.cod && hcat(h.cod), trina = o.color === 'auto' && kk;
-        const fill = trina ? (HCOL[kk.color] && HCOL[kk.color] !== 'transparent' ? HCOL[kk.color] : '#ffffff') : colEst(h);
-        usados.set(trina ? 'c:' + kk.color + '|' + ramCodCorto(h.cod) : 'e:' + (h.est !== 'ok' ? 'f' : h.salto ? 's' : 'o'), fill);
-        const arriba = o.rot === 'alt' ? h.cab.toFixed(2) : kk ? ramCodCorto(h.cod) : h.motor ? 'MOTOR' : '';
-        const abajo = o.rot === 'cod' ? '' : h.rev.toFixed(2);
-        g += `<rect x="${x - lado / 2}" y="${y - lado / 2}" width="${lado}" height="${lado}" fill="${fill}" stroke="${h.motor ? '#000' : '#555'}" stroke-width="${h.motor ? 0.25 : 0.08}"/>`;
-        if (h.motor && !kk) g += `<text x="${x}" y="${y + txt * 0.36}" font-size="${txt}" text-anchor="middle" font-weight="700" fill="#fff">M</text>`;
-        if (o.hech && hecho) g += `<path d="M${x - lado / 2} ${y - lado / 2}L${x + lado / 2} ${y + lado / 2}M${x + lado / 2} ${y - lado / 2}L${x - lado / 2} ${y + lado / 2}" stroke="#c0392b" stroke-width="0.18"/>`;
-        if (arriba) g += `<text x="${x}" y="${y - lado / 2 - txt * 0.3}" font-size="${txt}" text-anchor="middle"${h.motor ? ' font-weight="700"' : ''}>${esc_(arriba)}</text>`;
-        if (abajo) g += `<text x="${x}" y="${y + lado / 2 + txt * 0.95}" font-size="${txt * 0.9}" text-anchor="middle" fill="${h.est !== 'ok' ? '#c0392b' : '#333'}">${abajo}</text>`;
+        usados.set(trina ? 'c:' + kk.color + '|' + ramCodCorto(h.cod) : 'e:' + (h.est !== 'ok' ? 'f' : h.salto ? 's' : 'o'), trina ? (HCOL[kk.color] && HCOL[kk.color] !== 'transparent' ? HCOL[kk.color] : '#ffffff') : ramColEst(h));
+        g += ramPilaSVG(h, x, y, o, o.hech && hecho, txt);
       });
     });
     return `<section class="rmpg" style="width:${pw}mm;height:${ph}mm">

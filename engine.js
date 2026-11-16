@@ -350,6 +350,19 @@
         nParciales: par.length, parcialFalta: r2(par.reduce((a, z) => a + z.largo - z.abiertoM, 0)),
         n: zs.length, nAbiertas: zs.filter((z) => z.estado === 'abierta').length, nCerradas: zs.filter((z) => z.estado === 'cerrada').length,
         nParaCerrar: zs.filter((z) => z.estado === 'abierta' && z.listoCerrar).length, nCompartidas: zs.filter((z) => z.miembros.length > 1).length };
+      // circuitos con zanja abierta o cerrada (una zanja lleva varios circuitos)
+      const cs = circuitos.filter((c) => c.cat === cat && !c.vinculo);
+      zanjas[cat].nCirc = cs.length; zanjas[cat].nCircZ = cs.filter((c) => c.zanja !== 'no abierta').length;
+      // BT: la red real de zanjas sale del plano de canalización (rutas superpuestas); cada tramo se cuenta una sola vez
+      const CB = typeof window !== 'undefined' && window.CANAL_BT;
+      if (cat === 'BT' && CB && CB.grupos) {
+        const fr = new Map(), cer = new Map();
+        cs.forEach((c) => { const z = c.zid && zMap.get(c.zid); if (!z) return;
+          fr.set(c.desde, z.estado === 'cerrada' ? 1 : z.estado === 'abierta' && z.largo > 0 ? Math.min(1, z.abiertoM / z.largo) : 0); cer.set(c.desde, z.estado === 'cerrada'); });
+        let tot = 0, real = 0, cerr = 0;
+        CB.grupos.forEach(([L, ks]) => { tot += L; real += L * Math.max(0, ...ks.map((k) => fr.get(k) || 0)); if (ks.some((k) => cer.get(k))) cerr += L; });
+        Object.assign(zanjas[cat], { sumaCircuitos: zanjas[cat].total, total: r2(tot), realizada: r2(real), cerrada: r2(Math.min(cerr, real)), abierta: r2(Math.max(0, real - cerr)), red: CB.fuente });
+      }
     });
     const sinZ = circuitos.filter((c) => !c.listo && !c.vinculo).length;
     if (sinZ) alerts.push({ tipo: 'info', txt: `${sinZ} circuitos sin zanja abierta: su plan es provisorio hasta que se abra la zanja` });
