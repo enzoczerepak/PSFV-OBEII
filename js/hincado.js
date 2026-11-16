@@ -28,7 +28,10 @@ function normalizarHincado(st) {
   const H = (st.hincado = st.hincado || {});
   H.catalogo = H.catalogo && H.catalogo.length ? H.catalogo : HCAT_SEED.map((x) => Object.assign({}, x));
   H.matriz = H.matriz || {};
-  HCFGS.forEach((k) => { if (!H.matriz[k]) H.matriz[k] = { n: k.startsWith('1P52') ? 12 : 10, pos: [], conf: false }; });
+  // 13 hincas por 1P52 y 7 por 1P26 (lista de replanteo r3); las matrices vacías que quedaron con el 12/10 provisorio se corrigen
+  HCFGS.forEach((k) => { const n = k.startsWith('1P52') ? 13 : 7, m = H.matriz[k];
+    if (!m) H.matriz[k] = { n, pos: [], conf: false };
+    else if (!m.conf && !(m.pos || []).some(Boolean) && (m.n === 12 || m.n === 10)) m.n = n; });
   H.avance = H.avance || {}; H.recep = H.recep || [];
 }
 const hcat = (c) => (S.hincado.catalogo || []).find((x) => x.codigo === c);
