@@ -76,7 +76,7 @@ function vCables(el) {
   R.resumen.filter((r) => r.cat !== 'LA').forEach((r) => {
     const tot = Math.max(r.stock, r.requerido);
     const st = !r.bobinas ? '<span class="pill p-warn">sin bobinas</span>' : r.faltante > 0 ? pill('falta cable').replace('p-prov', 'p-bad') : '<span class="pill p-ok">stock suficiente</span>';
-    h += `<div class="card sc" data-go="${r.cat}-plan"><div class="hero"><div class="sec">${r.seccion}<small> mm² · ${ctag(r.cat)}${CATN[r.cat]}</small></div><span style="margin-left:auto">${st}</span></div><div class="muted" style="margin:-8px 0 12px">${r.bobinas} bobinas · ${fmt(r.stock)} m en stock</div>
+    h += `<div class="card sc" data-go="${r.cat}-plan"><div class="schd"><div class="sec">${r.seccion}<small> mm² · ${ctag(r.cat)}${CATN[r.cat]}</small></div><span style="margin-left:auto">${st}</span></div><div class="muted" style="margin:-8px 0 12px">${r.bobinas} bobinas · ${fmt(r.stock)} m en stock</div>
       <div class="kpis k3">${kpi('Requerido', r.requerido)}${kpi('Tendido', r.tendido)}${r.parcial ? kpi('En tendido parcial', r.parcial) : ''}${kpi('Listo p/ cortar', r.listo)}${kpi('Balance stock', r.balance)}${kpi('Remanente útil previsto', r.remUtil)}${kpi('Descarte previsto', r.descarte)}</div>
       <div class="muted" style="margin-top:6px">Bobinas: ${r.realSinAbrir} sin abrir · ${r.realEnUso} en uso · ${r.realTerminadas} terminadas${r.noSeUsa ? ` · ${r.noSeUsa} que el plan no usa` : ''}</div>
       ${r.tendidoTeo ? `<div class="muted" style="margin-top:8px">Tirado vs lista: <span class="dv ${r.desvio > 0.005 ? 'pos' : r.desvio < -0.005 ? 'neg' : ''}">${r.desvio > 0 ? '+' : ''}${fmt(r.desvio, 1)} m (${r.desvio > 0 ? '+' : ''}${fmt(r.desvioPct * 100, 1)} %)</span> sobre ${fmt(r.tendidoTeo)} m tendidos</div>` : ''}
