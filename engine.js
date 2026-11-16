@@ -165,7 +165,11 @@
     const PB = state.patBT || {}, pbReg = (PB.reg || []).filter((x) => x.tipo === 'c' && Number(x.metros) > 0);
     const pbCirc = pbReg.map((x) => ({ id: 'pb-' + x.id, cat: 'PAT', formacion: PAT_SEC.BT, fases: 1, cantidad: Number(x.metros), designacion: 'PAT BT · ' + (x.desc || 'tramo'),
       desde: x.desc || 'tramo de PAT', hasta: '', patBT: x.id, real: { C: x.bobina ? { bobina: x.bobina, metros: Number(x.metros), fecha: x.f || '' } : { sinBobina: true, metros: Number(x.metros), fecha: x.f || '' } } }));
-    const circuitos = (state.circuitos || []).concat(pbCirc).map((c, i) => {
+    // la PAT por zanja de BT ya no cuenta (va aparte, por tramo): se ignora la que no se cargó. Los registros se dejan como están
+    // en los datos (no se borran) para que todas las versiones del programa guarden lo mismo y no se peleen en la red
+    const zCatE = new Map((state.zanjas || []).map((z) => [z.id, catDe(z)]));
+    const patVacia = (c) => c.vinculo && zCatE.get(c.vinculo) === 'BT' && !(c.real && c.real.C && Number(c.real.C.metros) > 0);
+    const circuitos = (state.circuitos || []).filter((c) => !patVacia(c)).concat(pbCirc).map((c, i) => {
       const cat = catDe(c), seccion = parseSeccion(c.formacion);
       const real = c.real || {}, fz = fasesDe(c);
       const nReal = fz.filter((f) => real[f] && (real[f].bobina || real[f].sinBobina)).length;
@@ -427,8 +431,6 @@
     state.zanjas.forEach((z) => {
       const miembros = cs.filter((c) => c.zanjaId === z.id);
       let pt = pats.get(z.id);
-      // BT: la PAT va aparte, por tramo (vista PAT de BT); solo se conserva la que ya se cargó en una zanja
-      if (catDe(z) === 'BT' && !(pt && pt.real && pt.real.C && (pt.real.C.metros > 0))) { if (pt) cs.splice(cs.indexOf(pt), 1); return; }
       if (!pt) { pt = { id: 'pat-' + z.id, cat: 'PAT', vinculo: z.id, formacion: PAT_SEC[catDe(z)], fases: 1, real: {} }; cs.push(pt); }
       Object.assign(pt, { designacion: 'PAT ' + miembros.map((c) => c.designacion).join(' + '), desde: miembros.map((c) => c.desde).join(' + '),
         hasta: [...new Set(miembros.map((c) => c.hasta))].join(' / '), cantidad: pt.largoManual > 0 ? pt.largoManual : Number(z.largo) || 0 });
