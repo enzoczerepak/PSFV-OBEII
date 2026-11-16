@@ -82,12 +82,14 @@ function hincInfo() {
 function verificar(r) {
   const k = hcat(r.codigo), out = { ok: true, msgs: [], sug: [] };
   if (!k) { out.ok = false; out.msgs.push('Código que no está en el manual'); return out; }
-  if (r.color && r.color !== k.color) { out.ok = false; out.msgs.push(`Color ${r.color}: el manual indica ${k.color} para ${k.codigo.replace(/^26050-/, '')}`); }
+  const supK = hColSup(k) || 'Sin color';
+  if (r.colorA && r.colorA !== supK) { out.ok = false; out.msgs.push(`Color de la cabeza ${r.colorA}: el manual indica ${supK} para ${k.codigo.replace(/^26050-/, '')}`); }
+  if (r.color && r.color !== k.color) { out.ok = false; out.msgs.push(`Color de la punta ${r.color}: el manual indica ${k.color} para ${k.codigo.replace(/^26050-/, '')}`); }
   if (r.largo && Math.abs(Number(r.largo) - k.largo) > 25) { out.ok = false; out.msgs.push(`Largo ${fmt(r.largo)} mm: el manual indica ${fmt(k.largo)} mm`); }
   if (r.perfil && String(r.perfil).replace(/\s|x|X|×/g, '') !== k.perfil.replace(/×/g, '')) { out.ok = false; out.msgs.push(`Perfil ${esc(r.perfil)}: el manual indica ${k.perfil}`); }
   if (!out.ok) {
     // qué código coincide con lo que se recibió
-    out.sug = S.hincado.catalogo.filter((x) => x.codigo !== k.codigo && (!r.color || x.color === r.color) && (!r.largo || Math.abs(x.largo - Number(r.largo)) <= 25) && (!r.perfil || String(r.perfil).replace(/\s|x|X|×/g, '') === x.perfil.replace(/×/g, ''))).map((x) => x.codigo);
+    out.sug = S.hincado.catalogo.filter((x) => x.codigo !== k.codigo && (!r.colorA || (hColSup(x) || 'Sin color') === r.colorA) && (!r.color || x.color === r.color) && (!r.largo || Math.abs(x.largo - Number(r.largo)) <= 25) && (!r.perfil || String(r.perfil).replace(/\s|x|X|×/g, '') === x.perfil.replace(/×/g, ''))).map((x) => x.codigo);
   }
   return out;
 }
@@ -209,15 +211,15 @@ function vHRec(el) {
   const rs = H.recep.slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || (b._o || 0) - (a._o || 0));
   const malos = rs.filter((r) => !verificar(r).ok);
   el.innerHTML = `${hincPrecargaHTML(hincInfo())}${malos.length ? `<div class="alert error" style="margin-bottom:14px"><b>${malos.length} recepción${malos.length > 1 ? 'es' : ''} no coincide${malos.length > 1 ? 'n' : ''} con el manual de Trina.</b>&nbsp;Revisá el color, el largo y el perfil antes de distribuir esas hincas.</div>` : ''}
-    <div class="tblwrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Remito</th><th>Código (etiqueta)</th><th>Color en punta</th><th class="n">Largo medido</th><th>Perfil</th><th class="n">Cantidad</th><th>Verificación</th><th></th></tr></thead><tbody>
+    <div class="tblwrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Remito</th><th>Código (etiqueta)</th><th>Color cabeza</th><th>Color punta</th><th class="n">Largo medido</th><th>Perfil</th><th class="n">Cantidad</th><th>Verificación</th><th></th></tr></thead><tbody>
     ${rs.map((r) => { const v = verificar(r), k = hcat(r.codigo) || {};
-      return `<tr data-id="${r.id}"><td>${fechaCorta(r.fecha)}</td><td>${esc(r.remito || '')}</td><td>${chipH(r.codigo)}</td><td>${r.color ? colorChip(r.color) : '<span class="muted">–</span>'}${r.color && r.color !== k.color ? ` <small class="muted">(manual: ${esc(k.color || '?')})</small>` : ''}</td>
+      return `<tr data-id="${r.id}"><td>${fechaCorta(r.fecha)}</td><td>${esc(r.remito || '')}</td><td>${chipH(r.codigo)}</td><td>${r.colorA ? (r.colorA === 'Sin color' ? '<span class="muted">sin color</span>' : colorChip(r.colorA)) : '<span class="muted">–</span>'}</td><td>${r.color ? colorChip(r.color) : '<span class="muted">–</span>'}${r.color && r.color !== k.color ? ` <small class="muted">(manual: ${esc(k.color || '?')})</small>` : ''}</td>
         <td class="n">${r.largo ? fmt(r.largo) + ' mm' : '–'}</td><td>${esc(r.perfil || '–')}</td><td class="n">${fmt(r.cant)}</td>
         <td>${v.ok ? '<span class="pill p-done">✓ coincide</span>' : `<span class="pill p-bad">no coincide</span><div class="hmsg">${v.msgs.join('<br>')}${v.sug.length ? `<br>Coincide con: ${v.sug.map((c) => chipH(c, true)).join(' ')}` : ''}</div>`}</td>
-        <td style="white-space:nowrap">${window.READONLY ? '' : '<button class="btn sm ghost" data-a="e">✎</button>'}</td></tr>`; }).join('') || '<tr><td colspan="9" class="muted" style="padding:20px">Todavía no se registraron recepciones de hincas.</td></tr>'}
+        <td style="white-space:nowrap">${window.READONLY ? '' : '<button class="btn sm ghost" data-a="e">✎</button>'}</td></tr>`; }).join('') || '<tr><td colspan="10" class="muted" style="padding:20px">Todavía no se registraron recepciones de hincas.</td></tr>'}
     </tbody></table></div>
-    <div class="card" style="margin-top:16px"><h3>Cómo verificar una entrega</h3><ol class="hlist"><li>Leé el código de la etiqueta del paquete (por ejemplo 26050-PW610-1A).</li><li>Mirá el color pintado en la punta de las hincas y, en una muestra, medí el largo total y el perfil.</li><li>Cargalo con <b>+ Recepción</b>: el programa lo compara con el manual de Trina (CIV-DW-26050-2402) y avisa si no coincide y con qué código sí coincide.</li></ol>
-      <p class="hint">Ojo: en el manual hay colores repetidos entre códigos (por ejemplo Gris en MS5-PW609-1B, PW610-1B y PW609-1B). En esos casos el largo y el perfil son los que confirman el código.</p></div>`;
+    <div class="card" style="margin-top:16px"><h3>Cómo verificar una entrega</h3><ol class="hlist"><li>Leé el código de la etiqueta del paquete (por ejemplo 26050-PW610-1A).</li><li>Mirá los dos colores pintados: el de la cabeza (rojo = general de suelo normal, azul = general de suelo blando, sin color = motor) y el de la punta (identifica el código), y, en una muestra, medí el largo total y el perfil.</li><li>Cargalo con <b>+ Recepción</b>: el programa lo compara con el manual de Trina (CIV-DW-26050-2402) y avisa si no coincide y con qué código sí coincide.</li></ol>
+      <p class="hint">Ojo: el color de la punta se repite entre algunos códigos (por ejemplo Gris en MS5-PW609-1B, PW610-1B y PW609-1B). Con el color de la cabeza se separan suelo normal, suelo blando y motor; si aun así queda la duda, el largo y el perfil confirman el código.</p></div>`;
   $$('[data-a=e]', el).forEach((b) => { b.onclick = () => editRecep(b.closest('tr').dataset.id); });
   $$('[data-go]', el).forEach((b) => { b.onclick = (e) => { e.preventDefault(); go(b.dataset.go); }; });
 }
@@ -225,16 +227,17 @@ async function editRecep(id) {
   if (window.READONLY) return;
   const H = S.hincado, r0 = id ? H.recep.find((x) => x.id === id) : null;
   const cols = Object.keys(HCOL);
-  const box0 = { codigo: r0 ? r0.codigo : '', color: r0 ? r0.color : '' };
+  const box0 = { codigo: r0 ? r0.codigo : '', color: r0 ? r0.color : '', colorA: r0 ? r0.colorA || '' : '' };
   const res = await modal({ title: r0 ? 'Editar recepción de hincas' : 'Recepción de hincas', wide: true,
     body: `<div class="form"><label>Fecha<input type="date" id="rF" value="${r0 ? r0.fecha : today()}"></label><label>Remito<input type="text" id="rR" value="${esc(r0 ? r0.remito || '' : '')}"></label>
       <label class="full">Código de la etiqueta<select id="rC"><option value="">Elegí el código…</option>${['N', 'B'].map((sl) => `<optgroup label="${sl === 'N' ? 'Suelo normal (…A)' : 'Suelo blando (…B)'}">${H.catalogo.filter((k) => k.suelo === sl).map((k) => `<option value="${esc(k.codigo)}" ${box0.codigo === k.codigo ? 'selected' : ''}>${esc(k.codigo)} · ${k.tipo === 'Drive' ? 'Drive' : 'Estándar'} · ${k.perfil} · ${fmt(k.largo)} mm</option>`).join('')}</optgroup>`).join('')}</select></label>
-      <div class="full"><div class="lbl">Color pintado en la punta (lo que se ve)</div><div class="hcolsel" id="rCol">${cols.map((c) => `<button type="button" data-col="${c}" class="${box0.color === c ? 'on' : ''}"><i class="hc" style="--hc:${HCOL[c]}" data-c="${c}"></i>${c}</button>`).join('')}</div></div>
+      <div class="full"><div class="lbl">Color pintado en la cabeza (arriba)</div><div class="hcolsel" id="rColA">${['Rojo', 'Azul', 'Sin color'].map((c) => `<button type="button" data-col="${c}" class="${box0.colorA === c ? 'on' : ''}"><i class="hc" style="--hc:${HCOL[c] || '#fff'}" data-c="${c === 'Sin color' ? 'Blanco' : c}"></i>${c}</button>`).join('')}</div></div>
+      <div class="full"><div class="lbl">Color pintado en la punta (abajo)</div><div class="hcolsel" id="rCol">${cols.map((c) => `<button type="button" data-col="${c}" class="${box0.color === c ? 'on' : ''}"><i class="hc" style="--hc:${HCOL[c]}" data-c="${c}"></i>${c}</button>`).join('')}</div></div>
       <label>Largo total medido (mm, opcional)<input type="number" id="rL" step="1" min="0" value="${r0 && r0.largo ? r0.largo : ''}"></label><label>Perfil medido (opcional, ej. 151x100)<input type="text" id="rP" value="${esc(r0 ? r0.perfil || '' : '')}"></label>
       <label>Cantidad de hincas<input type="number" id="rN" step="1" min="0" value="${r0 ? r0.cant : ''}"></label><label>Observación<input type="text" id="rO" value="${esc(r0 ? r0.obs || '' : '')}"></label></div>
       <div id="rVer" class="hver"></div>`,
     buttons: (r0 ? [['Eliminar', 'btn danger', () => 'del']] : []).concat([['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (b) => {
-      const o = { fecha: $('#rF', b).value || today(), remito: $('#rR', b).value.trim(), codigo: $('#rC', b).value, color: ($('#rCol .on', b) || {}).dataset ? $('#rCol .on', b).dataset.col : '', largo: Number($('#rL', b).value) || null, perfil: $('#rP', b).value.trim(), cant: Number($('#rN', b).value) || 0, obs: $('#rO', b).value.trim() };
+      const o = { fecha: $('#rF', b).value || today(), remito: $('#rR', b).value.trim(), codigo: $('#rC', b).value, color: ($('#rCol .on', b) || {}).dataset ? $('#rCol .on', b).dataset.col : '', colorA: ($('#rColA .on', b) || {}).dataset ? $('#rColA .on', b).dataset.col : '', largo: Number($('#rL', b).value) || null, perfil: $('#rP', b).value.trim(), cant: Number($('#rN', b).value) || 0, obs: $('#rO', b).value.trim() };
       if (!o.codigo) { $('#rC', b).focus(); return false; } if (!o.cant) { $('#rN', b).focus(); return false; }
       return o;
     }]]) });
@@ -246,16 +249,16 @@ async function editRecep(id) {
   if (!v.ok) toast('⚠ La recepción no coincide con el manual de Trina: ' + v.msgs.join(' · '), { err: true, ms: 10000 });
 }
 // verificación en vivo dentro del formulario de recepción
-document.addEventListener('click', (e) => { const b = e.target.closest('#rCol button'); if (!b) return; $$('#rCol button').forEach((x) => x.classList.toggle('on', x === b)); verRecepVivo(); });
+document.addEventListener('click', (e) => { const b = e.target.closest('#rCol button, #rColA button'); if (!b) return; const g = b.closest('#rCol, #rColA'); $$('button', g).forEach((x) => x.classList.toggle('on', x === b)); verRecepVivo(); });
 document.addEventListener('input', (e) => { if (e.target.closest('#rL, #rP, #rC')) verRecepVivo(); });
 document.addEventListener('change', (e) => { if (e.target.id === 'rC') verRecepVivo(); });
 function verRecepVivo() {
   const box = $('#rVer'); if (!box) return;
-  const r = { codigo: $('#rC').value, color: ($('#rCol .on') || { dataset: {} }).dataset.col || '', largo: Number($('#rL').value) || null, perfil: $('#rP').value.trim() };
+  const r = { codigo: $('#rC').value, color: ($('#rCol .on') || { dataset: {} }).dataset.col || '', colorA: ($('#rColA .on') || { dataset: {} }).dataset.col || '', largo: Number($('#rL').value) || null, perfil: $('#rP').value.trim() };
   if (!r.codigo) { box.innerHTML = ''; return; }
   const k = hcat(r.codigo), v = verificar(r);
-  box.innerHTML = `<div class="hverk">Según el manual: ${chipH(r.codigo)} · ${esc(k.tipo)} · perfil ${k.perfil} · largo ${fmt(k.largo)} mm (sobre terreno ${fmt(k.sobre)} · NRL ${fmt(k.nrl)} · MRL ${fmt(k.mrl)}) · color ${colorChip(k.color)}</div>
-    ${!r.color && !r.largo && !r.perfil ? '<div class="muted">Elegí el color que se ve en la punta para verificar.</div>' : v.ok ? '<div class="alert ok">✓ Coincide con el manual de Trina</div>' : `<div class="alert error"><div><b>No coincide con el manual.</b><br>${v.msgs.join('<br>')}${v.sug.length ? `<br>Lo recibido coincide con: ${v.sug.map((c) => chipH(c, true)).join(' ')}` : '<br>No hay ningún código del manual con esas características.'}</div></div>`}`;
+  box.innerHTML = `<div class="hverk">Según el manual: ${chipH(r.codigo)} · ${esc(k.tipo)} · perfil ${k.perfil} · largo ${fmt(k.largo)} mm (sobre terreno ${fmt(k.sobre)} · NRL ${fmt(k.nrl)} · MRL ${fmt(k.mrl)}) · cabeza ${hColSup(k) ? colorChip(hColSup(k)) : 'sin color'} · punta ${colorChip(k.color)}</div>
+    ${!r.color && !r.colorA && !r.largo && !r.perfil ? '<div class="muted">Elegí los colores que se ven (cabeza y punta) para verificar.</div>' : v.ok ? '<div class="alert ok">✓ Coincide con el manual de Trina</div>' : `<div class="alert error"><div><b>No coincide con el manual.</b><br>${v.msgs.join('<br>')}${v.sug.length ? `<br>Lo recibido coincide con: ${v.sug.map((c) => chipH(c, true)).join(' ')}` : '<br>No hay ningún código del manual con esas características.'}</div></div>`}`;
 }
 function vHCat(el) {
   const H = S.hincado, I = hincInfo();
