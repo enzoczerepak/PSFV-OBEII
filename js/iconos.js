@@ -17,6 +17,10 @@ const ICO = {
   circuito: svgI('<path d="M4 7.5h13l-3-3M20 16.5H7l3 3"/>'),
   punta: svgI('<path d="M2.5 12h7"/><path d="M9.5 8.5h5.5l4 3.5-4 3.5H9.5z"/><circle cx="15.5" cy="12" r="1.1"/>'),
   sts: svgI('<circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/><path d="M9 3v4M15 3v4M9 17v4M15 17v4"/>'),
+  // mapita plegado con un marcador (plano de distribución)
+  mapa: svgI('<path d="M3 6.8 8.5 4.5l7 2.5L21 4.8V17l-5.5 2.3-7-2.5L3 19z"/><path d="M8.5 4.5v3.2M8.5 14.5v2.3M15.5 7v2.5M15.5 15v4.3"/><path d="M10.1 10.2c0-1.1.85-1.9 1.9-1.9s1.9.8 1.9 1.9c0 1.5-1.9 3.4-1.9 3.4s-1.9-1.9-1.9-3.4z"/><circle cx="12" cy="10.2" r=".5"/>'),
+  // perfil: terreno ondulado, línea del tubo y una fila de hincas (ramming plan)
+  perfil: svgI('<path d="M2 19c2.5-2.2 4.5-2.6 7-1.3s4.5 1 6.8-.8 4.2-1.6 6.2-.4"/><path d="M2.5 6.5 21.5 8"/><path d="M5 6.7v11.4M9.5 7.1v11M14 7.4v9.8M18.5 7.8v8.4"/>'),
   hinca: svgI('<path d="M9 2.8h6v3H9z"/><path d="M10.2 5.8v12.5L12 21l1.8-2.7V5.8"/><path d="M4 13.5h16" stroke-dasharray="2 2"/>'),
   trackers: svgI('<path d="M5 3.5v17M12 3.5v17M19 3.5v17"/><rect x="3.4" y="6" width="3.2" height="12" rx=".6"/><rect x="10.4" y="6" width="3.2" height="12" rx=".6"/><rect x="17.4" y="6" width="3.2" height="12" rx=".6"/>'),
   fibra: svgI('<path d="M2.5 20c3.5 0 4.5-7.5 9-7.5"/><path d="M2.5 16.5c3 0 4-6.5 9-6.5"/><path d="M11.5 10v2.5h2.2l1.3-1.25-1.3-1.25z"/><path d="M17 11.25h4.5M16.6 8l3.6-2.2M16.6 14.5l3.6 2.2"/>'),

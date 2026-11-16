@@ -53,7 +53,7 @@ function ramCalc() {
   const P = ramP(), key = JSON.stringify(P) + '|' + JSON.stringify(S.hincado.matriz || {});
   if (RAMC && RAMC.key === key) return RAMC;
   const L = (window.PLANO ? window.PLANO.trk : []).map((t) => ramTracker(t, P) || { t, est: 'sin', H: [], n: 0 });
-  RAMC = { key, L, map: new Map(L.map((r) => [r.t.id, r])) }; RAMREF = null;
+  RAMC = { key, L, map: new Map(L.map((r) => [r.t.id, r])) }; RAMCAB = null;
   return RAMC;
 }
 // programa: trackers por orden de sector y sentido, repartidos por día según hincadoras × rendimiento (sin domingos)
@@ -157,21 +157,37 @@ function ramPilaSVG(h, k, x, y, o, hecho, txt) {
     : `<rect x="${x0}" y="${y0}" width="${L}" height="${L}" fill="${ramColEst(h)}" ${stroke} class="rmh"/>`;
   if (h.motor) g += ramTxt(x - a - txt * 0.2, y + txt * 0.38, 'M', txt * 1.1, 'text-anchor="end" font-weight="700" class="rmhm"');
   if (hecho) g += `<path d="M${x0} ${y0}L${x1} ${y1}M${x1} ${y0}L${x0} ${y1}" stroke="#c0392b" stroke-width="0.18" class="rmhm"/>`;
-  if (o.modo === 'dist') { if (kk) g += ramTxt(x, y - a - txt * 0.3, esc(ramCodCorto(h.cod)), txt, `text-anchor="middle" class="rmhl"${h.motor ? ' font-weight="700"' : ''}`); }
-  else g += ramTxt(x, y + a + txt * 0.95, `${k + 1} · ${h.rev.toFixed(2)}`, txt * 0.9, `text-anchor="middle" class="rmhl" fill="${h.est !== 'ok' ? '#c0392b' : '#333'}"`);
+  // o.lat: hinca de cabecera con inversor -> el rótulo va al costado (izquierda) para no pisar el inversor
+  if (o.modo === 'dist') { if (kk) g += o.lat ? ramTxt(x - a - txt * 0.25, y + txt * 0.35, esc(ramCodCorto(h.cod)), txt, 'text-anchor="end" class="rmhl"') : ramTxt(x, y - a - txt * 0.3, esc(ramCodCorto(h.cod)), txt, `text-anchor="middle" class="rmhl"${h.motor ? ' font-weight="700"' : ''}`); }
+  else g += o.lat ? ramTxt(x - a - txt * 0.25, y + txt * 0.35, `${k + 1} · ${h.rev.toFixed(2)}`, txt * 0.9, `text-anchor="end" class="rmhl" fill="${h.est !== 'ok' ? '#c0392b' : '#333'}"`)
+    : ramTxt(x, y + a + txt * 0.95, `${k + 1} · ${h.rev.toFixed(2)}`, txt * 0.9, `text-anchor="middle" class="rmhl" fill="${h.est !== 'ok' ? '#c0392b' : '#333'}"`);
   return g;
 }
 // rótulo del tracker: arriba de la primera hinca, por encima del código si lo hay
-const ramTrkTxt = (t, L, o, txt) => { const top = Math.min(...L.map((q) => q.y)); return ramTxt(L[0].x, top - RAM_LADO / 2 - txt * (o.modo === 'dist' ? 1.55 : 0.45), t.id.replace('TRK-', 'TR '), txt * 1.05, 'text-anchor="middle" font-weight="700" class="rmtid2"'); };
+const ramTrkTxt = (t, L, o, txt) => { const top = Math.min(...L.map((q) => q.y)), invN = ramInvCab().get(t.id) === 'N';
+  return ramTxt(L[0].x, invN ? top - 2.0 - 0.6 - txt * 0.35 : top - RAM_LADO / 2 - txt * (o.modo === 'dist' ? 1.55 : 0.45), t.id.replace('TRK-', 'TR '), txt * 1.05, 'text-anchor="middle" font-weight="700" class="rmtid2"'); };
+// ¿la hinca k es la de la cabecera donde está el inversor?
+const ramLat = (t, L, k) => { const c = ramInvCab().get(t.id); return !!c && (c === 'N' ? k === 0 : k === L.length - 1); };
 // STS e inversores (referencia): rectángulo solo con borde y el nombre en la esquina de arriba a la izquierda
 const ramInvNom = (id) => { const m = /^TX(\d+)-INV(\d+)$/.exec(id); return m ? `INV ${m[1]}.${m[2]}` : id; };
 let RAMREF = null;
-function ramLocal(X, Y) {
-  if (!RAMREF) { const C = ramCalc(); RAMREF = []; window.PLANO.trk.forEach((t) => { const r = C.map.get(t.id); if (!r || !r.n) return;
-    const ys = r.H.map((h) => h.y), yN = Math.max(...ys), yS = Math.min(...ys), off = (t.h - (yN - yS)) / 2;
-    RAMREF.push({ X: r.H[0].x, Y: (yN + yS) / 2, c: t.y + off + yN }); }); }
-  let b = null, bd = Infinity; RAMREF.forEach((q) => { const d = Math.hypot(q.X - X, q.Y - Y); if (d < bd) { bd = d; b = q; } });
-  return { x: X - RAM_X0, y: b ? b.c - Y : 0 };
+// todo se dibuja en coordenadas reales (replanteo de hincas y plano de canalización), igual que el DXF: x = X − origen, y = origen − Y
+function ramLocal(X, Y) { const [OX, OY] = window.PLANO.origen; return { x: X - OX, y: OY - Y }; }
+// rectángulo de cada tracker a partir de sus hincas reales (si no tiene coordenadas, el del plano general)
+// cabecera de cada tracker donde está su inversor ('N' o 'S'), según coordenadas reales
+let RAMCAB = null;
+function ramInvCab() {
+  if (RAMCAB) return RAMCAB; RAMCAB = new Map(); const C = ramCalc(), [OX, OY] = window.PLANO.origen;
+  (window.PLANO.inv || []).forEach((v) => { const X = OX + v.x, Y = OY - v.y; let b = null, bd = Infinity;
+    C.L.forEach((r) => { if (!r.n) return; const ys = r.H.map((h) => h.y), yN = Math.max(...ys), yS = Math.min(...ys), xm = r.H[0].x;
+      const dy = Y > yN ? Y - yN : Y < yS ? yS - Y : 0, d = Math.hypot(xm - X, dy); if (d < bd) { bd = d; b = { id: r.t.id, lado: Y > (yN + yS) / 2 ? 'N' : 'S' }; } });
+    if (b && bd < 6) RAMCAB.set(b.id, b.lado); });
+  return RAMCAB;
+}
+function ramRect(t) {
+  const r = ramCalc().map.get(t.id); if (!r || !r.n) return { x: t.x, y: t.y, w: t.w, h: t.h };
+  const [OX, OY] = window.PLANO.origen, ys = r.H.map((h) => h.y), yN = Math.max(...ys), yS = Math.min(...ys), xm = r.H.reduce((q, h) => q + h.x, 0) / r.n;
+  return { x: xm - OX - t.w / 2, y: OY - yN - 1.75, w: t.w, h: yN - yS + 3.5 };
 }
 function ramRefSVG(tx, conInv) {
   const P = window.PLANO, [OX, OY] = P.origen, L = (o) => Object.assign({}, o, ramLocal(OX + o.x, OY - o.y));
@@ -183,7 +199,7 @@ function ramHincasSVG(C, HA, modo) {
   const o = { modo };
   return window.PLANO.trk.map((t) => { const r = C.map.get(t.id); if (!r || !r.n) return '';
     const L = ramPilesLocal(t, r);
-    return `<g data-t="${t.id}"><title>${t.id}</title>${ramTrkTxt(t, L, o, 0.85)}` + L.map(({ h, k, x, y }) => ramPilaSVG(h, k, x, y, o, !!HA[t.id], 0.85)).join('') + '</g>'; }).join('');
+    return `<g data-t="${t.id}"><title>${t.id}</title>${ramTrkTxt(t, L, o, 0.85)}` + L.map(({ h, k, x, y }) => ramPilaSVG(h, k, x, y, Object.assign({}, o, { lat: ramLat(t, L, k) }), !!HA[t.id], 0.85)).join('') + '</g>'; }).join('');
 }
 // referencias (leyenda) de cada plano
 function ramRefs(C, modo, dosCol) {
@@ -206,7 +222,7 @@ function ramPlano(b, C, PG, modo = 'ram') {
   const sel = UI.sel && C.map.get(UI.sel);
   const fillT = (r) => (modo === 'dist' ? (HA[r.t.id] ? '#d9d2ec' : r.conCod ? '#e3e8ee' : '#c9d0da') : ramColor(r, PG, HA));
   b.innerHTML = `<div class="rmgrid"><div class="card rmplano">${modo === 'dist' ? '' : `<div class="tools" style="margin:0 0 8px"><div class="seg" id="rmC"><button data-v="estado">Estado</button><button data-v="pend">Pendiente</button><button data-v="ond">Ondulación</button><button data-v="prog">Programa</button><button data-v="hinc">Avance</button></div></div>`}
-      <div class="rmwrap"><svg viewBox="${ramVB().join(' ')}" class="rmsvg ${ramZcls()}" preserveAspectRatio="xMidYMid meet" font-family="Arial">${P.trk.map((t) => { const r = C.map.get(t.id); return `<rect data-t="${t.id}" x="${t.x}" y="${t.y}" width="${t.w}" height="${t.h}" fill="${fillT(r)}" class="${UI.sel === t.id ? 'on' : ''}"><title>${t.id}${modo === 'dist' ? ` · ${cfgTxt(cfgDe(t))}` : ` · ${(RAM_EST[r.est] || RAM_EST.sin)[0]}${r.n ? ` · pendiente ${fmt(r.pend, 1)} % · ondulación ${fmt(r.ond, 2)} m` : ''}`}</title></rect>`; }).join('')}
+      <div class="rmwrap"><svg viewBox="${ramVB().join(' ')}" class="rmsvg ${ramZcls()}" preserveAspectRatio="xMidYMid meet" font-family="Arial">${P.trk.map((t) => { const r = C.map.get(t.id), q = ramRect(t); return `<rect data-t="${t.id}" x="${q.x}" y="${q.y}" width="${q.w}" height="${q.h}" fill="${fillT(r)}" class="${UI.sel === t.id ? 'on' : ''}"><title>${t.id}${modo === 'dist' ? ` · ${cfgTxt(cfgDe(t))}` : ` · ${(RAM_EST[r.est] || RAM_EST.sin)[0]}${r.n ? ` · pendiente ${fmt(r.pend, 1)} % · ondulación ${fmt(r.ond, 2)} m` : ''}`}</title></rect>`; }).join('')}
         <g class="rmz1">${ramHincasSVG(C, HA, modo)}</g><g class="rmref">${ramRefSVG(1.2, false)}</g></svg>
         <div class="rmzb"><button class="btn sm" data-z="in" title="Acercar">＋</button><button class="btn sm" data-z="out" title="Alejar">－</button><button class="btn sm" data-z="fit" title="Ver todo el parque">⤢</button>${UI.sel ? '<button class="btn sm" data-z="sel" title="Ir al tracker elegido">◎</button>' : ''}</div></div>
       <div class="legend rmleg">${leg}</div><p class="hint" style="margin:6px 0 0">Rueda del mouse o ＋/－ para hacer zoom, arrastrá para moverte. Al acercarte aparecen los trackers y cada hinca; más cerca, los rótulos.</p></div>
@@ -244,7 +260,7 @@ function ramZoomBind(b) {
   svg.addEventListener('dblclick', (e) => { const [x, y] = pt(e); zoom(0.5, x, y); });
   $$('[data-z]', b).forEach((bt) => { bt.onclick = () => { const z = bt.dataset.z;
     if (z === 'in') zoom(0.6); else if (z === 'out') zoom(1.6); else if (z === 'fit') { PUI.vb = null; set([0, 0, P.W, P.H]); }
-    else if (z === 'sel') { const t = P.trk.find((x) => x.id === PUI.sel); if (t) set([t.x + t.w / 2 - 45, t.y + t.h / 2 - 35, 60, 70]); } }; });
+    else if (z === 'sel') { const t0 = P.trk.find((x) => x.id === PUI.sel); if (t0) { const t = ramRect(t0); set([t.x + t.w / 2 - 45, t.y + t.h / 2 - 35, 60, 70]); } } }; });
 }
 // tracker bajo una hinca clickeada: el rectángulo que la contiene
 function ramTrkEn(e) { const els = document.elementsFromPoint(e.clientX, e.clientY); const r = els.find((x) => x.dataset && x.dataset.t); return r ? r.dataset.t : null; }
@@ -286,7 +302,7 @@ function ramTabla(b, C, PG) {
       <td>${HA[r.t.id] ? `<span class="tpos">✓ ${fechaCorta(HA[r.t.id].f)}</span>` : p ? `${fechaCorta(p.f)} · H${p.maq}` : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
   segBind('#rmS', RAMUI.s, (v) => { RAMUI.s = v; render(false); }); segBind('#rmF', RAMUI.f, (v) => { RAMUI.f = v; render(false); });
   const q = $('#rmQ', b); q.oninput = () => { RAMUI.q = q.value.trim(); clearTimeout(q._t); q._t = setTimeout(() => render(false), 300); };
-  $$('tr[data-t]', b).forEach((tr) => { tr.onclick = () => { RAMUI.sel = tr.dataset.t; RAMUI.tab = 'plano'; const t = window.PLANO.trk.find((x) => x.id === tr.dataset.t); if (t) RAMUI.vb = [t.x + t.w / 2 - 45, t.y + t.h / 2 - 35, 60, 70]; render(false); }; });
+  $$('tr[data-t]', b).forEach((tr) => { tr.onclick = () => { RAMUI.sel = tr.dataset.t; RAMUI.tab = 'plano'; const t0 = window.PLANO.trk.find((x) => x.id === tr.dataset.t), t = t0 && ramRect(t0); if (t) RAMUI.vb = [t.x + t.w / 2 - 45, t.y + t.h / 2 - 35, 60, 70]; render(false); }; });
 }
 function ramProg(b, C, PG) {
   const P = ramP(), HA = (S.hincado || {}).avance || {};
@@ -392,7 +408,7 @@ function ramDxf(modo = 'ram') {
   C.L.forEach((r) => {
     if (!r.n) return; const H = r.H, a = H[0], z = H[H.length - 1], hecho = !!HA[r.t.id];
     g(0, 'LINE', 8, hecho ? 'RAM-HINCADO' : 'RAM-TRACKER', 10, num(a.x), 20, num(a.y), 30, 0, 11, num(z.x), 21, num(z.y), 31, 0);
-    const yT = a.y + RAM_LADO / 2 + (dist ? 1.35 : 0.45);
+    const cab = ramInvCab().get(r.t.id), yT = cab === 'N' ? a.y + 2.0 + 0.6 + 0.3 : a.y + RAM_LADO / 2 + (dist ? 1.35 : 0.45);
     g(0, 'TEXT', 8, 'RAM-TRACKER-ID', 10, num(a.x), 20, num(yT), 30, 0, 40, 0.8, 1, r.t.id, 72, 1, 11, num(a.x), 21, num(yT), 31, 0);
     H.forEach((h, k) => {
       const kk = h.cod && hcat(h.cod), est = h.est === 'corto' ? 'Perfil corto' : h.est === 'alto' ? 'Terreno alto' : h.salto ? 'Salto' : 'OK';
@@ -407,12 +423,15 @@ function ramDxf(modo = 'ram') {
         g(0, 'SOLID', 8, capa, 62, h.est !== 'ok' ? 1 : h.salto ? 30 : 3, 10, ax, 20, ay, 30, 0, 11, bx, 21, by, 31, 0, 12, cx2, 22, cy2, 32, 0, 13, dx2, 23, dy2, 33, 0); }
       const sq = (d, ly) => { const c = [P(-d, -d), P(d, -d), P(d, d), P(-d, d)]; c.forEach((p, i) => { const q = c[(i + 1) % 4]; g(0, 'LINE', 8, ly, 10, p[0], 20, p[1], 30, 0, 11, q[0], 21, q[1], 31, 0); }); };
       sq(A, capa); if (h.motor) { sq(A + 0.08, 'HINCA-MOTOR'); sq(A + 0.16, 'HINCA-MOTOR'); g(0, 'TEXT', 8, 'HINCA-MOTOR', 10, num(X - A - 0.35), 20, num(Y - 0.3), 30, 0, 40, 0.65, 1, 'M', 72, 2, 11, num(X - A - 0.35), 21, num(Y - 0.3), 31, 0); }
-      if (dist && kk) g(0, 'TEXT', 8, 'HINCA-CODIGO', 10, num(X), 20, num(Y + A + 0.25), 30, 0, 40, 0.5, 1, ramCodCorto(h.cod), 72, 1, 11, num(X), 21, num(Y + A + 0.25), 31, 0);
+      const lat = !!cab && (cab === 'N' ? k === 0 : k === H.length - 1);
+      if (dist && kk) { if (lat) g(0, 'TEXT', 8, 'HINCA-CODIGO', 10, num(X - A - 0.25), 20, num(Y - 0.25), 30, 0, 40, 0.5, 1, ramCodCorto(h.cod), 72, 2, 11, num(X - A - 0.25), 21, num(Y - 0.25), 31, 0);
+        else g(0, 'TEXT', 8, 'HINCA-CODIGO', 10, num(X), 20, num(Y + A + 0.25), 30, 0, 40, 0.5, 1, ramCodCorto(h.cod), 72, 1, 11, num(X), 21, num(Y + A + 0.25), 31, 0); }
       g(0, 'INSERT', 8, capa, 66, 1, 2, 'HINCA', 10, num(h.x), 20, num(h.y), 30, 0);
       const vals = [r.t.id, k + 1, h.motor ? 'Motor' : 'General', h.cod || '', kk ? hColSup(kk) || 'sin color' : '', kk ? kk.color : '', num(h.z), num(h.cab), num(h.rev), num(h.emb), est];
       TAGS.forEach(([t], i) => g(0, 'ATTRIB', 8, capa, 10, num(h.x + 0.3), 20, num(h.y - 0.15 - i * 0.3), 30, 0, 40, 0.2, 1, vals[i], 2, t, 70, 1));
       g(0, 'SEQEND', 8, capa);
-      if (!dist) g(0, 'TEXT', 8, 'RAM-ALTURA-LIBRE', 10, num(X), 20, num(Y - A - 0.6), 30, 0, 40, 0.45, 1, `${k + 1} · ${h.rev.toFixed(2)}`, 72, 1, 11, num(X), 21, num(Y - A - 0.6), 31, 0);
+      if (!dist) { if (lat) g(0, 'TEXT', 8, 'RAM-ALTURA-LIBRE', 10, num(X - A - 0.25), 20, num(Y - 0.22), 30, 0, 40, 0.45, 1, `${k + 1} · ${h.rev.toFixed(2)}`, 72, 2, 11, num(X - A - 0.25), 21, num(Y - 0.22), 31, 0);
+        else g(0, 'TEXT', 8, 'RAM-ALTURA-LIBRE', 10, num(X), 20, num(Y - A - 0.6), 30, 0, 40, 0.45, 1, `${k + 1} · ${h.rev.toFixed(2)}`, 72, 1, 11, num(X), 21, num(Y - A - 0.6), 31, 0); }
       if (HA[r.t.id]) g(0, 'LINE', 8, 'RAM-HINCADO', 10, num(X - A), 20, num(Y - A), 30, 0, 11, num(X + A), 21, num(Y + A), 31, 0), g(0, 'LINE', 8, 'RAM-HINCADO', 10, num(X - A), 20, num(Y + A), 30, 0, 11, num(X + A), 21, num(Y - A), 31, 0);
     });
   });
@@ -452,8 +471,8 @@ const RAMPR = { sec: 'all', size: 'A3', esc: 400, color: 'auto', rot: 'auto', he
 const RAM_X0 = 7393788.009;
 // posición de cada hinca en coordenadas del plano (m, norte arriba), dentro del rectángulo de su tracker
 function ramPilesLocal(t, r) {
-  const ys = r.H.map((h) => h.y), yN = Math.max(...ys), off = (t.h - (yN - Math.min(...ys))) / 2;
-  return r.H.map((h, k) => ({ h, k, x: h.x - RAM_X0, y: t.y + off + (yN - h.y) }));
+  const [OX, OY] = window.PLANO.origen;
+  return r.H.map((h, k) => ({ h, k, x: h.x - OX, y: OY - h.y }));
 }
 const ramCodCorto = (c) => String(c || '').replace(/^26050-/, '').replace(/^MS\d-/, '');
 async function ramImprimir(modo = 'ram') {
@@ -478,7 +497,7 @@ function ramHojas(C, o) {
   const W = (pw - 16) * esc, H = (ph - 16 - 22 - 14) * esc; // márgenes, encabezado y referencias
   const hojas = [], secs = o.sec === 'all' ? [...new Set(C.L.map((r) => r.t.s))].sort() : [o.sec];
   secs.forEach((s) => {
-    const T = C.L.filter((r) => r.t.s === s && r.n).map((r) => r.t).sort((a, b) => a.y - b.y);
+    const T = C.L.filter((r) => r.t.s === s && r.n).map((r) => Object.assign({}, ramRect(r.t), { id: r.t.id, s: r.t.s, t: r.t.t, z: r.t.z, sl: r.t.sl })).sort((a, b) => a.y - b.y);
     const filas = []; T.forEach((t) => { const f = filas.find((f) => Math.abs(f.y0 - t.y) < 8); if (f) { f.t.push(t); f.y1 = Math.max(f.y1, t.y + t.h); } else filas.push({ y0: t.y, y1: t.y + t.h, t: [t] }); });
     filas.sort((a, b) => a.y0 - b.y0);
     const grupos = []; filas.forEach((f) => { const g = grupos[grupos.length - 1]; if (g && Math.max(g.y1, f.y1) - g.y0 + 6 <= H) { g.t.push(...f.t); g.y1 = Math.max(g.y1, f.y1); } else grupos.push({ y0: f.y0, y1: f.y1, t: f.t.slice() }); });
@@ -499,7 +518,7 @@ function ramPdfPlano(o) {
       const top = Math.min(...L.map((q) => q.y)), bot = Math.max(...L.map((q) => q.y));
       g += `<line x1="${L[0].x}" y1="${top}" x2="${L[0].x}" y2="${bot}" stroke="#d09060" stroke-width="0.12"/>`;
       g += ramTrkTxt(t, L, o, txt);
-      L.forEach(({ h, k, x, y }) => { g += ramPilaSVG(h, k, x, y, o, o.hech && hecho, txt); });
+      L.forEach(({ h, k, x, y }) => { g += ramPilaSVG(h, k, x, y, Object.assign({}, o, { lat: ramLat(t, L, k) }), o.hech && hecho, txt); });
     });
     g += ramRefSVG(txt, true);
     return `<section class="rmpg" style="width:${pw}mm;height:${ph}mm">
