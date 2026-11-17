@@ -201,7 +201,7 @@ function perCubre(maq, f) { return maqH().some((r) => r.maq === maq && Object.en
 function filaCarga(m, f) {
   const x = datoDia(m.id, f), ya = m.sinHoro ? x.h : x.v, L = lecturas(m.id).filter((y) => y[0] !== f), ant = m.sinHoro ? null : horoAntes(m.id, f, L), prevD = L.filter((y) => y[0] < f).pop();
   const ref = m.sinHoro ? 'sin horómetro: horas del día' : ant == null ? 'sin horómetro inicial' : `inicio ${fmt(ant, 1)}${prevD ? ` (${fechaCorta(prevD[0]).slice(0, 5)})` : ''}`;
-  return `<div class="mqr${vacio(ya) ? '' : ' ya'}" data-m="${m.id}" data-f="${f}"><b class="mono">${esc(m.interno)}</b><span class="muted mqd">${esc(m.descripcion || '')}</span>
+  return `<div class="mqr${vacio(ya) ? '' : ' ya'}" data-m="${m.id}" data-f="${f}"><b class="mono" title="${esc(m.interno)}">${esc(m.interno)}</b><span class="muted mqd">${esc(m.descripcion || '')}</span>
     <span class="muted mqref">${ref}</span><input type="number" inputmode="decimal" step="${m.sinHoro ? '0.5' : '0.1'}" min="0" class="mqv" placeholder="${m.sinHoro ? 'horas' : 'horómetro'}" value="${vacio(ya) ? '' : Number(ya)}"><span class="mqh"></span>
     <button class="btn sm ghost mqin" data-inact="${m.id}" title="Equipo en obra sin uso (por ejemplo, una hincadora hasta que empiece el hincado): deja de pedir horas hasta que lo reactives">💤 Inactiva</button></div>`;
 }

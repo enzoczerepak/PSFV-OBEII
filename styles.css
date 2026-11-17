@@ -1322,13 +1322,20 @@ body.ro .solo-pc { display: none !important; }
 .mqcard{padding:12px 16px}.mqcard.pend{border-left:4px solid var(--warn)}
 .mqhd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}.mqhd h3{margin:0;font-size:15px;text-transform:none}.mqhd h3::first-letter{text-transform:uppercase}
 .mqhd input[type=date]{padding:5px 8px;border:1px solid var(--line,#d5dbe3);border-radius:8px;font:inherit}
-.mqrows{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:0 18px}
+.mqrows{display:grid;grid-template-columns:1fr;gap:0}
 .mqr{display:grid;grid-template-columns:80px 1fr 150px 110px 120px;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line,#e2e7ee)}
 .mqr .mqd,.mqr .mqref{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mqr .mqv{padding:6px 8px;border:1.5px solid var(--line,#d5dbe3);border-radius:8px;font:inherit;text-align:right;width:100%}
 .mqr.ya .mqv{border-color:#9bd3b5;background:#effaf4}.mqr.bad .mqv{border-color:#d64545;background:#fdecec}
 .mqr .mqh{font-size:12.5px;font-weight:600;color:#1f9d6b}.mqr.bad .mqh{color:#d64545}
-.mqr{grid-template-columns:80px 1fr 150px 110px 110px auto}.mqr .mqin{padding:3px 8px;font-size:11.5px;opacity:.7}.mqr .mqin:hover{opacity:1}
+/* un equipo por fila: el botón Inactiva nunca se superpone con el interno */
+.mqr{grid-template-columns:120px minmax(0,1fr) 200px 120px 150px auto}.mqr .mqin{padding:3px 8px;font-size:11.5px;opacity:.7;white-space:nowrap;justify-self:end}.mqr .mqin:hover{opacity:1}
+.mqr > b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+@media (max-width:1200px){
+  .mqr{grid-template-columns:110px minmax(0,1fr) 130px auto;row-gap:2px}
+  .mqr > b{grid-column:1;grid-row:1}.mqr .mqd{grid-column:2;grid-row:1}.mqr .mqv{grid-column:3;grid-row:1}.mqr .mqin{grid-column:4;grid-row:1}
+  .mqr .mqref{grid-column:2;grid-row:2}.mqr .mqh{grid-column:3/5;grid-row:2}
+}
 .mqina{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line,#d5dbe3);display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;color:var(--mute)}
 .mqi{display:inline-flex;align-items:center;gap:6px;background:#f1f4f8;border-radius:9px;padding:3px 4px 3px 10px}
 .tl-hecho{color:var(--mute,#6b7785);font-weight:600;white-space:nowrap}
