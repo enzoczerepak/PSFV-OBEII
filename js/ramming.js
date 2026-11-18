@@ -489,7 +489,7 @@ async function ramExportDxf(modo = 'ram') {
 }
 
 // ---------- plano de hincado imprimible (por sector, en hojas A3/A4 a escala) ----------
-const RAMPR = { sec: 'all', size: 'A3', n: 4, hech: true };
+const RAMPR = { sec: 'all', size: 'A3', n: 4, menos: true, hech: true };
 // posición de cada hinca en coordenadas del plano (m, norte arriba), dentro del rectángulo de su tracker
 function ramPilesLocal(t, r) {
   const [OX, OY] = window.PLANO.origen;
@@ -505,19 +505,20 @@ async function ramImprimir(modo = 'ram') {
       <label>Sector<select id="pS"><option value="all">Todos (un juego de hojas por sector)</option>${secs.map((s) => `<option value="${s}" ${RAMPR.sec === s ? 'selected' : ''}>Sector ${s}</option>`).join('')}</select></label>
       <label>Hoja<select id="pT"><option value="A3" ${RAMPR.size === 'A3' ? 'selected' : ''}>A3</option><option value="A4" ${RAMPR.size === 'A4' ? 'selected' : ''}>A4</option></select></label>
       <label>Hojas por sector<select id="pN">${[1, 2, 4, 6, 8].map((n) => `<option value="${n}" ${RAMPR.n === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <label class="rmchk" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="pM" ${RAMPR.menos !== false ? 'checked' : ''} style="width:auto"><span>Usar menos hojas si el sector entra a escala 1:${RAM_ESC_MAX} o mayor (por ejemplo, el sector 2 en una sola hoja)</span></label>
       <label class="rmchk" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="pH" ${RAMPR.hech ? 'checked' : ''} style="width:auto"><span>Tachar con una cruz las hincas de trackers ya hincados</span></label></div>
       <div class="hint" id="pInf"></div>`,
     buttons: [['Cancelar', 'btn', () => null], ['Generar PDF', 'btn pri', (m) => ramLeerPr(m)]] });
   setTimeout(() => { const m = $('#modal .mbox'); if (!m || !$('#pS', m)) return;
-    const upd = () => { const o = ramLeerPr(m), H = ramHojas(C, o), por = new Map(); H.forEach((h) => por.set(h.s, h));
+    const upd = () => { const o = Object.assign(ramLeerPr(m), { modo }), H = ramHojas(C, o), por = new Map(); H.forEach((h) => por.set(h.s, h));
       $('#pInf', m).innerHTML = `Salen <b>${H.length} hojas ${o.size}</b>:<br>` + [...por.values()].map((h) => `Sector ${h.s}: ${h.de} hojas ${h.port ? 'verticales' : 'apaisadas'} (${h.cols} × ${h.filas}) · escala 1:${h.esc}`).join('<br>'); };
     $$('select,input', m).forEach((i) => (i.onchange = upd)); upd(); }, 0);
   const o = await pr; if (!o) return; Object.assign(RAMPR, o); ramPdfPlano(Object.assign({}, RAMPR, { modo }));
 }
-function ramLeerPr(m) { return { sec: $('#pS', m).value, size: $('#pT', m).value, n: Number($('#pN', m).value), hech: $('#pH', m).checked }; }
+function ramLeerPr(m) { return { sec: $('#pS', m).value, size: $('#pT', m).value, n: Number($('#pN', m).value), menos: $('#pM', m).checked, hech: $('#pH', m).checked }; }
 // medidas de la hoja (mm): área de dibujo descontando márgenes, encabezado y referencias
 const RAM_HOJA = { A3: [420, 297], A4: [297, 210] };
-function ramArea(size, port) { const [a, b] = RAM_HOJA[size] || RAM_HOJA.A3, pw = port ? b : a, ph = port ? a : b, F = port ? 26 : 18; return { pw, ph, F, W: pw - 16, H: ph - 16 - 20 - F - 4 }; } // 4 mm de holgura: si el contenido se pasa aunque sea un poco, el PDF parte la hoja en dos }
+function ramArea(size, port) { const [a, b] = RAM_HOJA[size] || RAM_HOJA.A3, pw = port ? b : a, ph = port ? a : b; return { pw, ph, W: pw - 16, H: ph - 16 - 4 }; } // 4 mm de holgura: si el contenido se pasa aunque sea un poco, el PDF parte la hoja en dos }
 // cortes posibles a lo largo de un eje: huecos entre trackers (nunca se corta un tracker)
 function ramCortes(T, ax) {
   const iv = T.map((t) => (ax === 'x' ? [t.x, t.x + t.w] : [t.y, t.y + t.h])).sort((a, b) => a[0] - b[0]), c = [];
@@ -531,41 +532,120 @@ function* ramComb(n, k, d = 0, acc = []) { if (acc.length === k) { yield acc; re
 // parte T en 'partes' trozos a lo largo de 'ax' maximizando f(trozo) mínimo; devuelve {v, grupos}
 function ramPartir(T, ax, partes, f) {
   if (partes === 1) return { v: f(T), grupos: [T] };
-  const cs = ramCortes(T, ax), cen = (t) => (ax === 'x' ? t.x + t.w / 2 : t.y + t.h / 2); let best = { v: -1, grupos: null };
-  if (cs.length < partes - 1) return best;
-  for (const ix of ramComb(cs.length, partes - 1)) { const lim = ix.map((i) => cs[i]).concat(Infinity), G = lim.map(() => []);
-    T.forEach((t) => { const c = cen(t); G[lim.findIndex((l) => c < l)].push(t); });
-    if (G.some((g) => !g.length)) continue; let v = Infinity; for (const g of G) { v = Math.min(v, f(g)); if (v <= best.v) break; }
-    if (v > best.v) best = { v, grupos: G }; }
-  return best;
+  // programación dinámica sobre los huecos entre trackers: maximiza el mínimo f(trozo) en milisegundos (antes se probaban todas las
+  // combinaciones de cortes, que con 6 u 8 hojas en un sector grande eran millones y trababan el programa)
+  const cs = ramCortes(T, ax), cen = (t) => (ax === 'x' ? t.x + t.w / 2 : t.y + t.h / 2);
+  if (cs.length < partes - 1) return { v: -1, grupos: null };
+  const L = T.slice().sort((p, q) => cen(p) - cen(q)), B = [0]; let j = 0;
+  cs.forEach((c) => { while (j < L.length && cen(L[j]) < c) j++; B.push(j); }); B.push(L.length); // B: índice de corte en L para cada borde
+  const nb = B.length, memo = new Map(), F = (i, k) => { if (B[k] <= B[i]) return -1; const key = i * nb + k; if (!memo.has(key)) memo.set(key, f(L.slice(B[i], B[k]))); return memo.get(key); };
+  const D = [Array.from({ length: nb }, (_, k) => (k ? F(0, k) : -1))], P = [[]];
+  for (let p = 1; p < partes; p++) { D[p] = new Array(nb).fill(-1); P[p] = new Array(nb).fill(-1);
+    for (let k = p + 1; k < nb; k++) for (let i = p; i < k; i++) { if (D[p - 1][i] <= D[p][k]) continue; const v = Math.min(D[p - 1][i], F(i, k)); if (v > D[p][k]) { D[p][k] = v; P[p][k] = i; } } }
+  const v = D[partes - 1][nb - 1]; if (v <= 0) return { v: -1, grupos: null };
+  // segunda pasada: con esa misma escala, emparejar los trozos (minimizar el más largo sobre el eje) para que no quede una hoja casi vacía
+  const ext = (i, k) => { const g = L.slice(B[i], B[k]), b = ramCaja(g); return ax === 'x' ? b.x1 - b.x0 : b.y1 - b.y0; };
+  const ok = (i, k) => F(i, k) >= v * (1 - 3e-3), E = [Array.from({ length: nb }, (_, k) => (k && B[k] > 0 && ok(0, k) ? ext(0, k) : Infinity))], Q = [[]];
+  for (let p = 1; p < partes; p++) { E[p] = new Array(nb).fill(Infinity); Q[p] = new Array(nb).fill(-1);
+    for (let k = p + 1; k < nb; k++) for (let i = p; i < k; i++) { if (E[p - 1][i] >= E[p][k] || B[k] <= B[i] || !ok(i, k)) continue; const w = Math.max(E[p - 1][i], ext(i, k)); if (w < E[p][k]) { E[p][k] = w; Q[p][k] = i; } } }
+  const R = E[partes - 1][nb - 1] < Infinity ? Q : P;
+  const G = []; let k = nb - 1; for (let p = partes - 1; p > 0; p--) { const i = R[p][k]; G.unshift(L.slice(B[i], B[k])); k = i; } G.unshift(L.slice(0, B[k]));
+  return { v, grupos: G };
 }
-// reparte cada sector en o.n hojas: prueba grillas columnas × filas (cortes por huecos entre trackers), hoja vertical o apaisada,
-// y se queda con la que da la escala más grande (la misma escala para todas las hojas del sector)
+// mejor grilla columnas × filas para repartir T en k hojas (cortes por huecos entre trackers), hoja vertical o apaisada
+function ramGrilla(T, k, size) {
+  const grillas = []; for (let c = 1; c <= k; c++) if (k % c === 0) grillas.push([c, k / c]);
+  let best = null; const todas = [];
+  [false, true].forEach((port) => { const A = ramArea(size, port), f = (g) => { const b = ramCaja(g), sx = A.W / (b.x1 - b.x0), sy = A.H / (b.y1 - b.y0); return Math.min(sx, sy) * (1 + 1e-4 * Math.min(sx / sy, sy / sx)) + 1e-6 * (sx + sy); };
+    grillas.forEach(([c, r]) => { const memo = new Map(), fc = (g) => { const kk = g.map((t) => t.id).join(); if (!memo.has(kk)) memo.set(kk, ramPartir(g, 'y', r, f)); return memo.get(kk).v; };
+      const X = ramPartir(T, 'x', c, fc); if (X.v <= 0) return;
+      const cand = { v: X.v, port, c, r, A, G: X.grupos.map((g) => memo.get(g.map((t) => t.id).join()).grupos) }; todas.push(cand);
+      if (!best || X.v > best.v * 1.0001) best = cand; }); });
+  return todas.sort((a, b) => b.v - a.v);
+}
+// tamaño del recuadro de referencias (mm), según la hoja y cuántos códigos hay que listar
+function ramRotDim(size, nCod, dist, croqAsp, comp) {
+  if (comp) { // compacto, para sectores llenos sin hueco grande: códigos en 3 columnas y esquema más chico
+    const W = size === 'A4' ? 64 : 76, cw = W - 7, ch = Math.min(22, cw * croqAsp), lin = dist ? Math.ceil(Math.max(nCod, 1) / 3) + 3 : 4;
+    return { W, ch, comp: true, H: 21 + ch + 6 + lin * 3.4 + 12 };
+  }
+  const W = size === 'A4' ? 80 : 96, cw = W - 8, ch = Math.min(size === 'A4' ? 30 : 40, cw * croqAsp);
+  const lin = dist ? Math.ceil(Math.max(nCod, 1) / 2) + 4 : 5;
+  return { W, ch, H: 25 + ch + 7 + lin * 3.7 + 16 };
+}
+const RAM_ESC_MAX = 400; // con "usar menos hojas": una hoja más solo si sin ella la escala queda más chica que 1:400
+// obstáculos de la hoja (en metros): trackers con su rótulo, inversores y STS
+function ramObst(T) {
+  const P = window.PLANO, O = T.map((t) => ramCaja([t]));
+  (P.inv || []).forEach((v) => O.push({ x0: v.x - 1.5, x1: v.x + 6.5, y0: v.y - 1.5, y1: v.y + 2 }));
+  (P.sts || []).forEach((v) => O.push({ x0: v.x - 4.5, x1: v.x + 4.5, y0: v.y - 4.5, y1: v.y + 2.5 }));
+  return O;
+}
+const ramChoca = (R, O) => O.some((b) => b.x0 < R.x1 && b.x1 > R.x0 && b.y0 < R.y1 && b.y1 > R.y0);
+// ubica la hoja a escala esc: prueba correr el dibujo dentro de la hoja y busca un lugar libre sobre los bordes para el recuadro
+function ramUbicar(p, esc, O) {
+  const m = esc / 1000, W = p.A.W * m, H = p.A.H * m, b = p.caja, rw = (p.rot.W + 3) * m, rh = (p.rot.H + 3) * m;
+  if (rw > W || rh > H) return null;
+  const hx = Math.max(0, W - (b.x1 - b.x0)) / 2, hy = Math.max(0, H - (b.y1 - b.y0)) / 2, cx = (b.x0 + b.x1) / 2 - W / 2, cy = (b.y0 + b.y1) / 2 - H / 2;
+  const pos = [[1, 1], [0, 1], [1, 0], [0, 0]]; [0.25, 0.5, 0.75].forEach((t) => pos.push([t, 1], [t, 0], [1, t], [0, t]));
+  // desplazamientos del dibujo (centrado primero) y posiciones del recuadro: esquinas primero, después el resto del borde
+  for (const [dx, dy] of [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]]) {
+    const x0 = cx - dx * hx, y0 = cy - dy * hy;
+    for (const [tx, ty] of pos) {
+      const rx = x0 + tx * (W - rw), ry = y0 + ty * (H - rh), R = { x0: rx, x1: rx + rw, y0: ry, y1: ry + rh };
+      // rl/rt: posición del recuadro (mm) desde el borde del área de dibujo, con 3 mm de separación del dibujo
+      if (!ramChoca(R, O)) return { x0, y0, W, H, rl: (rx - x0) / m + (tx > 0.5 ? 3 : 0), rt: (ry - y0) / m + (ty > 0.5 ? 3 : 0) };
+    }
+  }
+  return null;
+}
+// reparte cada sector en hojas: grilla con la escala más grande y lugar libre para el recuadro de referencias en cada hoja.
+// Con o.menos, usa menos hojas que o.n si el sector entra igual a 1:400 o mejor (p. ej. el sector 2 en una sola A3).
 function ramHojas(C, o) {
-  const n = o.n || 4, hojas = [], secs = o.sec === 'all' ? [...new Set(C.L.map((r) => r.t.s))].sort() : [o.sec];
-  const grillas = []; for (let c = 1; c <= n; c++) if (n % c === 0) grillas.push([c, n / c]);
+  const n = o.n || 4, hojas = [], secs = o.sec === 'all' ? [...new Set(C.L.map((r) => r.t.s))].sort() : [o.sec], dist = o.modo !== 'ram';
+  const ks = o.menos === false ? [n] : [1, 2, 4, 6, 8].filter((k) => k <= n).concat([1, 2, 4, 6, 8].includes(n) ? [] : [n]);
   secs.forEach((s) => {
     const T = C.L.filter((r) => r.t.s === s && r.n).map((r) => Object.assign({}, ramRect(r.t), { id: r.t.id, s: r.t.s }));
-    if (!T.length) return; let best = null;
-    [false, true].forEach((port) => { const A = ramArea(o.size, port), f = (g) => { const b = ramCaja(g); return Math.min(A.W / (b.x1 - b.x0), A.H / (b.y1 - b.y0)); };
-      grillas.forEach(([c, r]) => { const memo = new Map(), fc = (g) => { const k = g.map((t) => t.id).join(); if (!memo.has(k)) memo.set(k, ramPartir(g, 'y', r, f)); return memo.get(k).v; };
-        const X = ramPartir(T, 'x', c, fc); if (X.v <= 0) return;
-        if (!best || X.v > best.v * 1.0001) best = { v: X.v, port, c, r, A, G: X.grupos.map((g) => memo.get(g.map((t) => t.id).join()).grupos) }; }); });
-    if (!best) { const A = ramArea(o.size, false); const b = ramCaja(T); best = { v: Math.min(A.W / (b.x1 - b.x0), A.H / (b.y1 - b.y0)), port: false, c: 1, r: 1, A, G: [[T]] }; }
-    const esc = Math.ceil(1000 / best.v / 25) * 25, m = esc / 1000, pz = [];
-    best.G.forEach((col, ci) => col.forEach((g, ri) => { const b = ramCaja(g), cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2, W = best.A.W * m, H = best.A.H * m;
-      pz.push({ s, port: best.port, A: best.A, esc, cols: best.c, filas: best.r, ci, ri, caja: b, x0: cx - W / 2, y0: cy - H / 2, W, H, ids: new Set(g.map((t) => t.id)) }); }));
+    if (!T.length) return; const O = ramObst(T), cj = ramCaja(T), asp = (cj.y1 - cj.y0) / (cj.x1 - cj.x0);
+    let sel = null;
+    for (const k of ks) {
+      let cands = ramGrilla(T, k, o.size);
+      if (!cands.length) { if (k !== n) continue; const A = ramArea(o.size, false), bb = ramCaja(T); cands = [{ v: Math.min(A.W / (bb.x1 - bb.x0), A.H / (bb.y1 - bb.y0)), port: false, c: 1, r: 1, A, G: [[T]] }]; }
+      // cada grilla candidata con su recuadro de referencias: gana la que queda a mayor escala
+      let mejor = null;
+      for (const comp of [false, true]) for (const best of cands) {
+        const e0 = Math.ceil(1000 / best.v / 25) * 25; if (mejor && e0 >= mejor.esc - (comp && !mejor.comp ? 50 : 0)) continue;
+        const pz = []; best.G.forEach((col, ci) => col.forEach((g, ri) => {
+          const ids = new Set(g.map((t) => t.id)), nCod = dist ? new Set(C.L.filter((r) => ids.has(r.t.id)).flatMap((r) => r.H.map((h) => ramCodCorto(h.cod)))).size : 0;
+          pz.push({ s, port: best.port, A: best.A, cols: best.c, filas: best.r, ci, ri, caja: ramCaja(g), ids, rot: ramRotDim(o.size, nCod, dist, asp, comp) }); }));
+        // obstáculos de cada hoja: sus trackers, inversores y STS (los trackers de las hojas vecinas van en gris y se pueden tapar)
+        const OP = pz.map((p) => O.filter((b, j) => j >= T.length || p.ids.has(T[j].id)));
+        // el compacto solo si mejora la escala en al menos 1:50
+        let esc = e0, ub = null, tope = mejor ? mejor.esc - (comp && !mejor.comp ? 50 : 0) : e0 * 3;
+        for (; esc < tope; esc += 25) { ub = pz.map((p, j) => ramUbicar(p, esc, OP[j])); if (ub.every(Boolean)) break; }
+        if (esc >= tope || !ub || !ub.every(Boolean)) continue;
+        pz.forEach((p, i) => Object.assign(p, ub[i], { esc })); mejor = { esc, pz, comp };
+      }
+      if (!mejor) { // sin esquina libre en ninguna grilla: la de mayor escala, recuadro abajo a la derecha
+        const best = cands[0], esc = Math.ceil(1000 / best.v / 25) * 25, m = esc / 1000, pz = [];
+        best.G.forEach((col, ci) => col.forEach((g, ri) => { const cj2 = ramCaja(g), W = best.A.W * m, H = best.A.H * m;
+          pz.push({ s, port: best.port, A: best.A, cols: best.c, filas: best.r, ci, ri, caja: cj2, ids: new Set(g.map((t) => t.id)), rot: ramRotDim(o.size, 20, dist, asp), x0: (cj2.x0 + cj2.x1) / 2 - W / 2, y0: (cj2.y0 + cj2.y1) / 2 - H / 2, W, H, rl: best.A.W - ramRotDim(o.size, 20, dist, asp).W, rt: best.A.H - ramRotDim(o.size, 20, dist, asp).H, esc }); }));
+        mejor = { esc, pz };
+      }
+      const pz = mejor.pz, esc = mejor.esc;
+      sel = pz; if (esc <= RAM_ESC_MAX || k === ks[ks.length - 1]) break;
+    }
     // orden de lectura: de norte a sur y de oeste a este
-    pz.sort((a, b) => a.ri - b.ri || a.ci - b.ci).forEach((p, i, L) => { p.i = i + 1; p.de = L.length; p.todas = L; p.T = T; hojas.push(p); });
+    sel.sort((a, b) => a.ri - b.ri || a.ci - b.ci).forEach((p, i, L) => { p.i = i + 1; p.de = L.length; p.todas = L; p.T = T; hojas.push(p); });
   });
   return hojas;
 }
 // croquis de ubicación de la hoja dentro del sector
-function ramCroquis(p) {
-  const b = ramCaja(p.T), w = b.x1 - b.x0, h = b.y1 - b.y0, k = Math.min(46 / w, 15 / h), sw = (0.35 / k).toFixed(2);
+function ramCroquis(p, mw = 46, mh = 15) {
+  const b = ramCaja(p.T), w = b.x1 - b.x0, h = b.y1 - b.y0, k = Math.min(mw / w, mh / h), sw = (0.35 / k).toFixed(2);
   return `<svg viewBox="${b.x0} ${b.y0} ${w} ${h}" style="width:${(w * k).toFixed(1)}mm;height:${(h * k).toFixed(1)}mm" class="rmcroq">`
     + p.T.map((t) => `<rect x="${t.x}" y="${t.y}" width="${t.w}" height="${t.h}" fill="#bbb"/>`).join('')
-    + p.todas.map((q) => { const c = q.caja; return `<rect x="${c.x0}" y="${c.y0}" width="${c.x1 - c.x0}" height="${c.y1 - c.y0}" fill="${q === p ? 'rgba(194,94,0,.35)' : 'none'}" stroke="${q === p ? '#c25e00' : '#555'}" stroke-width="${sw}"/><text x="${(c.x0 + c.x1) / 2}" y="${(c.y0 + c.y1) / 2}" font-size="${(4.2 / k).toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-weight="700" fill="${q === p ? '#7a3a00' : '#333'}">${q.i}</text>`; }).join('') + '</svg>';
+    + p.todas.map((q) => { const c = q.caja; return `<rect x="${c.x0}" y="${c.y0}" width="${c.x1 - c.x0}" height="${c.y1 - c.y0}" fill="${q === p ? 'rgba(194,94,0,.35)' : 'none'}" stroke="${q === p ? '#c25e00' : '#555'}" stroke-width="${sw}"/><text x="${(c.x0 + c.x1) / 2}" y="${(c.y0 + c.y1) / 2}" font-size="${(Math.min(5.5, Math.max(3, Math.min(c.x1 - c.x0, c.y1 - c.y0) * k * 0.45)) / k).toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-weight="700" fill="${q === p ? '#7a3a00' : '#333'}">${q.i}</text>`; }).join('') + '</svg>';
 }
 function ramPdfPlano(o) {
   const C = ramCalc(), HA = (S.hincado || {}).avance || {}, hojas = ramHojas(C, o), dist = o.modo === 'dist';
@@ -584,14 +664,30 @@ function ramPdfPlano(o) {
     g += ramRefSVG(txt, true);
     if (pre) g += `<text x="${p.x0 + p.W / 2}" y="${p.y0 + p.H / 2}" font-size="${(p.W / 9).toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="#c0392b" fill-opacity="0.10" font-weight="700" transform="rotate(-30 ${p.x0 + p.W / 2} ${p.y0 + p.H / 2})">PRECARGA</text>`;
     return `<section class="rmpg" data-o="${p.port ? 'P' : 'L'}" style="width:${A.pw}mm;height:${A.ph}mm">
-      <div class="rmpgh"><div><b>${tit} · Sector ${p.s}</b>${pre ? ' <span class="rmpre">PRECARGA · no apto para hincar</span>' : ''}<br>${esc_(S.nombre || '')}${dist ? ` · Trina ${esc_(TRINA_DIST_DOC)}` : ''}</div>${ramCroquis(p)}<div style="text-align:right"><b>Hoja ${p.i} de ${p.de}</b> · sector ${p.s}<br>escala 1:${p.esc} (${o.size}) · ${new Date().toLocaleDateString('es-AR')} · pág. ${i + 1}/${hojas.length}</div></div>
       <svg viewBox="${p.x0.toFixed(2)} ${p.y0.toFixed(2)} ${p.W.toFixed(2)} ${p.H.toFixed(2)}" style="display:block;width:${A.W}mm;height:${A.H}mm" font-family="Arial">${g}</svg>
-      <div class="rmpgf" style="height:${A.F}mm">${ley}<span class="rmnorte">▲ N</span></div></section>`;
+      ${ramRotulo(p, i, hojas.length, { tit, dist, pre, size: o.size, C })}</section>`;
   });
   // hojas verticales y apaisadas: se imprimen por separado y se unen en orden (Chromium no mezcla bien orientaciones)
   ramPrintPaginas(pags.join(''), `${dist ? 'Plano de distribución de hincas' : 'Ramming plan' + (pre ? ' PRECARGA' : '')} ${o.sec === 'all' ? 'todos los sectores' : 'sector ' + o.sec} ${today()}.pdf`, o.size, hojas.map((p) => (p.port ? 'P' : 'L')));
 }
 const esc_ = (s) => esc(s);
+// recuadro de referencias de la hoja: título, esquema de hojas del sector, referencias y datos de la hoja
+function ramRotulo(p, i, tot, o) {
+  const R = p.rot, L = o.C.L.filter((r) => p.ids.has(r.t.id)), nH = L.reduce((q, r) => q + r.n, 0), nM = L.reduce((q, r) => q + r.H.filter((h) => h.motor).length, 0);
+  const RP = window.REPLANTEO || {}, pos = `left:${(8 + Math.max(0, p.rl)).toFixed(1)}mm;top:${(8 + Math.max(0, p.rt)).toFixed(1)}mm`;
+  let ref;
+  if (o.dist) { const m = new Map(); L.forEach((r) => r.H.forEach((h) => { const k = h.cod && hcat(h.cod); if (k) { const c = ramCodCorto(h.cod), x = m.get(c) || { k, n: 0 }; x.n++; m.set(c, x); } }));
+    ref = (m.size ? `<div class="rmrcod">${[...m.entries()].sort().map(([c, x]) => `<span title="${esc(hColTxt(x.k))}">${ramDosCol(x.k)}<b>${esc(c)}</b> <small>${R.comp ? '' : esc(hColTxt(x.k)) + ' · '}${fmt(x.n)}</small></span>`).join('')}</div>` : '<p><b>Falta la distribución de Trina</b> (Catálogo y distribución).</p>')
+      + '<p class="rmrnota">Cuadrado: triángulo de arriba = color de la cabeza (rojo general, azul general suelo blando, sin color motor); de abajo = color de la punta. Código Trina arriba de cada hinca.</p>';
+  } else ref = '<div class="rmrcod"><span><i style="background:#58b368"></i>Dentro de tolerancia</span><span><i style="background:#f0a23b"></i>Salto con la vecina</span><span><i style="background:#d64545"></i>Fuera de tolerancia</span></div><p class="rmrnota">Rótulo de cada hinca: número (norte a sur) · altura libre (m).</p>';
+  ref += '<div class="rmrcod"><span><i style="background:#fff;border:0.5mm solid #000"></i>M = hinca motor</span><span><i style="background:#fff;border:0.35mm solid #c25e00"></i>Inversor</span><span><i style="background:#fff;border:0.35mm solid #1f2a37"></i>STS</span><span>✕ tracker hincado</span></div>';
+  return `<div class="rmrot${R.comp ? ' rmrc' : ''}" style="${pos};width:${R.W}mm;max-height:${R.H.toFixed(0)}mm;overflow:hidden">
+    <div class="rmrt"><b>${o.tit}</b>${o.pre ? '<span class="rmpre">PRECARGA · no apto para hincar</span>' : ''}<div>${esc(S.nombre || '')}</div></div>
+    <div class="rmrg"><div><small>Sector</small><b>${p.s}</b></div><div><small>Hoja</small><b>${p.i} de ${p.de}</b></div><div><small>Escala</small><b>1:${p.esc}</b></div><div><small>Norte</small><b class="rmrn">▲</b></div></div>
+    <h5>Esquema de hojas del sector ${p.s}</h5>${ramCroquis(p, R.W - (R.comp ? 7 : 8), R.ch)}
+    <h5>Referencias${o.dist ? ' · códigos en esta hoja' : ''}</h5>${ref}
+    <div class="rmrpie">${L.length} trackers · ${fmt(nH)} hincas (${fmt(nM)} de motor) en esta hoja<br>${o.dist ? `Distribución: Trina ${esc(TRINA_DIST_DOC)} · ` : ''}Replanteo: ${esc((RP.fuente || '').split(' · ')[0])} · numeración OBEII-GR-PL-003 r1<br>Hoja ${o.size} · ${new Date().toLocaleDateString('es-AR')} · pág. ${i + 1}/${tot}</div></div>`;
+}
 async function ramPrintPaginas(html, name, size, orden) {
   const pa = $('#printArea'); pa.innerHTML = html;
   document.body.classList.add('pr-land', 'imprimiendo', 'pr-plano');

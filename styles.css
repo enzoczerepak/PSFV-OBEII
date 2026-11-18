@@ -1384,7 +1384,7 @@ body.ro .solo-pc { display: none !important; }
 .rmform .rmsub { grid-column: 1 / -1; margin: 6px 0 0; font-size: 13px; color: var(--mute); text-transform: uppercase; letter-spacing: .04em; }
 /* plano de hincado imprimible */
 @media print { body.pr-plano #printArea { padding: 0 !important; } #printArea[data-solo=P] .rmpg[data-o=L], #printArea[data-solo=L] .rmpg[data-o=P] { display: none !important; } }
-.rmpg { box-sizing: border-box; padding: 8mm; page-break-after: always; break-after: page; break-inside: avoid; overflow: hidden; display: flex; flex-direction: column; background: #fff; color: #222; font-family: Arial, sans-serif; }
+.rmpg { position: relative; box-sizing: border-box; padding: 8mm; page-break-after: always; break-after: page; break-inside: avoid; overflow: hidden; display: flex; flex-direction: column; background: #fff; color: #222; font-family: Arial, sans-serif; }
 .rmpg:last-child { page-break-after: auto; break-after: auto; }
 .rmpgh { flex: none; overflow: hidden; display: flex; justify-content: space-between; gap: 6mm; font-size: 9pt; line-height: 1.35; border-bottom: 1.2px solid #222; padding-bottom: 1.5mm; margin-bottom: 2mm; height: 18mm; box-sizing: border-box; align-items: flex-end; }
 .rmpgh > div { flex: 1; }
@@ -1406,3 +1406,24 @@ body.ro .solo-pc { display: none !important; }
 .rmpre { display: inline-block; margin-left: 3mm; padding: 0.4mm 2mm; border: 0.4mm solid #c0392b; color: #c0392b; font-size: 8.5pt; font-weight: 700; vertical-align: 1px; }
 /* visor web en iPad / iPhone apaisado a pantalla completa (Agregar a inicio): dejar libre la barra de estado */
 @media (min-width: 861px) { #side { padding-top: calc(18px + env(safe-area-inset-top)); padding-left: calc(12px + env(safe-area-inset-left)); } #main { padding-top: env(safe-area-inset-top); padding-right: env(safe-area-inset-right); } }
+
+/* recuadro de referencias de los planos de hincado (en una esquina libre del dibujo) */
+.rmrot { position: absolute; box-sizing: border-box; background: #fff; border: 0.45mm solid #222; padding: 3mm 3.5mm 2.5mm; font: 7pt/1.3 Arial, sans-serif; color: #222; }
+.rmrt { border-bottom: 0.3mm solid #222; padding-bottom: 1.5mm; margin-bottom: 1.5mm; }
+.rmrt b { font-size: 10.5pt; display: block; } .rmrt div { color: #555; margin-top: 0.4mm; }
+.rmrt .rmpre { margin: 1mm 0 0; }
+.rmrg { display: grid; grid-template-columns: 1fr 1.4fr 1.3fr 0.8fr; border: 0.25mm solid #999; margin-bottom: 1.5mm; }
+.rmrg > div { padding: 0.8mm 1.5mm; border-left: 0.25mm solid #999; } .rmrg > div:first-child { border-left: 0; }
+.rmrg small { display: block; color: #666; font-size: 6pt; text-transform: uppercase; letter-spacing: .03em; } .rmrg b { font-size: 9.5pt; }
+.rmrn { font-size: 10pt; }
+.rmrot h5 { margin: 1.6mm 0 0.8mm; font-size: 7pt; text-transform: uppercase; letter-spacing: .04em; color: #444; }
+.rmrot .rmcroq { display: block; margin: 0 auto; }
+.rmrcod { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6mm 2.5mm; margin: 0.5mm 0; }
+.rmrcod span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rmrcod small { color: #666; }
+.rmrcod i { display: inline-block; width: 3mm; height: 3mm; border: 0.3mm solid #555; margin-right: 1.2mm; vertical-align: -0.6mm; }
+.rmrcod svg { width: 3.4mm !important; height: 3.4mm !important; vertical-align: -0.8mm; margin-right: 1.2mm; }
+.rmrnota { margin: 0.6mm 0 0.8mm; color: #555; font-size: 6.3pt; }
+.rmrpie { border-top: 0.25mm solid #999; margin-top: 1.5mm; padding-top: 1.2mm; color: #444; font-size: 6.3pt; }
+.rmrc { padding: 2.2mm 2.8mm 2mm; font-size: 6.5pt; } .rmrc .rmrt b { font-size: 9pt; } .rmrc .rmrg b { font-size: 8.5pt; }
+.rmrc .rmrcod { grid-template-columns: 1fr 1fr 1fr; gap: 0.5mm 1.5mm; } .rmrc .rmrnota, .rmrc .rmrpie { font-size: 5.8pt; }
