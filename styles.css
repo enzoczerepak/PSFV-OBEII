@@ -344,7 +344,7 @@ i.pin { font-style: normal; color: var(--acc); font-size: 9px; margin-left: 3px;
 
 /* ---------- visor web ---------- */
 #login { display: none; }
-body.ro #login { position: fixed; inset: 0; z-index: 100; background: linear-gradient(160deg, #0f1b2d, #1b3150); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .4s; }
+body.ro #login { position: fixed; inset: 0; z-index: 100; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); background: linear-gradient(160deg, #0f1b2d, #1b3150); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .4s; }
 body.ro #login.show { opacity: 1; }
 body.ro #login.ok { opacity: 0; pointer-events: none; }
 .lgbox { background: #fff; border-radius: 16px; padding: 30px 28px 24px; width: min(360px, 90vw); display: flex; flex-direction: column; gap: 12px; box-shadow: 0 24px 60px rgba(0,0,0,.35); animation: pop .4s var(--ease); }
@@ -1404,3 +1404,5 @@ body.ro .solo-pc { display: none !important; }
 .rmsvg .rmtid2 { display: none; }
 .rmsvg.z1 .rmtid2 { display: inline; }
 .rmpre { display: inline-block; margin-left: 3mm; padding: 0.4mm 2mm; border: 0.4mm solid #c0392b; color: #c0392b; font-size: 8.5pt; font-weight: 700; vertical-align: 1px; }
+/* visor web en iPad / iPhone apaisado a pantalla completa (Agregar a inicio): dejar libre la barra de estado */
+@media (min-width: 861px) { #side { padding-top: calc(18px + env(safe-area-inset-top)); padding-left: calc(12px + env(safe-area-inset-left)); } #main { padding-top: env(safe-area-inset-top); padding-right: env(safe-area-inset-right); } }

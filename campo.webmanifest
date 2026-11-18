@@ -1,1 +1,2 @@
-{ "name": "Campo PSFV-OBEII", "short_name": "Campo OBEII", "start_url": "campo.html", "display": "standalone", "background_color": "#142033", "theme_color": "#142033", "icons": [{ "src": "icon.png", "sizes": "256x256", "type": "image/png" }] }
+{ "id": "campo.html", "name": "Campo PSFV-OBEII", "short_name": "Campo OBEII", "start_url": "campo.html", "scope": "./", "display": "standalone", "orientation": "portrait", "background_color": "#142033", "theme_color": "#142033",
+  "icons": [{ "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }, { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }] }

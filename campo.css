@@ -1,8 +1,12 @@
 :root { --ink: #142033; --mute: #6b7a90; --line: #e3e8ef; --bg: #f3f5f8; --card: #fff; --acc: #00939a; --warn: #f5a524; --ok: #2f9e5b; --bad: #d64545; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.4 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; }
+/* iPhone a pantalla completa (Agregar a inicio): sin rebote, sin zoom por doble toque, sin agrandar letras al girar */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; background: var(--ink); }
+body { overscroll-behavior-y: none; min-height: 100vh; min-height: 100dvh; }
+button, a, label, input, select { touch-action: manipulation; }
 .hidden { display: none !important; }
-.scr { position: fixed; inset: 0; display: grid; place-items: center; background: linear-gradient(160deg, #0b1626, #1f4a6a); padding: 20px; }
+.scr { position: fixed; inset: 0; display: grid; place-items: center; background: linear-gradient(160deg, #0b1626, #1f4a6a); padding: calc(20px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left)); overflow-y: auto; }
 .lgbox { background: #fff; border-radius: 18px; padding: 26px 22px; width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 12px; }
 .lglogo { width: 48px; height: 48px; } .lgbox h1 { margin: 0; font-size: 24px; } .lgbox p { margin: -8px 0 4px; color: var(--mute); }
 label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--mute); font-weight: 600; }
@@ -13,10 +17,10 @@ textarea { min-height: 70px; resize: vertical; }
 .b { font: inherit; font-weight: 700; border: 0; border-radius: 12px; padding: 13px 16px; font-size: 16px; cursor: pointer; background: #e9edf2; color: var(--ink); }
 .b.pri { background: var(--ink); color: #fff; } .b.acc { background: var(--acc); color: #fff; } .b:disabled { opacity: .5; }
 .err { color: var(--bad); font-size: 13px; min-height: 18px; }
-header { position: sticky; top: 0; z-index: 5; background: var(--ink); color: #fff; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+header { position: sticky; top: 0; z-index: 5; background: var(--ink); color: #fff; padding: calc(10px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 10px calc(16px + env(safe-area-inset-left)); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 header b { display: block; font-size: 16px; } header small { color: #9fb1cb; font-size: 12px; }
 #hEst { font-size: 12px; text-align: right; color: #9fd8dc; } #hEst .q { color: var(--warn); font-weight: 700; }
-main { padding: 12px 12px calc(84px + env(safe-area-inset-bottom)); max-width: 640px; margin: 0 auto; }
+main { padding: 12px calc(12px + env(safe-area-inset-right)) calc(84px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left)); max-width: 640px; margin: 0 auto; }
 nav#tabs { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(3, 1fr); background: #fff; border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
 nav#tabs button { border: 0; background: none; font: inherit; font-size: 12px; font-weight: 600; color: var(--mute); padding: 8px 0 9px; display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; }
 nav#tabs svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }

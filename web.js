@@ -134,6 +134,10 @@ window.READONLY = true;
     // en la app de Android los archivos y las impresiones pasan por el puente nativo (AndroidApp)
     saveBinary: async (data, name) => {
       if (window.AndroidApp && AndroidApp.guardar) { const b = new Blob([data]); const b64 = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.readAsDataURL(b); }); AndroidApp.guardar(b64, name, ''); return null; }
+      // iPhone/iPad: la hoja de Compartir (Guardar en Archivos, WhatsApp, Mail); en la app a pantalla completa una descarga común abre una vista sin botón para volver
+      const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+      if (ios && navigator.canShare) { const ext = (name.split('.').pop() || '').toLowerCase(), mime = { pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', dxf: 'application/dxf', csv: 'text/csv', png: 'image/png' }[ext] || 'application/octet-stream';
+        const file = new File([data], name, { type: mime }); if (navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); } catch (e) { /* cancelado */ } return null; } }
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data])); a.download = name; document.body.appendChild(a); a.click(); a.remove(); return null; },
     printPDF: async (o) => { if (window.AndroidApp && AndroidApp.imprimir) { const fin = new Promise((ok) => { window.__impFin = () => { window.__impFin = null; ok(null); }; }); AndroidApp.imprimir(String((typeof o === 'string' ? o : o && (o.name || o.nombre)) || document.title || 'OBE II').replace(/\.pdf$/i, '')); return fin; } window.print(); return null; }, openPath: no, showItem: no,
     info: async () => ({ version: 'visor web', userData: '' }), onOpenFile: () => {},
