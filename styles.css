@@ -1427,3 +1427,42 @@ body.ro .solo-pc { display: none !important; }
 .rmrpie { border-top: 0.25mm solid #999; margin-top: 1.5mm; padding-top: 1.2mm; color: #444; font-size: 6.3pt; }
 .rmrc { padding: 2.2mm 2.8mm 2mm; font-size: 6.5pt; } .rmrc .rmrt b { font-size: 9pt; } .rmrc .rmrg b { font-size: 8.5pt; }
 .rmrc .rmrcod { grid-template-columns: 1fr 1fr 1fr; gap: 0.5mm 1.5mm; } .rmrc .rmrnota, .rmrc .rmrpie { font-size: 5.8pt; }
+/* ---------- Cálculo movimiento de suelos ---------- */
+.mstop { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: flex-end; }
+.mstop label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted, #64748b); }
+.mstop select { min-width: 180px; max-width: 360px; }
+.msslider { min-width: 300px; flex: 1; } .msslider b { color: var(--ink, #1f2937); font-size: 14px; }
+.msslider input[type=range] { width: 100%; accent-color: #c25e00; }
+.msbtns { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+.mswarn { margin: -4px 0 12px; }
+.msplano { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 12px; align-items: start; }
+@media (max-width: 1350px) { .msplano { grid-template-columns: 1fr; } }
+.msmap { padding: 10px; }
+.mstb { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.mstb .seg button.on { background: var(--acc, #c25e00); color: #fff; }
+.mszb { display: flex; gap: 4px; }
+.mssvg { width: 100%; height: 62vh; min-height: 420px; background: #fcfbf8; border: 1px solid #e5e7eb; border-radius: 8px; cursor: grab; display: block; }
+.mssvg:active { cursor: grabbing; }
+.mssvg .mstrk { cursor: pointer; } .mssvg .mstrk:hover rect { stroke: #c25e00; stroke-width: 0.35; }
+.mscz { font-size: 1.1px; fill: #8b7f6a; paint-order: stroke; stroke: #fcfbf8; stroke-width: 0.35px; }
+.msvol { fill: #444; }
+.msley { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; margin-top: 8px; align-items: center; }
+.msley span { display: inline-flex; align-items: center; gap: 5px; }
+.msley i { display: inline-block; width: 18px; height: 10px; border-radius: 2px; }
+.msley.sm { font-size: 11px; } .msley.sm i { width: 16px; }
+.msley i.msdot { width: 9px; height: 9px; border-radius: 50%; background: #b45309; }
+.msley i.mshat { background: repeating-linear-gradient(45deg, rgba(217,119,6,.6) 0 1.5px, rgba(245,158,11,.12) 1.5px 5px); }
+.msdet { position: sticky; top: 8px; }
+.msdh { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; } .msdh b { font-size: 16px; }
+.msdk { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
+.msdk > div { background: #f6f7f9; border-radius: 6px; padding: 5px 8px; } .msdk small { display: block; color: #64748b; font-size: 10.5px; } .msdk b { font-size: 13.5px; }
+.msperf { width: 100%; height: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; }
+.tbl.sm td, .tbl.sm th { padding: 3px 6px; font-size: 11.5px; }
+.msbar { display: flex; height: 12px; background: #f1f5f9; border-radius: 3px; overflow: hidden; }
+.mschk { margin: 8px 0 0 18px; padding: 0; font-size: 13px; line-height: 1.6; } .mschk .warn { color: #b45309; }
+tr.clk { cursor: pointer; } tr.clk:hover td { background: #fff7ed; }
+.mspdfh { display: flex; justify-content: space-between; align-items: flex-end; gap: 6mm; border-bottom: 0.4mm solid #222; padding-bottom: 2mm; margin-bottom: 2mm; font-size: 10pt; }
+.mspdfk { display: flex; gap: 0; border: 0.25mm solid #999; } .mspdfk > div { padding: 1mm 2.5mm; border-left: 0.25mm solid #999; } .mspdfk > div:first-child { border-left: 0; }
+.mspdfk small { display: block; font-size: 6.5pt; color: #666; text-transform: uppercase; } .mspdfk b { font-size: 10.5pt; }
+.msley.pr { font-size: 7.5pt; margin-top: 2mm; } .msley.pr i { width: 7mm; height: 3mm; } .msley.pr .rmnorte { margin-left: auto; font-weight: 700; }
+.mspdft { font-size: 8pt; width: 100%; } .mspdft td, .mspdft th { padding: 0.8mm 1.5mm; border-bottom: 0.2mm solid #ddd; text-align: right; } .mspdft td:first-child, .mspdft th:first-child { text-align: left; }

@@ -7,7 +7,7 @@
   // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
   const PROTO = 5; // 3: cada cambio lleva la revisión del servidor sobre la que se hizo · 4: al actualizar, el cliente primero toma todo del servidor · 5: tipos de 2 letras (usuarios, historial, montaje) y fin del reenvío sin fin
   // 'hc' catálogo y distribución de hincas, 'ht:' hincado por tracker, 'hr:' recepciones de hincas
-  const nuevo = (k) => k === 'pk' || k.startsWith('pb:') || k.startsWith('hl:') || k.startsWith('us:') || k.startsWith('mo:') || k === 'tb' || k.startsWith('te:') || k.startsWith('tn:') || k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('la:') || k.startsWith('sv:');
+  const nuevo = (k) => k === 'ms' || k.startsWith('tp:') || k === 'pk' || k.startsWith('pb:') || k.startsWith('hl:') || k.startsWith('us:') || k.startsWith('mo:') || k === 'tb' || k.startsWith('te:') || k.startsWith('tn:') || k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('la:') || k.startsWith('sv:');
   const conocido = (k) => k === 'cfg' || k === 'comp' || k === 'km' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
 
   // JSON con claves ordenadas: el orden interno de los campos no cuenta como cambio
@@ -27,6 +27,7 @@
     if (S.hincado) {
       m.set('hc', { catalogo: S.hincado.catalogo || [], matriz: S.hincado.matriz || {}, ram: S.hincado.ram || null });
       Object.entries(S.hincado.avance || {}).forEach(([id, v]) => { if (v) m.set('ht:' + id, v); });
+      if (S.hincado.mov) m.set('ms', S.hincado.mov); // movimiento de suelos: parámetros y terreno por sector
       (S.hincado.recep || []).forEach((r) => m.set('hr:' + r.id, r));
     }
     // fibra óptica: criterio y un registro por zanja de MT
@@ -42,6 +43,7 @@
     // PAT de BT por tramo: criterio ('pk') y un registro por tramo o carga de accesorios ('pb:')
     if (S.patBT) { if (S.patBT.cfg) m.set('pk', S.patBT.cfg); (S.patBT.reg || []).forEach((x) => m.set('pb:' + x.id, x)); }
     // registros de versiones más nuevas: se guardan tal cual para no borrarlos
+    (S.topo || []).forEach((t) => m.set('tp:' + t.id, t)); // topografías / mallas de rugosidad
     Object.entries(S.__otros || {}).forEach(([k, v]) => m.set(k, v));
     return m;
   }
@@ -73,7 +75,7 @@
   // registros de tipos conocidos que una versión anterior guardó como "desconocidos" (usuarios, historial, montaje): a su lugar
   function rescatar(S) {
     const O = S.__otros; if (!O) return 0; let n = 0;
-    Object.keys(O).forEach((k) => { const ix = k.indexOf(':'); if (ix > 0 && KINDS.some(([p]) => p === k.slice(0, ix))) { aplicar(S, k, false, O[k]); delete O[k]; n++; } });
+    Object.keys(O).forEach((k) => { const ix = k.indexOf(':'); if ((ix > 0 && KINDS.some(([p]) => p === k.slice(0, ix))) || k === 'ms' || k.startsWith('tp:')) { aplicar(S, k, false, O[k]); delete O[k]; n++; } });
     if (!Object.keys(O).length) delete S.__otros;
     return n;
   }
@@ -85,6 +87,8 @@
     if (k === 'cfg') { if (!d && v) { S.nombre = v.nombre; S.params = v.params; S.fuente = v.fuente; if (v.parque) S.parque = v.parque; } return; }
     if (k === 'comp') { if (!d && v) S.compromiso = v.compromiso || {}; return; }
     if (k === 'km') { S.cronoMeta = d ? null : v; return; }
+    if (k === 'ms') { S.hincado = S.hincado || { catalogo: [], matriz: {}, avance: {}, recep: [] }; if (d) delete S.hincado.mov; else S.hincado.mov = v; if (typeof MSC !== 'undefined') MSC = null; return; }
+    if (k.startsWith('tp:')) { const id = k.slice(3); S.topo = (S.topo || []).filter((t) => t.id !== id); if (!d && v) S.topo.push(v); if (typeof MSC !== 'undefined') MSC = null; return; }
     if (k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:')) {
       const H = (S.hincado = S.hincado || { catalogo: [], matriz: {}, avance: {}, recep: [] });
       H.avance = H.avance || {}; H.recep = H.recep || [];

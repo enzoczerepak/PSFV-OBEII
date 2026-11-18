@@ -18,6 +18,8 @@ const ICO = {
   punta: svgI('<path d="M2.5 12h7"/><path d="M9.5 8.5h5.5l4 3.5-4 3.5H9.5z"/><circle cx="15.5" cy="12" r="1.1"/>'),
   sts: svgI('<circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/><path d="M9 3v4M15 3v4M9 17v4M15 17v4"/>'),
   // mapita plegado con un marcador (plano de distribución)
+  // suelo: terreno con un corte (arriba) y un relleno (abajo) y la línea de diseño
+  suelo: svgI('<path d="M2 9.5c3-.4 4.5-3.5 8-3.5s5 3.5 12 4.5"/><path d="M2 16.5c4 1.2 6.5 2.6 10 1.6s6-3 10-2.4"/><path d="M2 13l20-1.2" stroke-dasharray="2 2"/><path d="M7 7.6v4.8M17 12.3v4.6"/>'),
   mapa: svgI('<path d="M3 6.8 8.5 4.5l7 2.5L21 4.8V17l-5.5 2.3-7-2.5L3 19z"/><path d="M8.5 4.5v3.2M8.5 14.5v2.3M15.5 7v2.5M15.5 15v4.3"/><path d="M10.1 10.2c0-1.1.85-1.9 1.9-1.9s1.9.8 1.9 1.9c0 1.5-1.9 3.4-1.9 3.4s-1.9-1.9-1.9-3.4z"/><circle cx="12" cy="10.2" r=".5"/>'),
   // perfil: terreno ondulado, línea del tubo y una fila de hincas (ramming plan)
   perfil: svgI('<path d="M2 19c2.5-2.2 4.5-2.6 7-1.3s4.5 1 6.8-.8 4.2-1.6 6.2-.4"/><path d="M2.5 6.5 21.5 8"/><path d="M5 6.7v11.4M9.5 7.1v11M14 7.4v9.8M18.5 7.8v8.4"/>'),

@@ -277,7 +277,7 @@ function vHCat(el) {
       ${H.catalogo.map((k) => `<tr data-c="${esc(k.codigo)}"><td><b>${esc(k.codigo)}</b></td><td>${esc(k.tipo)}</td><td>${k.suelo === 'B' ? 'Blando' : 'Normal'}</td><td>${esc(k.perfil)}</td><td class="n">${fmt(k.largo)}</td><td class="n">${fmt(k.sobre)}</td><td class="n">${fmt(k.nrl)}</td><td class="n">${fmt(k.mrl)}</td>
         <td>${hColSup(k) ? colorChip(hColSup(k)) : '<span class="muted">sin color</span>'}</td><td>${window.READONLY ? colorChip(k.color) : `<select class="kc">${Object.keys(HCOL).map((c) => `<option ${c === k.color ? 'selected' : ''}>${c}</option>`).join('')}</select>`}</td><td class="n">${I && I.req[k.codigo] ? fmt(I.req[k.codigo]) : ''}</td></tr>`).join('')}
       </tbody></table></div>
-      <p class="hint">Medidas en mm. NRL: largo nominal de hincado · MRL: mínimo. Regulación en obra ±200 mm según Trina. Colores leídos del plano de Trina; si el fabricante cambia un color, corregilo acá y la verificación de recepciones se actualiza.</p></div>`;
+      <p class="hint">Medidas en mm. NRL: largo nominal de hincado · MRL: mínimo. Regulación en obra −200 / +100 mm respecto del largo nominal de hincado (manual Trina ARI-GR-MN-4301-0A §3.4.3). Colores leídos del plano de Trina; si el fabricante cambia un color, corregilo acá y la verificación de recepciones se actualiza.</p></div>`;
   $$('tr[data-k]', el).forEach((tr) => {
     const k = tr.dataset.k, m = H.matriz[k];
     const n = $('.mN', tr); if (n) n.onchange = () => { m.n = Math.max(0, Math.min(30, Number(n.value) || 0)); m.pos = (m.pos || []).slice(0, m.n); commit(`${cfgTxt(k)}: ${m.n} hincas por tracker`); };

@@ -3,12 +3,13 @@
    Parámetros en S.hincado.ram (se sincronizan con el catálogo, clave 'hc'). */
 const RAM_DEF = {
   revNom: 1.315,    // hinca general (Standard/Damper): altura libre nominal (m), manual Trina
-  revMin: 1.00,     // altura libre mínima (despeje del módulo / ajuste) (m)
+  regMenos: 100,    // regulación Trina (manual ARI-GR-MN-4301-0A §3.4.3): se puede hincar hasta 100 mm más que la nominal (altura libre −100 mm)
+  regMas: 200,      // … y hasta 200 mm menos (altura libre +200 mm), sin bajar del empotramiento mínimo
   largo: 3.515,     // hinca general: largo del perfil (m) si no hay código por posición (PW610-1A, suelo N)
   embMin: 2.00,     // hinca general: empotramiento mínimo (m)
   drNom: 1.23, drLargo: 3.43, drEmb: 2.00, // hinca motor (Drive): altura libre nominal, largo, empotramiento mínimo (PW614-1A, suelo N)
   mot52: 7, mot26: 4, // posición de la hinca motor contando de norte a sur (central)
-  pendMax: 5,       // pendiente N-S máxima del tracker (%): Trina diseña estas configuraciones para 0-5 % (MEC-DW-26050-3401-0A)
+  pendMax: 15,      // pendiente N-S máxima del tracker (%): Vanguard 1P hasta 15 % / 9° N-S y E-O (manual ARI-GR-MN-4301-0A §3.2)
   difMax: 0.30,     // diferencia máxima de altura libre entre hincas vecinas (m)
   usarCodigos: true,// si la distribución por posición está completa, usar largo / altura / empotramiento de cada código
   hincadoras: 2, rend: 120, inicio: null, sabado: true, orden: '1,2,3,4,5,6', sentido: 'OE',
@@ -18,7 +19,8 @@ const RAM_PRE_TXT = 'PRECARGA · alturas orientativas · no apto para hincar';
 const RAMUI = { tab: 'plano', color: 'estado', sel: null, s: 'all', q: '', f: 'all' };
 const ramP = () => { const H = S.hincado || (S.hincado = {}); const r = H.ram || {};
   if (r.revNom === 1.25 && r.largo === 3.46) { r.revNom = 1.315; r.largo = 3.515; }
-  if (r.pendMax === 10) r.pendMax = 5; // valor provisorio anterior: Trina diseña para 0-5 % // valores provisorios anteriores (mezcla motor/general)
+  if (r.pendMax === 10) r.pendMax = 5; // valores provisorios anteriores
+  if (!r.trv) { if (r.pendMax === 5) r.pendMax = 15; delete r.revMin; r.trv = 1; } // criterios del manual de montaje Trina (15 %, regulación −200/+100)
   H.ram = Object.assign({}, RAM_DEF, r); return H.ram; };
 const ramZ = (id) => (window.COTAS_HINCAS && window.COTAS_HINCAS.z[id]) || null;
 
@@ -32,7 +34,7 @@ function ramTracker(t, P) {
   H.forEach((h, i) => { h.d = y0 - h.y; const k = h.cod && hcat(h.cod);
     h.motor = k ? /drive/i.test(k.tipo || '') : i + 1 === Number(mot);
     h.nom = k ? k.sobre / 1000 : h.motor ? P.drNom : P.revNom; h.L = k ? k.largo / 1000 : h.motor ? P.drLargo : P.largo;
-    h.emin = k ? k.mrl / 1000 : h.motor ? P.drEmb : P.embMin; h.rmin = Math.min(P.revMin, h.nom); h.rmax = h.L - h.emin; });
+    h.emin = k ? k.mrl / 1000 : h.motor ? P.drEmb : P.embMin; h.rmin = h.nom - P.regMenos / 1000; h.rmax = Math.min(h.nom + P.regMas / 1000, h.L - h.emin); });
   // recta del terreno (mínimos cuadrados) y pendiente limitada a la máxima
   const n = H.length, md = H.reduce((a, h) => a + h.d, 0) / n, mz = H.reduce((a, h) => a + h.z, 0) / n;
   const sdd = H.reduce((a, h) => a + (h.d - md) ** 2, 0) || 1, pend = H.reduce((a, h) => a + (h.d - md) * (h.z - mz), 0) / sdd;
@@ -104,7 +106,7 @@ function ramPrecargaHTML(C) {
       <li>✓ Posición de cada hinca: <b>${esc((RP.fuente || '').split(' · ')[0])}</b>, numeración de mesas OBEII-GR-PL-003 r1 · ${fmt(RP.nHincas || 0)} hincas.</li>
       <li>✓ Cota de terreno natural por hinca: superficie TIN del relevamiento (OBEII-GR-PL-003 r1).</li>
       <li>${cods ? '✓' : '·'} Código, largo y altura libre de cada hinca: Trina CIV-DW-26050-2402-0B y MEC-DW-26050-3401-0A${cods ? '' : ' (distribución incompleta)'}.</li>
-      <li>✓ Pendiente N-S de diseño 0–5 % y regulación ±200 mm (Trina).</li></ul></div>
+      <li>✓ Pendiente N-S del tracker hasta ${fmt(ramP().pendMax, 1)} % y regulación de hincado −200 / +100 mm (manual Trina ARI-GR-MN-4301-0A).</li></ul></div>
     <div><h4>Falta para que sea definitivo</h4><ol>
       <li><b>Topografía final del terreno</b> (después del movimiento de suelos / malla de rugosidad): hoy las alturas se calculan sobre terreno natural.</li>
       <li><b>Confirmación de la discretización</b> de los ${rev} trackers que se movieron en el replanteo r4 (zona y suelo definen el código y el largo de cada hinca).</li>
@@ -346,8 +348,9 @@ function ramPar(b) {
       ${f('mot52', 'Posición de la hinca motor en 1P52', 'de 13', '1', 'Contando de norte a sur. Central = 7.')}
       ${f('mot26', 'Posición de la hinca motor en 1P26', 'de 7', '1', 'Contando de norte a sur. Central = 4.')}
       <h4 class="rmsub">Tolerancias</h4>
-      ${f('revMin', 'Altura libre mínima', 'm', '0.01', 'Por debajo de esto el terreno está muy alto (despeje del módulo / ajuste de la cabeza).')}
-      ${f('pendMax', 'Pendiente N-S máxima del tracker', '%', '0.5', 'Trina diseña estas configuraciones para pendiente 0–5 % (MEC-DW-26050-3401-0A). Si el terreno tiene más, el tubo se limita a esta pendiente y el tracker queda para revisar.')}
+      ${f('regMenos', 'Regulación: hincar más que la nominal', 'mm', '10', 'Manual Trina §3.4.3: hasta 100 mm más (altura libre nominal −100 mm). Si el terreno queda más alto, hay que cortar.')}
+      ${f('regMas', 'Regulación: hincar menos que la nominal', 'mm', '10', 'Manual Trina §3.4.3: hasta 200 mm menos (altura libre nominal +200 mm), sin bajar del empotramiento mínimo. Si el terreno queda más bajo, hay que rellenar.')}
+      ${f('pendMax', 'Pendiente N-S máxima del tracker', '%', '0.5', 'Manual Trina ARI-GR-MN-4301-0A §3.2: hasta 15 % (9°) N-S y E-O. Si el terreno tiene más, el tubo se limita a esta pendiente y el tracker queda para revisar.')}
       ${f('difMax', 'Salto máximo de altura libre entre hincas vecinas', 'm', '0.05', 'Se marca como aviso.')}
       <label class="rmchk"><input type="checkbox" data-k="usarCodigos" ${P.usarCodigos ? 'checked' : ''} ${ro ? 'disabled' : ''} style="width:auto"><span>Usar largo, altura y empotramiento de cada código de hinca (cuando esté cargada la distribución de Trina, reemplaza a los valores de arriba)${cods ? '' : '<small class="muted">La distribución por posición todavía no está completa en Catálogo y distribución: mientras tanto se usan los valores de arriba, motor y general por separado.</small>'}</span></label></div></div>
     <div><div class="card" style="margin-bottom:12px"><h3>Estado del plan</h3><label class="rmchk"><input type="checkbox" data-k="precarga" ${P.precarga ? 'checked' : ''} ${ro ? 'disabled' : ''} style="width:auto"><span><b>Ramming plan en precarga</b>: alturas orientativas, no apto para hincar. Destildar recién cuando estén la topografía final, la discretización confirmada y la validación de Trina.</span></label></div>
