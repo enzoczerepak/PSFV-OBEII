@@ -19,7 +19,9 @@ const MS_DEF = {
   todoLargo: true, // controlar el terreno en todo el largo del tracker (no solo en las hincas)
   esponj: 15,      // esponjamiento / compactación del relleno (%)
   umbral: 200,     // espesor desde el que Trina pide validar los postes (mm)
-  pesoRell: 1.0,   // costo relativo del relleno frente al corte (1 = igual; >1 prefiere cortar)
+  pesoRell: 1.0,   // (anterior) costo relativo del relleno
+  prior: 'corte',  // qué se prefiere cuando hay que mover: 'corte' (el relleno pesa 3 veces), 'igual' o 'relleno'
+  limUmb: true,    // evitar movimientos de más de 'umbral' mm (así no hay que validar postes): pesa 50 veces más que el volumen
   equi: 0.5,       // equidistancia de las curvas de nivel (m)
   fuente: {},      // terreno por sector: 'tin' (layout) o id de una topografía cargada
 };
@@ -72,17 +74,16 @@ function msPilas(t, RP) {
   return H;
 }
 
-// mínimo de Σ w·max(0, u−a) + kf·Σ w·max(0, a−l) en a (convexa, lineal por tramos): devuelve el intervalo de mínimo [aL, aR] y el costo
-function msOptA(u, l, w, kf) {
-  const n = u.length, ev = new Array(2 * n);
-  for (let i = 0; i < n; i++) { ev[2 * i] = [u[i], w[i]]; ev[2 * i + 1] = [l[i], kf * w[i]]; }
-  ev.sort((p, q) => p[0] - q[0]);
-  let der = 0; for (let i = 0; i < n; i++) der -= w[i];
-  let aL = ev[0][0], aR = ev[0][0];
-  for (let j = 0; j < ev.length; j++) { const prev = der; der += ev[j][1];
-    if (prev < -1e-12 && der >= -1e-12) { aL = ev[j][0]; aR = der <= 1e-12 ? (j + 1 < ev.length ? ev[j + 1][0] : ev[j][0]) : ev[j][0]; break; } }
-  let c = 0; for (let i = 0; i < n; i++) c += w[i] * (Math.max(0, u[i] - aL) + kf * Math.max(0, aL - l[i]));
-  return { aL, aR, c };
+// mínimo en a de una suma de bisagras convexas: corte Σ w·max(0, c−a) (tipo 0) y relleno Σ w·max(0, a−c) (tipo 1).
+// Es lineal por tramos: se recorren los quiebres ordenados hasta que la derivada pasa a ≥ 0. Devuelve el intervalo de mínimo [aL, aR] y el costo.
+function msOptA(c, w, tp) {
+  const n = c.length, ix = Array.from({ length: n }, (_, i) => i).sort((p, q) => c[p] - c[q]);
+  let der = 0; for (let i = 0; i < n; i++) if (!tp[i]) der -= w[i];
+  let aL = c[ix[0]], aR = aL;
+  for (let j = 0; j < n; j++) { const prev = der; der += w[ix[j]];
+    if (prev < -1e-12 && der >= -1e-12) { aL = c[ix[j]]; aR = der <= 1e-12 ? (j + 1 < n ? c[ix[j + 1]] : aL) : aL; break; } }
+  let k = 0; for (let i = 0; i < n; i++) k += w[i] * (tp[i] ? Math.max(0, aL - c[i]) : Math.max(0, c[i] - aL));
+  return { aL, aR, c: k };
 }
 
 // ---------- cálculo de un tracker ----------
@@ -116,9 +117,22 @@ function msTracker(t, H, P, terr, pend) {
   const md = H.reduce((a, h) => a + h.d, 0) / H.length, mz = H.reduce((a, h) => a + h.z, 0) / H.length;
   const bT = H.reduce((a, h) => a + (h.d - md) * (h.z - mz), 0) / (H.reduce((a, h) => a + (h.d - md) ** 2, 0) || 1);
   const bC = Math.max(-lim, Math.min(lim, bT));
-  const n = M.length, u = new Float64Array(n), l = new Float64Array(n), w = M.map((m) => m.w), kf = P.pesoRell;
-  const prueba = (b) => { for (let i = 0; i < n; i++) { const r = M[i].z - b * M[i].d; u[i] = r - M[i].hi; l[i] = r - M[i].lo; } return msOptA(u, l, w, kf); };
-  let best = null; const evalb = (b) => { const r = prueba(b); if (!best || r.c < best.c - 1e-9 || (Math.abs(r.c - best.c) <= 1e-9 && Math.abs(b - bC) < Math.abs(best.b - bC))) best = Object.assign(r, { b }); };
+  // costo: volumen de corte + relleno × 3 si se prioriza el corte (o ÷3 si se prioriza el relleno)
+  const n = M.length, kf = P.prior === 'corte' ? 3 : P.prior === 'relleno' ? 1 / 3 : 1, umb = P.umbral / 1000;
+  const cc = new Float64Array(2 * n), ww = new Float64Array(2 * n), tp = new Uint8Array(2 * n), ip = M.map((m, i) => (m.pila ? i : -1)).filter((i) => i >= 0);
+  for (let i = 0; i < n; i++) { ww[2 * i] = M[i].w; ww[2 * i + 1] = kf * M[i].w; tp[2 * i + 1] = 1; }
+  const costo = (a) => { let k = 0; for (let i = 0; i < n; i++) k += ww[2 * i] * Math.max(0, cc[2 * i] - a) + ww[2 * i + 1] * Math.max(0, a - cc[2 * i + 1]); return k; };
+  const prueba = (b) => { for (let i = 0; i < n; i++) { const r = M[i].z - b * M[i].d; cc[2 * i] = r - M[i].hi; cc[2 * i + 1] = r - M[i].lo; }
+    const o = msOptA(cc, ww, tp); if (!P.limUmb) return Object.assign(o, { k: 0 });
+    // limitar el espesor: en cada hinca, la altura a de la línea que la deja con ≤ umbral es un intervalo; se busca la que cubre más hincas
+    // (menos hincas que validar) y, dentro de esa, la de menor costo
+    const ev = []; ip.forEach((i) => { ev.push([cc[2 * i] - umb, 1], [cc[2 * i + 1] + umb, -1]); }); ev.sort((p, q) => p[0] - q[0] || q[1] - p[1]);
+    let cur = 0, mx = -1, seg = []; for (let j = 0; j < ev.length; j++) { cur += ev[j][1];
+      if (ev[j][1] === 1) { if (cur > mx) { mx = cur; seg = [[ev[j][0], ev[j + 1][0]]]; } else if (cur === mx) seg.push([ev[j][0], ev[j + 1][0]]); } }
+    let best = null; seg.forEach(([s0, s1]) => { const a = Math.max(s0, Math.min(s1, o.aL)), k = costo(a); if (!best || k < best.c) best = { aL: a, aR: Math.max(a, Math.min(s1, o.aR)), c: k }; });
+    return Object.assign(best, { k: ip.length - mx }); };
+  // se compara primero la cantidad de hincas que pasan el umbral (si se limita), después el costo; a igualdad, la pendiente más parecida al terreno
+  let best = null; const evalb = (b) => { const r = prueba(b); if (!best || r.k < best.k || (r.k === best.k && (r.c < best.c - 1e-9 || (Math.abs(r.c - best.c) <= 1e-9 && Math.abs(b - bC) < Math.abs(best.b - bC))))) best = Object.assign(r, { b }); };
   const paso1 = 0.0025; for (let b = -lim; b <= lim + 1e-12; b += paso1) evalb(b); evalb(bC);
   const b0 = best.b; for (let b = Math.max(-lim, b0 - paso1); b <= Math.min(lim, b0 + paso1) + 1e-12; b += 0.0002) evalb(b);
   // dentro del intervalo sin costo extra, la línea que deja el terreno lo más cerca posible de la altura libre nominal
@@ -128,7 +142,7 @@ function msTracker(t, H, P, terr, pend) {
   M.forEach((m) => { const G = a + b * m.d; m.zf = Math.min(G + m.hi, Math.max(G + m.lo, m.z)); m.mov = m.zf - m.z;
     if (m.mov < 0) { corte -= m.mov * m.w * P.franja; cMax = Math.max(cMax, -m.mov); } else { relleno += m.mov * m.w * P.franja; rMax = Math.max(rMax, m.mov); } });
   H.forEach((h) => { const G = a + b * h.d; h.cab = G + h.nom; h.zf = Math.min(G + h.hi, Math.max(G + h.lo, h.z)); h.mov = h.zf - h.z; h.rev0 = h.cab - h.z; h.rev = h.cab - h.zf; });
-  const umb = P.umbral / 1000, nVal = H.filter((h) => Math.abs(h.mov) > umb + 1e-6).length;
+  const nVal = H.filter((h) => Math.abs(h.mov) > umb + 1e-6).length;
   // pendiente E-O del terreno bajo el tracker (gradiente de la superficie)
   let eo = null; if (terr.en) H.forEach((h) => { const r = terr.en(h.x, h.y); if (r) eo = Math.max(eo || 0, Math.abs(r.t.gx) * 100); });
   const grad = Math.abs(Math.atan(b) * 180 / Math.PI), amort = grad <= 1.5 ? 51 : grad <= 4.5 ? 83.5 : grad <= 7.5 ? 116 : grad <= 9 ? 148 : null;
@@ -204,6 +218,8 @@ function vMovSuelo(el) {
       <label>Terreno<select id="msFu" ${ro ? 'disabled' : ''}><option value="tin" ${R.fuente === 'tin' ? 'selected' : ''}>Superficie del layout (cota de cada hinca)</option>${msSets().map((x) => `<option value="${x.id}" ${R.fuente === x.id ? 'selected' : ''}>${esc(x.nombre)}${x.fecha ? ' · ' + esc(x.fecha) : ''} · ${fmt(x.n)} ptos${(x.sectores || []).includes(MSUI.sec) ? '' : ' (no cubre el sector)'}</option>`).join('')}</select></label>
       <label class="msslider">Pendiente N-S máxima del tracker <b id="msPv">${fmt(pend, 1)} %</b> <small class="muted">(${fmt(Math.atan(pend / 100) * 180 / Math.PI, 1)}°)</small>
         <input type="range" id="msPend" min="0" max="15" step="0.5" value="${pend}"></label>
+      <div class="msbtns"><label class="rmchk" title="Primero evita superar el espesor de validación de postes"><input type="checkbox" id="msLim" ${P.limUmb ? 'checked' : ''} ${ro ? 'disabled' : ''} style="width:auto"><span>Hasta ${P.umbral} mm</span></label>
+        <select id="msPri" ${ro ? 'disabled' : ''}>${[['corte', 'Priorizar corte'], ['igual', 'Menor volumen'], ['relleno', 'Priorizar relleno']].map(([v, t]) => `<option value="${v}" ${P.prior === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
       <div class="msbtns">${MSUI.pend != null && MSUI.pend !== P.pendNS ? `<button class="btn" id="msPg" ${ro ? 'disabled' : ''}>Guardar ${fmt(pend, 1)} % como parámetro</button><button class="btn" id="msPr">Volver a ${fmt(P.pendNS, 1)} %</button>` : `<span class="muted">Trina admite hasta 15 % (9°) N-S y E-O</span>`}</div></div>
     <div class="grid g4 stagger" style="margin:12px 0">
       <div class="card kpi"><div class="kl">Corte</div><div class="kv" style="color:#c0392b">${f3(R.corte)}</div><div class="muted">máx. ${fmt(R.cMax, 2)} m · franja ${fmt(P.franja, 1)} m</div></div>
@@ -216,6 +232,8 @@ function vMovSuelo(el) {
   $('#msSec', el).onchange = (e) => { MSUI.sec = e.target.value; MSUI.sel = null; MSUI.vb = null; render(false); };
   $('#msFu', el).onchange = (e) => { const m = msP(); m.fuente[MSUI.sec] = e.target.value; msGuardarP(m, `Movimiento de suelos: terreno del sector ${MSUI.sec} = ${e.target.selectedOptions[0].textContent}`); };
   let tm = null; $('#msPend', el).oninput = (e) => { $('#msPv', el).textContent = fmt(Number(e.target.value), 1) + ' %'; clearTimeout(tm); tm = setTimeout(() => { MSUI.pend = Number(e.target.value); render(false); }, 120); };
+  $('#msLim', el).onchange = (e) => { const m = msP(); m.limUmb = e.target.checked; msGuardarP(m, `Movimiento de suelos: ${m.limUmb ? 'evitar' : 'permitir'} movimientos de más de ${m.umbral} mm`); };
+  $('#msPri', el).onchange = (e) => { const m = msP(); m.prior = e.target.value; msGuardarP(m, `Movimiento de suelos: preferir ${e.target.selectedOptions[0].textContent.toLowerCase()}`); };
   const pg = $('#msPg', el); if (pg) pg.onclick = () => { const m = msP(); m.pendNS = pend; MSUI.pend = null; msGuardarP(m, `Movimiento de suelos: pendiente N-S máxima = ${pend} %`); };
   const pr = $('#msPr', el); if (pr) pr.onclick = () => { MSUI.pend = null; render(false); };
   segBind('#msT', MSUI.tab, (v) => { MSUI.tab = v; render(false); });
@@ -357,11 +375,12 @@ function msPar(b, R) {
       ${f('paso', 'Paso del perfil', 'm', '0.25', 'Cada cuánto se controla el terreno a lo largo del tracker.')}
       ${c('todoLargo', 'Controlar todo el largo del tracker', '(si no, solo en las hincas y el terreno entre hincas se toma recto).')}
       ${f('esponj', 'Esponjamiento / compactación del relleno', '%', '1', 'Material suelto necesario por m³ de relleno compactado.')}
-      ${f('pesoRell', 'Costo relativo del relleno', '×', '0.1', '1 = cortar y rellenar cuestan igual. Mayor que 1: prefiere cortar (menos aporte); menor: prefiere rellenar.')}
+      <label>Cuando hay que mover, preferir<span class="rmin"><select data-k="prior" ${ro ? 'disabled' : ''}>${[['corte', 'Cortar (el relleno pesa 3 veces)'], ['igual', 'Lo que mueva menos volumen'], ['relleno', 'Rellenar']].map(([v, t]) => `<option value="${v}" ${P.prior === v ? 'selected' : ''}>${t}</option>`).join('')}</select></span><small class="muted">Se elige la pendiente y la altura de la línea de cada tracker con este criterio.</small></label>
+      ${c('limUmb', 'Evitar movimientos de más del espesor de validación', `(${P.umbral} mm): primero se busca la pendiente y la altura que no lo superen, aunque mueva más volumen.`)}
       ${f('equi', 'Equidistancia de curvas de nivel', 'm', '0.1', 'Curva maestra cada 5.')}
       ${ro ? '' : '<button class="btn" id="msRes">Volver a los valores por defecto</button>'}</div>
       <p class="hint">La altura libre nominal, el largo y el empotramiento mínimo de cada hinca salen del catálogo Trina (o de los parámetros del Ramming plan si falta la distribución).</p></div></div>`;
-  $$('[data-k]', b).forEach((i) => { i.onchange = () => { const m = msP(), k = i.dataset.k; m[k] = i.type === 'checkbox' ? i.checked : Number(i.value); if (k === 'pendNS') MSUI.pend = null; msGuardarP(m, `Movimiento de suelos: ${k} = ${m[k]}`); }; });
+  $$('[data-k]', b).forEach((i) => { i.onchange = () => { const m = msP(), k = i.dataset.k; m[k] = i.type === 'checkbox' ? i.checked : i.tagName === 'SELECT' ? i.value : Number(i.value); if (k === 'pendNS') MSUI.pend = null; msGuardarP(m, `Movimiento de suelos: ${k} = ${m[k]}`); }; });
   const rs = $('#msRes', b); if (rs) rs.onclick = () => { const m = Object.assign({}, MS_DEF, { fuente: msP().fuente }); MSUI.pend = null; msGuardarP(m, 'Movimiento de suelos: parámetros por defecto'); };
 }
 
@@ -449,7 +468,8 @@ async function msImportar() {
 async function msExcel(sec, pend) {
   const R = msCalc(sec, pend); if (!R) return; const P = R.P, wb = XLSX.utils.book_new(), r3 = (v) => (v == null ? null : Math.round(v * 1000) / 1000);
   const res = [['PSFV Oberá II · Movimiento de suelos para hincado · sector ' + sec], ['Terreno', R.terr.nombre], ['Pendiente N-S máx. del tracker (%)', pend], ['Pendiente E-O máx. (%)', P.pendEO],
-    ['Regulación (mm)', `−${P.regMenos} / +${P.regMas}` + (P.usarTol ? ` · tolerancia ±${P.tolAlt} reservada` : '')], ['Franja (m)', P.franja], [],
+    ['Regulación (mm)', `−${P.regMenos} / +${P.regMas}` + (P.usarTol ? ` · tolerancia ±${P.tolAlt} reservada` : '')], ['Franja (m)', P.franja],
+    ['Criterio', (P.limUmb ? `evitar más de ${P.umbral} mm · ` : '') + ({ corte: 'priorizar corte (relleno ×3)', igual: 'menor volumen', relleno: 'priorizar relleno' }[P.prior] || '')], [],
     ['Corte (m³)', r3(R.corte)], ['Relleno (m³)', r3(R.relleno)], [`Material para relleno ×${1 + P.esponj / 100} (m³)`, r3(R.mat)], ['Aporte externo (m³)', r3(R.aporte)], ['Sobrante de corte (m³)', r3(R.sobra)],
     ['Trackers con movimiento', R.nTrk], ['Hincas con movimiento', R.nMov], [`Hincas con más de ${P.umbral} mm (validación Trina)`, R.nVal], ['Trackers con terreno E-O > límite', R.eoFuera], [],
     ['Criterios: manual Trina ARI-GR-MN-4301-0A (§3.1, §3.2, §3.3.1, §3.4.1, §3.4.3, §4.8.3)']];
@@ -474,7 +494,7 @@ function msPdf(sec, pend) {
       <div class="mspdfk">${kp('Corte', fmt(R.corte) + ' m³', '#c0392b')}${kp('Relleno', fmt(R.relleno) + ' m³', '#1f5fa8')}${kp(R.aporte > 0 ? 'Aporte' : 'Sobrante', fmt(R.aporte > 0 ? R.aporte : R.sobra) + ' m³')}${kp('Hincas con mov.', fmt(R.nMov) + ' / ' + fmt(R.nH))}${kp('> ' + P.umbral + ' mm', fmt(R.nVal), '#b45309')}${kp('Pend. N-S máx.', fmt(pend, 1) + ' %')}${kp('Escala', '1:' + esc)}</div></div>
     <svg viewBox="${vb.map((v) => v.toFixed(2)).join(' ')}" style="display:block;width:${W}mm;height:${Hm}mm" font-family="Arial">${S0.defs}${S0.g}</svg>
     <div class="msley pr"><span><i style="background:${msColor(-1.2)}"></i>Corte</span><span><i style="background:${msColor(-0.3)}"></i></span><span><i style="background:#e3e7ec"></i>Sin movimiento</span><span><i style="background:${msColor(0.3)}"></i></span><span><i style="background:${msColor(1.2)}"></i>Relleno</span><span><i class="msdot"></i>Hinca con más de ${P.umbral} mm (validación Trina)</span><span><i class="mshat"></i>Terreno fuera de pendiente Trina</span>
-      <span>Curvas cada ${fmt(P.equi, 2)} m · C/R: m³ por tracker (franja ${fmt(P.franja, 1)} m) · regulación −${P.regMenos}/+${P.regMas} mm${P.usarTol ? ` (±${P.tolAlt} reservados)` : ''} · Trina ARI-GR-MN-4301-0A · ${new Date().toLocaleDateString('es-AR')}</span><span class="rmnorte">▲ N</span></div></section>`;
+      <span>${P.limUmb ? `Evitando más de ${P.umbral} mm · ` : ''}${{ corte: 'priorizando corte', igual: 'menor volumen', relleno: 'priorizando relleno' }[P.prior] || ''} · Curvas cada ${fmt(P.equi, 2)} m · C/R: m³ por tracker (franja ${fmt(P.franja, 1)} m) · regulación −${P.regMenos}/+${P.regMas} mm${P.usarTol ? ` (±${P.tolAlt} reservados)` : ''} · Trina ARI-GR-MN-4301-0A · ${new Date().toLocaleDateString('es-AR')}</span><span class="rmnorte">▲ N</span></div></section>`;
   const L = R.L.slice().sort((p, q) => (q.corte + q.relleno) - (p.corte + p.relleno)).filter((r) => r.corte + r.relleno > 0.01);
   for (let i = 0; i < L.length; i += 34) h += `<section class="rmpg" data-o="L" style="width:420mm;height:297mm"><div class="mspdfh"><div><b>Trackers con movimiento · Sector ${sec} · pendiente N-S máx. ${fmt(pend, 1)} %</b></div></div>
     <table class="tbl mspdft"><thead><tr><th>Tracker</th><th>Tipo</th><th>Pend. terreno</th><th>Pend. tracker</th><th>E-O terreno</th><th>Corte (m³)</th><th>Relleno (m³)</th><th>Corte máx. (m)</th><th>Relleno máx. (m)</th><th>Hincas con mov.</th><th>&gt; ${P.umbral} mm</th><th>Amortiguador L</th></tr></thead><tbody>
