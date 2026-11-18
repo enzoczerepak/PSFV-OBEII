@@ -23,6 +23,11 @@ const MS_DEF = {
   prior: 'corte',  // qué se prefiere cuando hay que mover: 'corte' (el relleno pesa 3 veces), 'igual' o 'relleno'
   limUmb: true,    // evitar movimientos de más de 'umbral' mm (así no hay que validar postes): pesa 50 veces más que el volumen
   equi: 0.5,       // equidistancia de las curvas de nivel (m)
+  usarDesp: true,  // despeje mínimo módulo-suelo con el tracker girado al máximo (MEC-DW-26050-3401-0A, vista lateral ±60°)
+  despMin: 500,    // despeje mínimo exigido (mm)
+  despNom: 500,    // despeje con la hinca a su altura libre nominal y terreno plano (mm), según el plano de Trina
+  angMax: 60,      // giro máximo del tracker (°)
+  anchoMod: 2382,  // ancho del módulo en sentido E-O (mm): el borde queda a ancho/2 · cos(giro) del eje
   fuente: {},      // terreno por sector: 'tin' (layout) o id de una topografía cargada
 };
 const MSUI = { tab: 'plano', sec: null, sel: null, vb: null, pend: null, ver: { curvas: true, lim: true, vol: true, ptos: false } };
@@ -51,7 +56,7 @@ function msSuperficie(pts, maxLado = 25) {
     const det = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]); if (Math.abs(det) < 1e-9) continue;
     // gradiente del plano del triángulo (dz/dx = E-O, dz/dy = N-S)
     const gx = ((b[1] - c[1]) * (a[2] - c[2]) + (c[1] - a[1]) * (b[2] - c[2])) / det, gy = ((c[0] - b[0]) * (a[2] - c[2]) + (a[0] - c[0]) * (b[2] - c[2])) / det;
-    const k = tri.length; tri.push({ a, b, c, det, gx, gy });
+    const k = tri.length; tri.push({ a, b, c, det, gx, gy, fino: Math.abs(det) / L < 0.6 }); // fino: altura < 0,6 m (puntos casi alineados, el gradiente no sirve)
     const x0 = Math.floor(Math.min(a[0], b[0], c[0]) / C), x1 = Math.floor(Math.max(a[0], b[0], c[0]) / C), y0 = Math.floor(Math.min(a[1], b[1], c[1]) / C), y1 = Math.floor(Math.max(a[1], b[1], c[1]) / C);
     for (let gx_ = x0; gx_ <= x1; gx_++) for (let gy_ = y0; gy_ <= y1; gy_++) { const kk = gx_ + ',' + gy_; let l = G.get(kk); if (!l) G.set(kk, (l = [])); l.push(k); }
   }
@@ -92,6 +97,9 @@ function msTracker(t, H, P, terr, pend) {
   // banda del terreno respecto de la línea de diseño G (terreno teórico a altura libre nominal): z ∈ [G + lo, G + hi]
   H.forEach((h) => { h.rmin = h.nom - reg0 + tol; h.rmax = Math.min(h.nom + reg1, h.L - h.emin) - tol; h.lo = h.nom - h.rmax; h.hi = h.nom - h.rmin; });
   const gen = H.filter((h) => !h.motor), loG = gen.length ? Math.max(...gen.map((h) => h.lo)) : -reg1, hiG = gen.length ? Math.min(...gen.map((h) => h.hi)) : reg0;
+  // despeje módulo-suelo con el tracker girado al máximo: el borde bajo del módulo queda a 'lat' m al costado del eje y a despNom sobre el
+  // terreno de diseño. El terreno del lado alto (eje + lat × pendiente E-O) no puede subir más de despNom − despMin (− tolerancia) sobre el diseño.
+  const lat = P.anchoMod / 2000 * Math.cos(P.angMax * Math.PI / 180), mDesp = (P.despNom - P.despMin) / 1000 - tol;
   const xA = H.reduce((a, h) => a + h.x, 0) / H.length, dMax = H[H.length - 1].d;
   // cota del terreno en cada hinca: punto del relevamiento sobre la hinca (≤ 0,5 m) o superficie; si no hay, la del layout
   H.forEach((h) => { const r = terr.pila(h); h.z = r.z; h.fz = r.f; });
@@ -110,9 +118,13 @@ function msTracker(t, H, P, terr, pend) {
     for (let i = 0; i <= n; i++) { const d = -P.ext + (dMax + 2 * P.ext) * i / n, y = H[0].y - d;
       let h = null, bd = 1e9; H.forEach((q) => { const e = Math.abs(q.d - d); if (e < bd) { bd = e; h = q; } });
       const pila = bd < P.paso / 2 + 1e-6 ? h : null, zs = terr.sup ? terr.sup(pila ? pila.x : xA, y) : null;
-      M.push({ d, z: pila ? pila.z : zs != null ? zs : zLin(d), lo: pila ? pila.lo : loG, hi: pila ? pila.hi : hiG, w: (dMax + 2 * P.ext) / n * (i === 0 || i === n ? 0.5 : 1), pila });
+      M.push({ d, y, z: pila ? pila.z : zs != null ? zs : zLin(d), lo: pila ? pila.lo : loG, hi: pila ? pila.hi : hiG, w: (dMax + 2 * P.ext) / n * (i === 0 || i === n ? 0.5 : 1), pila });
     }
-  } else H.forEach((h, k) => { const a = k ? (h.d - H[k - 1].d) / 2 : P.ext, b = k < H.length - 1 ? (H[k + 1].d - h.d) / 2 : P.ext; M.push({ d: h.d, z: h.z, lo: h.lo, hi: h.hi, w: a + b, pila: h }); });
+  } else H.forEach((h, k) => { const a = k ? (h.d - H[k - 1].d) / 2 : P.ext, b = k < H.length - 1 ? (H[k + 1].d - h.d) / 2 : P.ext; M.push({ d: h.d, y: h.y, z: h.z, lo: h.lo, hi: h.hi, w: a + b, pila: h }); });
+  // pendiente E-O del terreno: diferencia de cota a 1,5 m a cada lado del eje (sobre la línea de hincas los triángulos son finos y engañan)
+  const eoAt = (x, y) => { if (!terr.sup) return null; const zr = terr.sup(x + 1.5, y), zl = terr.sup(x - 1.5, y); return zr != null && zl != null ? Math.abs(zr - zl) / 3 : null; };
+  M.forEach((m) => { const s0 = eoAt(xA, m.y); m.sEO = s0 == null ? 0 : s0;
+    if (P.usarDesp) { m.hiD = mDesp - lat * m.sEO; if (m.hiD < m.hi) { m.hi = Math.max(m.lo, m.hiD); m.porDesp = true; } } });
   // pendiente del terreno (ajuste por mínimos cuadrados sobre las hincas, en % y positiva hacia el sur que baja)
   const md = H.reduce((a, h) => a + h.d, 0) / H.length, mz = H.reduce((a, h) => a + h.z, 0) / H.length;
   const bT = H.reduce((a, h) => a + (h.d - md) * (h.z - mz), 0) / (H.reduce((a, h) => a + (h.d - md) ** 2, 0) || 1);
@@ -141,12 +153,14 @@ function msTracker(t, H, P, terr, pend) {
   let corte = 0, relleno = 0, cMax = 0, rMax = 0;
   M.forEach((m) => { const G = a + b * m.d; m.zf = Math.min(G + m.hi, Math.max(G + m.lo, m.z)); m.mov = m.zf - m.z;
     if (m.mov < 0) { corte -= m.mov * m.w * P.franja; cMax = Math.max(cMax, -m.mov); } else { relleno += m.mov * m.w * P.franja; rMax = Math.max(rMax, m.mov); } });
+  M.forEach((m) => { m.desp = P.despNom / 1000 + (a + b * m.d) - m.zf - lat * m.sEO; }); // despeje a giro máximo, lado alto (m)
+  const despMin = Math.min(...M.map((m) => m.desp)), nDespC = M.filter((m) => m.porDesp && m.mov < -1e-4).length;
   H.forEach((h) => { const G = a + b * h.d; h.cab = G + h.nom; h.zf = Math.min(G + h.hi, Math.max(G + h.lo, h.z)); h.mov = h.zf - h.z; h.rev0 = h.cab - h.z; h.rev = h.cab - h.zf; });
   const nVal = H.filter((h) => Math.abs(h.mov) > umb + 1e-6).length;
   // pendiente E-O del terreno bajo el tracker (gradiente de la superficie)
-  let eo = null; if (terr.en) H.forEach((h) => { const r = terr.en(h.x, h.y); if (r) eo = Math.max(eo || 0, Math.abs(r.t.gx) * 100); });
+  let eo = null; H.forEach((h) => { const s0 = eoAt(h.x, h.y); if (s0 != null) eo = Math.max(eo || 0, s0 * 100); });
   const grad = Math.abs(Math.atan(b) * 180 / Math.PI), amort = grad <= 1.5 ? 51 : grad <= 4.5 ? 83.5 : grad <= 7.5 ? 116 : grad <= 9 ? 148 : null;
-  return { t, H, M, a, b, pend: b * 100, pendT: bT * 100, eo, corte, relleno, cMax, rMax, nMov: H.filter((h) => Math.abs(h.mov) > 1e-4).length, nVal, xA, amort, grad, sinDato: H.filter((h) => h.fz === 'layout' || h.fz === 'interpolado').length };
+  return { t, H, M, a, b, pend: b * 100, pendT: bT * 100, eo, despMin, nDespC, corte, relleno, cMax, rMax, nMov: H.filter((h) => Math.abs(h.mov) > 1e-4).length, nVal, xA, amort, grad, sinDato: H.filter((h) => h.fz === 'layout' || h.fz === 'interpolado').length };
 }
 
 // ---------- terreno de un sector ----------
@@ -249,7 +263,7 @@ function msPlanoSVG(R, o = {}) {
     g += `<path d="${C.fina}" stroke="#cfc6b6" stroke-width="${sF.toFixed(3)}" fill="none"/><path d="${C.maestra}" stroke="#9c8f78" stroke-width="${sM.toFixed(3)}" fill="none"/>`;
     g += C.rot.map(([x, y, z, a]) => `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" transform="rotate(${(a > 90 || a < -90 ? a + 180 : a).toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})" class="mscz" font-size="${tZ.toFixed(2)}" style="stroke-width:${(tZ * 0.3).toFixed(2)}px" text-anchor="middle" dominant-baseline="middle">${fmt(z, 1)}</text>`).join(''); }
   if (V.lim) { const eo = P.pendEO / 100, ns = R.pend / 100;
-    g += R.terr.tri.filter((t) => Math.abs(t.gx) > eo || Math.abs(t.gy) > Math.max(ns, 0.15)).map((t) => `<path d="M${(t.a[0] - OX).toFixed(2)} ${(OY - t.a[1]).toFixed(2)}L${(t.b[0] - OX).toFixed(2)} ${(OY - t.b[1]).toFixed(2)}L${(t.c[0] - OX).toFixed(2)} ${(OY - t.c[1]).toFixed(2)}Z" fill="url(#msHatch)" stroke="none"><title>Terreno E-O ${fmt(Math.abs(t.gx) * 100, 1)} % · N-S ${fmt(Math.abs(t.gy) * 100, 1)} %</title></path>`).join(''); }
+    g += R.terr.tri.filter((t) => !t.fino && (Math.abs(t.gx) > eo || Math.abs(t.gy) > Math.max(ns, 0.15))).map((t) => `<path d="M${(t.a[0] - OX).toFixed(2)} ${(OY - t.a[1]).toFixed(2)}L${(t.b[0] - OX).toFixed(2)} ${(OY - t.b[1]).toFixed(2)}L${(t.c[0] - OX).toFixed(2)} ${(OY - t.c[1]).toFixed(2)}Z" fill="url(#msHatch)" stroke="none"><title>Terreno E-O ${fmt(Math.abs(t.gx) * 100, 1)} % · N-S ${fmt(Math.abs(t.gy) * 100, 1)} %</title></path>`).join(''); }
   // franjas por tracker: tramos del mismo color (cada 5 cm de espesor)
   R.L.forEach((r) => { const x = r.xA - OX - P.franja / 2, y0 = OY - r.H[0].y, M = r.M; let i = 0;
     while (i < M.length) { const q = Math.round(M[i].mov / 0.05); let j = i; while (j + 1 < M.length && Math.round(M[j + 1].mov / 0.05) === q) j++;
@@ -315,20 +329,21 @@ function msDetalle(r, R) {
     <div class="msdk"><div><small>Pendiente terreno</small><b>${fmt(Math.abs(r.pendT), 1)} %</b></div><div><small>Pendiente tracker</small><b>${fmt(Math.abs(r.pend), 1)} %</b><small>${fmt(r.grad, 1)}°</small></div>
       <div><small>Corte</small><b style="color:#c0392b">${fmt(r.corte, 1)} m³</b></div><div><small>Relleno</small><b style="color:#1f5fa8">${fmt(r.relleno, 1)} m³</b></div>
       <div><small>Amortiguadores</small><b>${r.amort ? 'L ' + fmt(r.amort, 1) + ' mm' : 'fuera de 9°'}</b><small>${r.grad > 1.5 ? 'mismo lado, hacia abajo' : 'lados alternados'}</small></div>
-      <div><small>E-O terreno</small><b style="color:${r.eo > P.pendEO ? '#b45309' : 'inherit'}">${r.eo == null ? '—' : fmt(r.eo, 1) + ' %'}</b></div></div>
+      <div><small>E-O terreno</small><b style="color:${r.eo > P.pendEO ? '#b45309' : 'inherit'}">${r.eo == null ? '—' : fmt(r.eo, 1) + ' %'}</b></div>
+      <div><small>Despeje mín. a ${P.angMax}°</small><b style="color:${r.despMin < P.despMin / 1000 - 0.005 ? '#c0392b' : 'inherit'}">${fmt(r.despMin * 1000)} mm</b><small>terreno final, lado alto</small></div></div>
     ${msPerfilSVG(r, P)}
     <div class="msley sm"><span><i style="background:#8a6d3b;height:2px"></i>Terreno actual</span><span><i style="background:#111;height:2px"></i>Terreno final</span><span><i style="border-top:1px dashed #2e7d32;background:none"></i>Diseño (altura libre nominal)</span><span><i style="background:rgba(46,160,67,.25)"></i>Banda de regulación</span></div>
     <div class="tblwrap" style="max-height:260px"><table class="tbl sm"><thead><tr><th>Hinca</th><th class="n">Terreno actual</th><th class="n">Cota cabeza</th><th class="n">Alt. libre sin mover</th><th class="n">Movimiento</th><th class="n">Alt. libre final</th><th>Dato</th></tr></thead><tbody>
     ${r.H.map((h) => `<tr><td>${h.n}${h.motor ? ' <b title="motor">M</b>' : ''}</td><td class="n">${fmt(h.z, 3)}</td><td class="n">${fmt(h.cab, 3)}</td><td class="n" style="color:${h.rev0 < h.rmin || h.rev0 > h.rmax ? '#c0392b' : 'inherit'}">${fmt(h.rev0, 3)}</td>
       <td class="n" style="color:${h.mov < -0.004 ? '#c0392b' : h.mov > 0.004 ? '#1f5fa8' : 'inherit'};font-weight:${Math.abs(h.mov) > P.umbral / 1000 ? 700 : 400}">${Math.abs(h.mov) < 0.0005 ? '—' : (h.mov > 0 ? '+' : '') + fmt(h.mov, 3)}</td><td class="n">${fmt(h.rev, 3)}</td><td class="muted">${h.fz}</td></tr>`).join('')}</tbody></table></div>
-    <p class="hint">Altura libre admitida: nominal −${P.regMenos} / +${P.regMas} mm${P.usarTol ? `, reservando ±${P.tolAlt} mm de tolerancia de hincado` : ''}. Movimiento: + relleno · − corte (m).</p>`;
+    <p class="hint">Altura libre admitida: nominal −${P.regMenos} / +${P.regMas} mm${P.usarTol ? `, reservando ±${P.tolAlt} mm de tolerancia de hincado` : ''}${P.usarDesp ? `. Despeje módulo-suelo a ${P.angMax}° de al menos ${P.despMin} mm: el terreno bajo el borde del módulo no puede quedar más alto que la línea de diseño${P.despNom > P.despMin ? ` + ${P.despNom - P.despMin} mm` : ''}` : ''}. Movimiento: + relleno · − corte (m).</p>`;
 }
 // tabla por tracker
 function msTabla(b, R) {
   const L = R.L.slice().sort((p, q) => (q.corte + q.relleno) - (p.corte + p.relleno));
-  b.innerHTML = `<div class="card"><div class="tblwrap" style="max-height:640px"><table class="tbl"><thead><tr><th>Tracker</th><th>Tipo</th><th class="n">Pend. terreno N-S</th><th class="n">Pend. tracker</th><th class="n">E-O terreno</th><th class="n">Corte (m³)</th><th class="n">Relleno (m³)</th><th class="n">Corte máx. (m)</th><th class="n">Relleno máx. (m)</th><th class="n">Hincas con mov.</th><th class="n">&gt; ${R.P.umbral} mm</th><th class="n">Amortiguador L</th></tr></thead><tbody>
+  b.innerHTML = `<div class="card"><div class="tblwrap" style="max-height:640px"><table class="tbl"><thead><tr><th>Tracker</th><th>Tipo</th><th class="n">Pend. terreno N-S</th><th class="n">Pend. tracker</th><th class="n">E-O terreno</th><th class="n">Corte (m³)</th><th class="n">Relleno (m³)</th><th class="n">Corte máx. (m)</th><th class="n">Relleno máx. (m)</th><th class="n">Hincas con mov.</th><th class="n">&gt; ${R.P.umbral} mm</th><th class="n">Despeje mín.</th><th class="n">Amortiguador L</th></tr></thead><tbody>
     ${L.map((r) => `<tr data-t="${r.t.id}" class="clk"><td><b>${r.t.id}</b>${r.t.rev ? ' <span class="pill p-warn" title="discretización a verificar">rev</span>' : ''}</td><td>${r.t.t}</td><td class="n" style="color:${Math.abs(r.pendT) > R.pend ? '#c0392b' : 'inherit'}">${fmt(Math.abs(r.pendT), 1)} %</td><td class="n">${fmt(Math.abs(r.pend), 1)} %</td>
-      <td class="n" style="color:${r.eo > R.P.pendEO ? '#b45309' : 'inherit'}">${r.eo == null ? '—' : fmt(r.eo, 1) + ' %'}</td><td class="n">${fmt(r.corte, 1)}</td><td class="n">${fmt(r.relleno, 1)}</td><td class="n">${fmt(r.cMax, 2)}</td><td class="n">${fmt(r.rMax, 2)}</td><td class="n">${r.nMov} / ${r.H.length}</td><td class="n">${r.nVal || ''}</td><td class="n">${r.amort ? fmt(r.amort, 1) + ' mm' : '—'}</td></tr>`).join('')}
+      <td class="n" style="color:${r.eo > R.P.pendEO ? '#b45309' : 'inherit'}">${r.eo == null ? '—' : fmt(r.eo, 1) + ' %'}</td><td class="n">${fmt(r.corte, 1)}</td><td class="n">${fmt(r.relleno, 1)}</td><td class="n">${fmt(r.cMax, 2)}</td><td class="n">${fmt(r.rMax, 2)}</td><td class="n">${r.nMov} / ${r.H.length}</td><td class="n">${r.nVal || ''}</td><td class="n" style="color:${r.despMin < R.P.despMin / 1000 - 0.005 ? '#c0392b' : 'inherit'}">${fmt(r.despMin * 1000)} mm</td><td class="n">${r.amort ? fmt(r.amort, 1) + ' mm' : '—'}</td></tr>`).join('')}
     </tbody></table></div></div>`;
   $$('tr[data-t]', b).forEach((tr) => { tr.onclick = () => { MSUI.sel = tr.dataset.t; MSUI.tab = 'plano'; render(false); }; });
 }
@@ -368,7 +383,12 @@ function msPar(b, R) {
       ${f('regMas', 'Regulación: hincar menos que la nominal', 'mm', '10', 'Manual §3.4.3: hasta −200 mm de hincado (altura libre +200 mm); nunca menos que el empotramiento mínimo del poste.')}
       ${f('tolAlt', 'Tolerancia de altura de la hinca', 'mm', '5', 'Manual §3.4.1: ±30 mm.')}
       ${c('usarTol', 'Reservar la tolerancia de hincado', 'dentro de la banda (el terreno queda 30 mm adentro de cada límite).')}
-      ${f('umbral', 'Espesor que requiere validar postes', 'mm', '10', 'Manual §3.1: áreas con movimiento de tierra de más de 200 mm.')}</div></div>
+      ${f('umbral', 'Espesor que requiere validar postes', 'mm', '10', 'Manual §3.1: áreas con movimiento de tierra de más de 200 mm.')}
+      ${c('usarDesp', 'Controlar el despeje módulo-suelo', 'con el tracker girado al máximo (vista lateral del plano MEC-DW-26050-3401-0A).')}
+      ${f('despMin', 'Despeje mínimo exigido', 'mm', '10', 'Distancia mínima del borde del módulo al suelo con el tracker girado al máximo.')}
+      ${f('despNom', 'Despeje del diseño en terreno plano', 'mm', '10', 'MEC-DW-26050-3401-0A: 500 mm a ±60° con la hinca a su altura libre nominal (1.315 mm).')}
+      ${f('angMax', 'Giro máximo del tracker', '°', '1', 'MEC-DW-26050-3401-0A: ±60°.')}
+      ${f('anchoMod', 'Ancho del módulo (E-O)', 'mm', '1', 'MEC-DW-26050-3401-0A: 2.382 mm. A 60°, el borde queda a ancho/2 × cos 60° ≈ 0,6 m al costado del eje.')}</div></div>
     <div class="card"><h3>Cálculo</h3><div class="form rmform">
       ${f('franja', 'Ancho de la franja por tracker', 'm', '0.5', 'Ancho de terreno que se mueve a lo largo de cada tracker.')}
       ${f('ext', 'Franja más allá de las puntas', 'm', '0.25', 'Largo extra al norte de la primera hinca y al sur de la última.')}
@@ -469,13 +489,14 @@ async function msExcel(sec, pend) {
   const R = msCalc(sec, pend); if (!R) return; const P = R.P, wb = XLSX.utils.book_new(), r3 = (v) => (v == null ? null : Math.round(v * 1000) / 1000);
   const res = [['PSFV Oberá II · Movimiento de suelos para hincado · sector ' + sec], ['Terreno', R.terr.nombre], ['Pendiente N-S máx. del tracker (%)', pend], ['Pendiente E-O máx. (%)', P.pendEO],
     ['Regulación (mm)', `−${P.regMenos} / +${P.regMas}` + (P.usarTol ? ` · tolerancia ±${P.tolAlt} reservada` : '')], ['Franja (m)', P.franja],
+    ['Despeje módulo-suelo', P.usarDesp ? `≥ ${P.despMin} mm a ±${P.angMax}° (diseño ${P.despNom} mm, módulo ${P.anchoMod} mm)` : 'no se controla'],
     ['Criterio', (P.limUmb ? `evitar más de ${P.umbral} mm · ` : '') + ({ corte: 'priorizar corte (relleno ×3)', igual: 'menor volumen', relleno: 'priorizar relleno' }[P.prior] || '')], [],
     ['Corte (m³)', r3(R.corte)], ['Relleno (m³)', r3(R.relleno)], [`Material para relleno ×${1 + P.esponj / 100} (m³)`, r3(R.mat)], ['Aporte externo (m³)', r3(R.aporte)], ['Sobrante de corte (m³)', r3(R.sobra)],
     ['Trackers con movimiento', R.nTrk], ['Hincas con movimiento', R.nMov], [`Hincas con más de ${P.umbral} mm (validación Trina)`, R.nVal], ['Trackers con terreno E-O > límite', R.eoFuera], [],
     ['Criterios: manual Trina ARI-GR-MN-4301-0A (§3.1, §3.2, §3.3.1, §3.4.1, §3.4.3, §4.8.3)']];
   const esc0 = [['Pendiente N-S máx. (%)', 'Corte (m³)', 'Relleno (m³)', 'Aporte (m³)', 'Hincas con mov.', `> ${P.umbral} mm`]].concat([5, 6, 8, 10, 12, 15].map((p) => { const e = msCalc(sec, p); return [p, r3(e.corte), r3(e.relleno), r3(e.aporte), e.nMov, e.nVal]; }));
-  const trk = [['Tracker', 'Tipo', 'Pend. terreno N-S (%)', 'Pend. tracker (%)', 'Inclinación (°)', 'E-O terreno (%)', 'Corte (m³)', 'Relleno (m³)', 'Corte máx. (m)', 'Relleno máx. (m)', 'Hincas con mov.', `> ${P.umbral} mm`, 'Amortiguador L (mm)']]
-    .concat(R.L.map((r) => [r.t.id, r.t.t, r3(Math.abs(r.pendT)), r3(Math.abs(r.pend)), r3(r.grad), r3(r.eo), r3(r.corte), r3(r.relleno), r3(r.cMax), r3(r.rMax), r.nMov, r.nVal, r.amort]));
+  const trk = [['Tracker', 'Tipo', 'Pend. terreno N-S (%)', 'Pend. tracker (%)', 'Inclinación (°)', 'E-O terreno (%)', 'Corte (m³)', 'Relleno (m³)', 'Corte máx. (m)', 'Relleno máx. (m)', 'Hincas con mov.', `> ${P.umbral} mm`, 'Despeje mín. (mm)', 'Amortiguador L (mm)']]
+    .concat(R.L.map((r) => [r.t.id, r.t.t, r3(Math.abs(r.pendT)), r3(Math.abs(r.pend)), r3(r.grad), r3(r.eo), r3(r.corte), r3(r.relleno), r3(r.cMax), r3(r.rMax), r.nMov, r.nVal, Math.round(r.despMin * 1000), r.amort]));
   const hin = [['Tracker', 'Hinca', 'Motor', 'Código', 'X', 'Y', 'Terreno actual', 'Dato', 'Cota cabeza', 'Alt. libre nominal', 'Alt. libre sin mover', 'Terreno final', 'Movimiento (+ relleno / − corte)', 'Alt. libre final', 'Alt. libre mín.', 'Alt. libre máx.']]
     .concat(R.L.flatMap((r) => r.H.map((h) => [r.t.id, h.n, h.motor ? 'M' : '', h.cod || '', r3(h.x), r3(h.y), r3(h.z), h.fz, r3(h.cab), r3(h.nom), r3(h.rev0), r3(h.zf), r3(h.mov), r3(h.rev), r3(h.rmin), r3(h.rmax)])));
   [['Resumen', res, [44, 30]], ['Escenarios', esc0, [22, 12, 12, 12, 14, 12]], ['Trackers', trk, [10, 7, 12, 12, 11, 11, 10, 10, 11, 11, 11, 9, 13]], ['Hincas', hin, [10, 6, 6, 10, 12, 12, 11, 10, 11, 10, 11, 11, 14, 10, 10, 10]]].forEach(([n, a, w]) => {
