@@ -1494,3 +1494,21 @@ tr.clk { cursor: pointer; } tr.clk:hover td { background: #fff7ed; }
 .rmaccg { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2.5mm; align-content: start; font-size: 7pt; margin-top: 3mm; }
 .rmaccg .rmacck { grid-template-columns: repeat(4, 1fr); gap: 1.2mm; } .rmaccg .rmacck > div { border: 0.25mm solid #bbb; border-radius: 1mm; padding: 0.8mm 1.5mm; } .rmaccg .rmacck small { font-size: 5.8pt; } .rmaccg .rmacck b { font-size: 9pt; }
 .rmaccg p { font-size: 6pt; margin: 1mm 0 0 !important; } .rmaccs { border: 0.3mm solid #999; padding: 2mm; border-radius: 1mm; } .rmaccs > b { font-size: 10pt; display: block; margin-bottom: 1mm; }
+/* vistas del tracker (apartado Accesorios) */
+.trkv { margin-top: 8px; } .tvbox { border: 1px solid var(--line, #e3e7ec); border-radius: 8px; padding: 6px 8px; margin-bottom: 8px; background: #fbfcfd; }
+.tvbox svg { width: 100%; display: block; } .tvtit { font-size: 12px; color: var(--muted, #667); margin-bottom: 2px; }
+.tvrow { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+.tvley { display: flex; flex-wrap: wrap; gap: 6px 12px; align-content: flex-start; font-size: 12.5px; padding-top: 6px; } .tvley span { cursor: default; padding: 2px 6px; border-radius: 6px; } .tvley span.on { background: #ffe1ec; }
+.tvley p { flex-basis: 100%; margin: 6px 0 0; }
+.tvsw { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 5px; vertical-align: -2px; border: 1px solid #333; }
+.trkv .tvmod { fill: #2f4b7c; stroke: #fff; stroke-width: 10; } .trkv .tvmodr { fill: none; stroke: #2f4b7c; stroke-width: 12; stroke-dasharray: 60 40; }
+.trkv .tvtube { fill: #9aa3ad; stroke: #444; stroke-width: 12; } .trkv .tvpur { fill: #c9b27c; stroke: #6b5a2e; stroke-width: 8; } .trkv .tvub { stroke: #6b5a2e; stroke-width: 14; fill: none; }
+.trkv .tvbolt { fill: #555; } .trkv .tvpost { fill: #8fa7bf; stroke: #333; stroke-width: 10; } .trkv .tvpostl { fill: #b8c2cc; stroke: #555; stroke-width: 10; }
+.trkv .tvdrive { fill: #1f2a37; } .trkv .tvtcu { fill: #f2c200; stroke: #333; stroke-width: 10; } .trkv .tvcap { fill: #333; }
+.trkv .tvbear { fill: #e9edf2; stroke: #222; stroke-width: 18; } .trkv .tvplate { fill: #7a4b00; } .trkv .tvunion { fill: none; stroke: #c25e00; stroke-width: 40; }
+.trkv .tvdamp { stroke: #2f9e5b; stroke-width: 60; stroke-linecap: round; } .trkv .tvgnd { stroke: #8a6d3b; stroke-width: 25; } .trkv .tvdim { stroke: #c0392b; stroke-width: 10; stroke-dasharray: 40 30; }
+.trkv .tvtx { font-size: 520px; fill: #333; } .trkv .tvrow .tvtx { font-size: 130px; } .trkv .tvmut { fill: #777; }
+.tvsw.tv-drive { background: #1f2a37; } .tvsw.tv-postc { background: #8fa7bf; } .tvsw.tv-bearing { background: #e9edf2; } .tvsw.tv-union { background: #c25e00; } .tvsw.tv-plate { background: #7a4b00; } .tvsw.tv-endcap { background: #333; } .tvsw.tv-purlin { background: #c9b27c; } .tvsw.tv-modfix { background: #555; } .tvsw.tv-tcu { background: #f2c200; } .tvsw.tv-damper { background: #2f9e5b; } .tvsw.tv-module { background: #2f4b7c; } .tvsw.tv-post { background: #b8c2cc; } .tvsw.tv-beam { background: #9aa3ad; }
+.trkv.tvon [data-p] { opacity: .18; transition: opacity .15s; } .trkv.tvon [data-p].tvhl { opacity: 1; } .trkv.tvon [data-p].tvhl * { stroke: #e0115f !important; stroke-width: 60; } .trkv.tvon .tvrow [data-p].tvhl * { stroke-width: 18; }
+.tbl tr[data-tag]:hover td { background: #fff0f5; }
+.rmacck .rmpan { border-color: #2f4b7c !important; background: #eef3fb; }

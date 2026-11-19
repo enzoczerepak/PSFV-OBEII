@@ -264,10 +264,11 @@ const accCat = (c) => (typeof trkCat === 'function' ? trkCat(c)[0] : c);
 function ramAccTabla(C, secs, cls, parte) {
   const { A, m } = accConteo(C), its = A.items.filter((i) => m.has(i.k) && secs.some((s) => (m.get(i.k)[s] || 0) > 0)).sort((a, b) => (ACC_ORD.indexOf(String(a.cat).toUpperCase()) - ACC_ORD.indexOf(String(b.cat).toUpperCase())) || String(a.desc).localeCompare(String(b.desc)));
   if (!its.length) return '<p class="muted">Falta el BOM de Trina con las cantidades por tipo de tracker.</p>';
-  let cat = '', h = []; const NP = 40;
+  let cat = '', h = []; const NP = 40, pan = ramPaneles(C);
+  h.push(`<tr class="rmacat"><td colspan="${3 + secs.length + 1}"><b>Módulos fotovoltaicos</b></td></tr>`, `<tr data-tag="module"><td>—</td><td>Panel solar 2.382 × 1.134 mm (1P, vertical)</td><td class="n">52 / 26</td>${secs.map((s) => `<td class="n">${fmt(pan[s] || 0)}</td>`).join('')}<td class="n"><b>${fmt(secs.reduce((a, s) => a + (pan[s] || 0), 0))}</b></td></tr>`);
   its.forEach((i) => { const x = m.get(i.k), c = String(i.cat).toUpperCase();
     if (c !== cat) { cat = c; h.push(`<tr class="rmacat"><td colspan="${3 + secs.length + 1}"><b>${esc(accCat(i.cat))}</b></td></tr>`); }
-    h.push(`<tr><td>${esc(i.k)}</td><td>${esc(i.desc)}${i.size ? ` <span class="muted">${esc(i.size)}</span>` : ''}</td><td class="n">${esc(A.tipos.map((t, j) => i.q[j]).filter((v, j, L) => L.indexOf(v) === j).join(' / '))}</td>${secs.map((s) => `<td class="n">${x[s] ? fmt(x[s]) : '–'}</td>`).join('')}<td class="n"><b>${fmt(secs.reduce((a, s) => a + (x[s] || 0), 0))}</b></td></tr>`); });
+    h.push(`<tr data-tag="${accTag(i)}"><td>${esc(i.k)}</td><td>${esc(i.desc)}${i.size ? ` <span class="muted">${esc(i.size)}</span>` : ''}</td><td class="n">${esc(A.tipos.map((t, j) => i.q[j]).filter((v, j, L) => L.indexOf(v) === j).join(' / '))}</td>${secs.map((s) => `<td class="n">${x[s] ? fmt(x[s]) : '–'}</td>`).join('')}<td class="n"><b>${fmt(secs.reduce((a, s) => a + (x[s] || 0), 0))}</b></td></tr>`); });
   if (parte === 'n') return Math.ceil(h.length / NP);
   const filas = parte == null ? h : h.slice(parte * NP, (parte + 1) * NP), ult = parte == null || (parte + 1) * NP >= h.length;
   return `<table class="${cls} rmrestb rmacc"><thead><tr><th>Material</th><th>Descripción</th><th class="n">Por tracker</th>${secs.map((s) => `<th class="n">Sector ${s}</th>`).join('')}<th class="n">Total</th></tr></thead><tbody>${filas.join('')}</tbody></table>${ult ? `
@@ -284,6 +285,7 @@ function ramAccRot(C, sec) {
   const { A, m } = accConteo(C), v = (re) => A.items.filter((i) => re.test(`${i.cat} ${i.desc}`)).reduce((a, i) => a + ((m.get(i.k) || {})[sec] || 0), 0);
   const L = [['motores 5"', /Drive Unit.*\(5"\)/i], ['motores 7"', /Drive Unit.*\(7"\)/i], ['rodamientos', /^BEARING Bearing\(130/i], ['amortiguadores', /^DAMPER Damper$/i], ['TCU', /^TCU Plastic/i], ['correas Ω', /^PURLIN/i], ['U-bolts de correa', /Purlin U-bolt/i], ['tapas de tubo', /End Cap/i]]
     .map(([n, re]) => [n, v(re)]).filter(([, x]) => x);
+  L.unshift(['paneles solares', C.L.filter((r) => r.t.s === sec).reduce((a, r) => a + (r.t.t === '1P26' ? 26 : 52), 0)]);
   return L.length ? `<p class="rmrnota"><b>Accesorios del sector ${sec}:</b> ${L.map(([n, x]) => `${fmt(x)} ${n}`).join(' · ')}. Bulonería y demás desde la pág. 2.</p>` : '';
 }
 const ramDosCol = (k) => { const t = HCOL[hColSup(k)] || '#fff', b = HCOL[k.color] && HCOL[k.color] !== 'transparent' ? HCOL[k.color] : '#fff';
@@ -398,6 +400,78 @@ function ramPlano(b, C, PG, modo = 'ram') {
   if (!dist) segBind('#rmC', RAMUI.color, (v) => { RAMUI.color = v; render(false); });
   ramZoomBind(b);
 }
+// ---------- vistas del tracker (esquema a partir de MEC-DW-26050-3401-0A y el manual de montaje) ----------
+// cada pieza lleva data-p con su grupo; al pasar sobre un accesorio del listado se resaltan las piezas de su grupo
+const TRKV_GEO = {
+  '1P52': { luces: [4600, 4650, 4700, 5300, 4600, 4350, 4350, 4600, 5300, 4700, 4650, 4600], mot: 6, mods: 52, damp: [0, 1, 11, 12] },
+  '1P26': { luces: [4750, 5150, 4500, 4500, 5150, 4750], mot: 3, mods: 26, damp: [] },
+};
+const ACC_TAG = [
+  [/Drive Unit|Motor Support|M16x50|Wide Flat Washer M16|Hex Flange Nut M16|M20x70|Washer M20|Nut M20/i, 'drive', 'Motor y soporte'],
+  [/Post Connection|M12x35|Nut M12|Flange Bolt M16x35/i, 'postc', 'Conector de poste'],
+  [/Bearing|Grounding Wire|M6\.3x25/i, 'bearing', 'Rodamiento'],
+  [/Rivet/i, 'union', 'Unión de tubos (remaches)'],
+  [/Beam plate|Head Bolt M16x35|Flat Washer M16 Steel DIN125/i, 'plate', 'Placas de unión al motor'],
+  [/End Cap/i, 'endcap', 'Tapa de tubo'],
+  [/Purlin|Nut M10/i, 'purlin', 'Correa Ω y U-bolt'],
+  [/M6x16|Nut M6|M8x16|Nut M8 /i, 'modfix', 'Fijación módulo-correa'],
+  [/TCU|Terminal|LORA|M8x20|fuse/i, 'tcu', 'TCU y cables'],
+  [/Damper|Split Pin/i, 'damper', 'Amortiguador'],
+  [/Module|panel/i, 'module', 'Módulo FV'],
+];
+const accTag = (i) => { const t = ACC_TAG.find(([re]) => re.test(`${i.desc} ${i.cat}`)); return t ? t[1] : ''; };
+function trkVistas(tipo) {
+  const G = TRKV_GEO[tipo] || TRKV_GEO['1P52'], L = G.luces, X = [0]; L.forEach((l) => X.push(X[X.length - 1] + l));
+  const tot = X[X.length - 1], over = tipo === '1P52' ? 2400 : 2150, x0 = -over, x1 = tot + over, W = x1 - x0, mw = 1134, gap = 13, mot = X[G.mot];
+  const P = (tag, s) => `<g data-p="${tag}">${s}</g>`;
+  // planta: módulos repartidos a cada lado del motor
+  const nL = G.mods / 2, Lm = nL * mw + (nL - 1) * gap, mx = []; for (let i = 0; i < nL; i++) { mx.push(mot - 200 - Lm + i * (mw + gap)); mx.push(mot + 200 + i * (mw + gap)); }
+  const HM = 2382, yT = HM / 2;
+  let pl = P('module', mx.map((x) => `<rect x="${x}" y="0" width="${mw}" height="${HM}" class="tvmod"/>`).join(''));
+  pl += P('beam', `<rect x="${x0 + 300}" y="${yT - 65}" width="${W - 600}" height="130" class="tvtube"/>`);
+  pl += P('purlin', mx.map((x) => `<rect x="${x + mw / 2 - 25}" y="120" width="50" height="${HM - 240}" class="tvpur"/>`).join(''));
+  pl += P('modfix', mx.map((x) => [300, HM - 300].map((y) => `<circle cx="${x + mw / 2}" cy="${y}" r="70" class="tvbolt"/>`).join('')).join(''));
+  pl += P('postc', X.map((x, i) => (i === G.mot ? '' : `<rect x="${x - 110}" y="${yT - 160}" width="220" height="320" class="tvpost"/>`)).join(''));
+  pl += P('drive', `<rect x="${mot - 330}" y="${yT - 420}" width="660" height="840" class="tvdrive"/>`);
+  pl += P('tcu', `<rect x="${mot + 520}" y="${yT + 260}" width="420" height="300" class="tvtcu"/>`);
+  pl += P('endcap', [x0 + 300, x1 - 300].map((x) => `<rect x="${x - 60}" y="${yT - 90}" width="120" height="180" class="tvcap"/>`).join(''));
+  // vista lateral (escala vertical ×4)
+  const ex = 4, H0 = 1315 * ex, gnd = H0 + 900;
+  let la = `<line x1="${x0}" y1="${gnd}" x2="${x1}" y2="${gnd}" class="tvgnd"/>`;
+  la += P('post', X.map((x, i) => `<rect x="${x - 75}" y="${gnd - H0 + (i === G.mot ? 300 : 0)}" width="150" height="${H0 - (i === G.mot ? 300 : 0) + 1800}" class="tvpostl"/>`).join(''));
+  la += P('module', `<rect x="${x0 + 300}" y="${gnd - H0 - 520}" width="${W - 600}" height="90" class="tvmod"/>`);
+  la += P('beam', `<rect x="${x0 + 300}" y="${gnd - H0 - 260}" width="${W - 600}" height="260" class="tvtube"/>`);
+  la += P('purlin', mx.map((x) => `<rect x="${x + mw / 2 - 40}" y="${gnd - H0 - 430}" width="80" height="170" class="tvpur"/>`).join(''));
+  la += P('bearing', X.map((x, i) => (i === G.mot ? '' : `<circle cx="${x}" cy="${gnd - H0 - 130}" r="300" class="tvbear"/>`)).join(''));
+  la += P('postc', X.map((x, i) => (i === G.mot ? '' : `<rect x="${x - 130}" y="${gnd - H0 + 170}" width="260" height="560" class="tvpost"/>`)).join(''));
+  la += P('drive', `<rect x="${mot - 380}" y="${gnd - H0 - 600}" width="760" height="1500" class="tvdrive"/>`);
+  la += P('plate', [mot - 470, mot + 410].map((x) => `<rect x="${x}" y="${gnd - H0 - 330}" width="60" height="400" class="tvplate"/>`).join(''));
+  // uniones remachadas entre tubos (los cambios de tubo que no son el motor)
+  const tub = tubosDe({ t: tipo, z: 'Outer' }), tl = tub.reduce((a, c) => a + TUBO_LARGO[c], 0); let u = mot - tl / 2; const J = [];
+  tub.forEach((c, i) => { u += TUBO_LARGO[c]; if (i < tub.length - 1 && Math.abs(u - mot) > 50) J.push(u); });
+  la += P('union', J.map((x) => `<rect x="${x - 120}" y="${gnd - H0 - 300}" width="240" height="340" class="tvunion"/>`).join(''));
+  la += P('endcap', [x0 + 300, x1 - 300].map((x) => `<rect x="${x - 70}" y="${gnd - H0 - 290}" width="140" height="320" class="tvcap"/>`).join(''));
+  la += P('damper', G.damp.map((i) => `<line x1="${X[i] + 120}" y1="${gnd - H0 + 1200}" x2="${X[i] + 1300}" y2="${gnd - H0 - 100}" class="tvdamp"/>`).join(''));
+  la += P('tcu', `<rect x="${mot + 520}" y="${gnd - H0 + 200}" width="420" height="700" class="tvtcu"/>`);
+  la += X.map((x, i) => `<text x="${x}" y="${gnd + 900}" class="tvtx" text-anchor="middle">${i + 1}${i === G.mot ? ' M' : ''}</text>`).join('') + L.map((l, i) => `<text x="${(X[i] + X[i + 1]) / 2}" y="${gnd + 1900}" class="tvtx tvmut" text-anchor="middle">${fmt(l)}</text>`).join('');
+  // corte E-O por una hinca con amortiguador (escala real, mm)
+  const cx = 1700, tY = 1315 + 300, gY = tY + 1315;
+  let co = `<line x1="0" y1="${gY}" x2="3400" y2="${gY}" class="tvgnd"/>`;
+  co += P('post', `<rect x="${cx - 75}" y="${tY + 230}" width="150" height="${1315 + 400}" class="tvpostl"/>`);
+  co += P('postc', `<rect x="${cx - 110}" y="${tY + 120}" width="220" height="380" class="tvpost"/><circle cx="${cx - 50}" cy="${tY + 220}" r="22" class="tvbolt"/><circle cx="${cx + 50}" cy="${tY + 220}" r="22" class="tvbolt"/><circle cx="${cx - 50}" cy="${tY + 400}" r="22" class="tvbolt"/><circle cx="${cx + 50}" cy="${tY + 400}" r="22" class="tvbolt"/>`);
+  co += P('bearing', `<circle cx="${cx}" cy="${tY}" r="135" class="tvbear"/>`);
+  co += P('beam', `<rect x="${cx - 65}" y="${tY - 65}" width="130" height="130" class="tvtube"/>`);
+  co += P('purlin', `<rect x="${cx - 1150}" y="${tY - 95}" width="2300" height="30" class="tvpur"/><path d="M${cx - 80} ${tY - 65} v-30 M${cx + 80} ${tY - 65} v-30" class="tvub"/>`);
+  co += P('module', `<rect x="${cx - 1191}" y="${tY - 135}" width="2382" height="40" class="tvmod"/><g transform="rotate(-60 ${cx} ${tY})"><rect x="${cx - 1191}" y="${tY - 135}" width="2382" height="40" class="tvmodr"/></g>`);
+  co += P('modfix', [cx - 900, cx + 900].map((x) => `<circle cx="${x}" cy="${tY - 100}" r="28" class="tvbolt"/>`).join(''));
+  co += P('damper', `<line x1="${cx + 70}" y1="${tY + 650}" x2="${cx + 520}" y2="${tY - 20}" class="tvdamp"/>`);
+  co += `<line x1="${cx + 596}" y1="${tY + 1032 - 120}" x2="${cx + 596}" y2="${gY}" class="tvdim"/><text x="${cx + 640}" y="${(tY + 1032 + gY) / 2}" class="tvtx tvmut">≥ 500 a 60°</text>`;
+  const vista = (t, vb, inner, h) => `<div class="tvbox"><div class="tvtit">${t}</div><svg viewBox="${vb}" style="height:${h}px" preserveAspectRatio="xMidYMid meet" font-family="Arial">${inner}</svg></div>`;
+  return `<div class="trkv">${vista(`Vista en planta · ${tipo} · ${G.mods} módulos · ${X.length} hincas (M = motor)`, `${x0} -300 ${W} ${HM + 600}`, pl, 92)}
+    ${vista('Vista lateral N-S · escala vertical ×4 · luces entre hincas (mm)', `${x0} ${gnd - H0 - 900} ${W} ${H0 + 3200}`, la, 150)}
+    <div class="tvrow">${vista('Corte E-O por hinca con amortiguador · módulo a 0° y a 60°', `0 ${tY - 1300} 3400 ${gY - tY + 1500}`, co, 230)}<div class="tvley">${ACC_TAG.map(([, t, n]) => `<span data-tag="${t}"><i class="tvsw tv-${t}"></i>${n}</span>`).join('')}<span data-tag="post"><i class="tvsw tv-post"></i>Hinca</span><span data-tag="beam"><i class="tvsw tv-beam"></i>Tubo de torque</span><p class="hint">Pasá el mouse sobre un accesorio del listado o de esta lista para ver dónde va. Esquema según Trina MEC-DW-26050-3401-0A y el manual de montaje; no es un plano de fabricación.</p></div></div></div>`;
+}
+const trkvHL = (root, tag) => { const v = $('.trkv', root); if (!v) return; v.classList.toggle('tvon', !!tag); $$('[data-p]', v).forEach((g) => g.classList.toggle('tvhl', !!tag && g.dataset.p === tag)); $$('.tvley [data-tag]', v).forEach((x) => x.classList.toggle('on', x.dataset.tag === tag)); };
 // ---------- apartado Accesorios: plano de sectores y resumen del sector elegido ----------
 const SEC_COL = ['#4e79a7', '#f28e2b', '#59a14f', '#e15759', '#b07aa1', '#edc948', '#76b7b2', '#9c755f'];
 function ramSecSVG(C, secs, sel, txt = 30) {
@@ -409,11 +483,13 @@ function ramSecSVG(C, secs, sel, txt = 30) {
   return { svg: R + L + `<g class="rmref">${ramRefSVG(2.4, false)}</g>`, bb };
 }
 // resumen del sector: principales accesorios en tarjetas y la tabla completa
+const ramPaneles = (C) => { const o = {}; C.L.forEach((r) => { o[r.t.s] = (o[r.t.s] || 0) + (r.t.t === '1P26' ? 26 : 52); }); return o; };
 function ramAccRes(C, sec) {
   const { A, m } = accConteo(C), v = (re) => A.items.filter((i) => re.test(`${i.cat} ${i.desc}`)).reduce((a, i) => a + Object.entries(m.get(i.k) || {}).filter(([s]) => !sec || s === sec).reduce((q, [, x]) => q + x, 0), 0);
+  const pan = Object.entries(ramPaneles(C)).filter(([s]) => !sec || s === sec).reduce((a, [, n]) => a + n, 0);
   const K = [['Motores 5"', /Drive Unit.*\(5"\)/i], ['Motores 7"', /Drive Unit.*\(7"\)/i], ['Rodamientos', /^BEARING Bearing\(130/i], ['Rodamientos exteriores', /Outer Bearing/i], ['Amortiguadores', /^DAMPER Damper$/i], ['TCU', /^TCU Plastic/i], ['Correas Ω', /^PURLIN/i], ['U-bolts de correa', /Purlin U-bolt/i], ['Tapas de tubo', /End Cap/i], ['Remaches T8-9', /Rivet LMB/i], ['Bulones', /^FASTENER .*Bolt/i], ['Tuercas', /^FASTENER .*Nut/i]];
   const nT = C.L.filter((r) => !sec || r.t.s === sec).length;
-  return `<div class="rmacck">${K.map(([n, re]) => `<div><small>${n}</small><b>${fmt(v(re))}</b></div>`).join('')}</div><p class="muted" style="margin:6px 0 10px">${sec ? `Sector ${sec}` : 'Todo el parque'} · ${fmt(nT)} trackers · cantidades del BOM de Trina por tipo de tracker, sin repuestos.</p>`;
+  return `<div class="rmacck"><div class="rmpan"><small>Paneles solares</small><b>${fmt(pan)}</b></div>${K.map(([n, re]) => `<div><small>${n}</small><b>${fmt(v(re))}</b></div>`).join('')}</div><p class="muted" style="margin:6px 0 10px">${sec ? `Sector ${sec}` : 'Todo el parque'} · ${fmt(nT)} trackers · cantidades del BOM de Trina por tipo de tracker, sin repuestos.</p>`;
 }
 function vHAcc(el, C, secs) {
   const sel = DISTUI.accSec && secs.includes(DISTUI.accSec) ? DISTUI.accSec : null, M = ramSecSVG(C, secs, sel);
@@ -423,7 +499,10 @@ function vHAcc(el, C, secs) {
       <div class="rmwrap"><svg viewBox="${M.bb.join(' ')}" class="rmsvg rmsecs" preserveAspectRatio="xMidYMid meet" font-family="Arial">${M.svg}</svg></div>
       <p class="hint" style="margin:6px 0 0">Tocá un sector en el plano (o arriba) para ver sus accesorios.</p></div>
     <div class="card rmdet"><h3>${sel ? `Sector ${sel}` : 'Todo el parque'} · accesorios</h3>${ramAccRes(C, sel)}<div class="tblwrap" style="max-height:52vh">${ramAccTabla(C, sel ? [sel] : secs, 'tbl')}</div></div></div>
+    <div class="card" style="margin-top:16px"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0;flex:1">Tracker · vistas principales</h3><div class="seg" id="dV"><button data-v="1P52">1P52</button><button data-v="1P26">1P26</button></div></div>${trkVistas(DISTUI.accTipo || '1P52')}</div>
     <div class="card" style="margin-top:16px"><h3>Accesorios por sector · motores, rodamientos, bulonería y demás</h3><div class="tblwrap" style="max-height:560px">${ramAccTabla(C, secs, 'tbl')}</div></div>`;
+  segBind('#dV', DISTUI.accTipo || '1P52', (v) => { DISTUI.accTipo = v; render(false); });
+  $$('[data-tag]', el).forEach((x) => { x.onmouseenter = () => trkvHL(el, x.dataset.tag); x.onmouseleave = () => trkvHL(el, null); });
   segBind('#dT', 'acc', (v) => { DISTUI.tab = v; render(false); });
   segBind('#dS', sel || '', (v) => { DISTUI.accSec = v || null; render(false); });
   $$('.rmsecs rect[data-s]', el).forEach((r) => { r.style.cursor = 'pointer'; r.onclick = () => { DISTUI.accSec = DISTUI.accSec === r.dataset.s ? null : r.dataset.s; render(false); }; });
