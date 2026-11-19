@@ -306,59 +306,90 @@ function bindSel(el, list) {
 // ---- Zanjeo y tendido parcial ----
 // Una zanja abierta puede estar excavada solo en parte (avance, m) y sus circuitos tendidos en parte (tendM: m de recorrido
 // con cable ya tendido). Es solo avance de obra: el plan de corte no cambia y el corte se registra con "Tender" como siempre.
+// Registro por fecha: cada carga suma una entrada (fecha, metros de ese día) y no pisa lo anterior. tendM / avance quedan como total.
+function tendLog(sc) {
+  const L = (sc.tendLog || []).map((x) => ({ f: x.f || '', m: Number(x.m) || 0, u: x.u })), tm = Number(sc.tendM) || 0, sum = L.reduce((a, x) => a + x.m, 0);
+  if (Math.abs(tm - sum) > 0.01) L.push({ f: sc.tendF || '', m: Math.round((tm - sum) * 100) / 100, aj: !!L.length }); // carga anterior sin registro (o de una versión vieja)
+  return L.filter((x) => Math.abs(x.m) > 0.001);
+}
+function zanLog(sz, largo) {
+  const L = (sz.avLog || []).map((x) => ({ f: x.f || '', m: Number(x.m) || 0, u: x.u })), sum = L.reduce((a, x) => a + x.m, 0);
+  const av = sz.avance != null && sz.avance !== '' ? Number(sz.avance) : sz.estado === 'abierta' && !L.length ? null : null;
+  if (av != null && Math.abs(av - sum) > 0.01) L.push({ f: sz.avanceF || '', m: Math.round((av - sum) * 100) / 100, aj: !!L.length });
+  return L.filter((x) => Math.abs(x.m) > 0.001);
+}
+const logHTML = (L, key, unidad) => (L.length ? `<div class="avlog">${L.map((x, i) => `<span class="avle" data-del="${key}|${i}">${x.f ? fechaCorta(x.f) : 'sin fecha'} · <b>${x.m > 0 ? '+' : ''}${fmt(x.m, 1)} m</b>${x.aj ? ' <small>(carga anterior)</small>' : ''}${x.u ? ` <small>${esc(x.u)}</small>` : ''}${window.READONLY ? '' : ' <button class="avdel" title="Quitar esta carga">×</button>'}</span>`).join('')}</div>` : `<div class="avlog muted">Sin cargas ${unidad}.</div>`);
 async function avanceZanja(zid) {
   if (window.READONLY) return;
   const z = R.zlist.find((x) => x.id === zid), sz = S.zanjas.find((x) => x.id === zid); if (!z || !sz) return;
-  const pend = z.miembros.filter((c) => !c.completo), hechos = z.miembros.filter((c) => c.completo);
-  const fila = (c) => { const lr = c.linRef || z.largo, v = Number(S.circuitos.find((x) => x.id === c.id).tendM) || 0;
-    return `<div class="avc" data-cid="${c.id}"><div><b class="mono">${esc(c.designacion)}</b> <span class="muted">${esc(c.desde)} → ${esc(c.hasta)}</span><div class="muted">${c.fz.length} conductor${c.fz.length > 1 ? 'es' : ''} · recorrido ${fmt(lr, 1)} m${c.nReal ? ` · ${c.nReal} ya registrado${c.nReal > 1 ? 's' : ''}` : ''}</div></div>
-      <div class="avin"><input type="number" class="tm" step="0.5" min="0" max="${lr}" value="${v || ''}" placeholder="0"><span>/ ${fmt(lr, 1)} m</span></div>
-      <div class="avq"><button class="btn sm ghost" data-q="0">0</button><button class="btn sm ghost" data-q="z" title="Igual a lo abierto de la zanja">= zanja</button><button class="btn sm ghost" data-q="t" title="Todo el recorrido: registrar el tendido completo (bobina y metros)">Completo…</button></div>
+  const pend = z.miembros.filter((c) => !c.completo), hechos = z.miembros.filter((c) => c.completo), ZL = zanLog(sz, z.largo);
+  const zPrev = sz.avance != null && sz.avance !== '' ? Math.min(z.largo, ZL.reduce((a, x) => a + x.m, 0)) : z.estado === 'abierta' && !ZL.length ? z.largo : Math.min(z.largo, ZL.reduce((a, x) => a + x.m, 0));
+  const CL = new Map(pend.map((c) => [c.id, tendLog(S.circuitos.find((x) => x.id === c.id))]));
+  const fila = (c) => { const lr = c.linRef || z.largo, L = CL.get(c.id), prev = Math.min(lr, L.reduce((a, x) => a + x.m, 0));
+    return `<div class="avc" data-cid="${c.id}" data-prev="${prev}" data-lr="${lr}"><div><b class="mono">${esc(c.designacion)}</b> <span class="muted">${esc(c.desde)} → ${esc(c.hasta)}</span><div class="muted">${c.fz.length} conductor${c.fz.length > 1 ? 'es' : ''} · recorrido ${fmt(lr, 1)} m · <b>tendido hasta ahora ${fmt(prev, 1)} m</b>${c.nReal ? ` · ${c.nReal} ya registrado${c.nReal > 1 ? 's' : ''}` : ''}</div>${logHTML(L, c.id, 'de tendido')}</div>
+      <div class="avin"><label class="muted" style="font-size:11.5px">Tendido este día (m)</label><input type="number" class="tm" step="0.5" min="0" max="${Math.max(0, lr - prev)}" value="" placeholder="0"><small class="muted" style="display:block;white-space:nowrap">faltan ${fmt(lr - prev, 1)} m</small></div>
+      <div class="avq"><button class="btn sm ghost" data-q="0">0</button><button class="btn sm ghost" data-q="z" title="Hasta lo abierto de la zanja">= zanja</button><button class="btn sm ghost" data-q="t" title="Todo el recorrido: registrar el tendido completo (bobina y metros)">Completo…</button></div>
       <div class="avcab muted"></div></div>`; };
   setTimeout(avUpd, 40);
   const res = await modal({ title: `Avance · zanja ${esc(z.titulo)}`, wide: true, sub: `${z.cat} · ${fmt(z.largo, 1)} m · ${z.miembros.length} circuito${z.miembros.length > 1 ? 's' : ''}`,
-    body: `<h4 style="margin:2px 0 8px">Zanjeo</h4>
-      <div class="avz"><label>Zanja abierta hasta hoy (m)<input type="number" id="avZ" step="0.5" min="0" max="${z.largo}" value="${z.abiertoM}"></label>
+    body: `<label class="avf" style="margin-bottom:10px">Fecha de lo que cargás <input type="date" id="avF" value="${today()}"></label>
+      <h4 style="margin:2px 0 8px">Zanjeo</h4>
+      <div class="avz" data-prev="${zPrev}"><label>Abierto este día (m)<input type="number" id="avZ" step="0.5" min="0" max="${Math.max(0, z.largo - zPrev)}" data-largo="${z.largo}" value=""></label>
         <div class="avbar"><div id="avZb"></div></div><span id="avZt" class="muted"></span>
-        <button class="btn sm ghost" id="avZall">Toda (${fmt(z.largo, 1)} m)</button><label class="avf">Fecha<input type="date" id="avF" value="${sz.avanceF || today()}"></label></div>
+        <button class="btn sm ghost" id="avZall">Abrir el resto (${fmt(z.largo - zPrev, 1)} m)</button></div>
+      ${logHTML(ZL, 'z', 'de zanjeo')}
       <h4 style="margin:16px 0 4px">Tendido de cable en la zanja</h4>
-      ${pend.length ? `<p class="hint" style="margin:0 0 6px">Cargá cuántos metros del recorrido de cada circuito ya tienen el cable tendido. Si se tendió todo, usá <b>Completo…</b> para registrar el tendido con su bobina, como siempre.</p>${pend.map(fila).join('')}` : '<p class="muted">Todos los circuitos de esta zanja están tendidos.</p>'}
+      ${pend.length ? `<p class="hint" style="margin:0 0 6px">Cargá los metros del recorrido que se tendieron <b>en la fecha elegida</b>: se suman a lo anterior y queda el registro por día. Si se terminó el circuito, usá <b>Completo…</b> para registrar el tendido con su bobina, como siempre.</p>${pend.map(fila).join('')}` : '<p class="muted">Todos los circuitos de esta zanja están tendidos.</p>'}
       ${hechos.length ? `<div class="muted" style="margin-top:8px">Tendidos completos: ${hechos.map((c) => esc(c.designacion)).join(', ')}</div>` : ''}
-      <p class="hint">Es avance de obra: suma en el resumen de avance como zanja abierta y cable en tendido parcial. El plan de corte no cambia: los cortes de esta zanja siguen listos para cortar y se descuentan de la bobina cuando registrás el tendido completo.</p>`,
+      <p class="hint">Es avance de obra: suma en el resumen de avance y en Tendido por fecha. El plan de corte no cambia: los cortes siguen listos para cortar y se descuentan de la bobina cuando registrás el tendido completo.</p>`,
     buttons: [['Cancelar', 'btn', () => null], ['Guardar avance', 'btn pri', (box) => {
-      const av = Math.max(0, Math.min(z.largo, Number($('#avZ', box).value) || 0));
+      const del = new Set($$('.avle.quitar', box).map((x) => x.dataset.del));
+      const zh = Math.max(0, Number($('#avZ', box).value) || 0);
       const tm = $$('.avc', box).map((row) => ({ cid: row.dataset.cid, v: Math.max(0, Number($('.tm', row).value) || 0) }));
-      return { av, fecha: $('#avF', box).value || today(), tm };
+      return { zh, fecha: $('#avF', box).value || today(), tm, del };
     }]] });
   if (!res) return;
-  sz.avance = res.av >= z.largo - 0.01 ? undefined : res.av; if (sz.avance === undefined) delete sz.avance;
-  sz.avanceF = res.fecha;
-  let nT = 0;
-  res.tm.forEach(({ cid, v }) => { const c = S.circuitos.find((x) => x.id === cid); const rc = R.circuitos.find((x) => x.id === cid); const lr = rc.linRef || z.largo;
-    if (v > 0) { c.tendM = Math.round(Math.min(v, lr) * 100) / 100; c.tendF = res.fecha; nT++; } else { delete c.tendM; delete c.tendF; } });
+  const u = (typeof USR !== 'undefined' && USR && (USR.nombre || USR.n)) || undefined, ent = (m) => Object.assign({ f: res.fecha, m: Math.round(m * 100) / 100 }, u ? { u } : {});
+  // zanjeo
+  let zl = ZL.filter((x, i) => !res.del.has('z|' + i)).map(({ f, m, u: uu }) => Object.assign({ f, m }, uu ? { u: uu } : {}));
+  if (res.zh > 0) zl.push(ent(res.zh));
+  const zTot = Math.min(z.largo, zl.reduce((a, x) => a + x.m, 0)), zCambio = res.zh > 0 || [...res.del].some((k) => k.startsWith('z|'));
+  if (zCambio) { if (zl.length) sz.avLog = zl; else delete sz.avLog;
+    if (zTot >= z.largo - 0.01 || (!zl.length && z.estado === 'abierta' && !ZL.length)) delete sz.avance; else sz.avance = Math.round(zTot * 100) / 100;
+    const fs = zl.map((x) => x.f).filter(Boolean).sort(); if (fs.length) sz.avanceF = fs[fs.length - 1]; else delete sz.avanceF; }
+  // tendido
+  let nT = 0, mT = 0;
+  res.tm.forEach(({ cid, v }) => { const c = S.circuitos.find((x) => x.id === cid), rc = R.circuitos.find((x) => x.id === cid), lr = rc.linRef || z.largo;
+    const L = CL.get(cid).filter((x, i) => !res.del.has(cid + '|' + i)).map(({ f, m, u: uu }) => Object.assign({ f, m }, uu ? { u: uu } : {}));
+    const cambio = v > 0 || [...res.del].some((k) => k.startsWith(cid + '|')); if (!cambio) return;
+    if (v > 0) { L.push(ent(Math.min(v, lr - L.reduce((a, x) => a + x.m, 0)))); nT++; mT += v; }
+    const tot = Math.min(lr, L.reduce((a, x) => a + x.m, 0));
+    if (tot > 0) { c.tendLog = L; c.tendM = Math.round(tot * 100) / 100; const fs = L.map((x) => x.f).filter(Boolean).sort(); c.tendF = fs[fs.length - 1] || res.fecha; }
+    else { delete c.tendLog; delete c.tendM; delete c.tendF; } });
   ui.flash = [zid, ...res.tm.map((x) => x.cid)];
-  commit(`Zanja ${z.titulo}: ${res.av >= z.largo - 0.01 ? 'abierta completa' : `${fmt(res.av, 1)} de ${fmt(z.largo, 1)} m abiertos`}${nT ? ` · ${nT} circuito${nT > 1 ? 's' : ''} con tendido parcial` : ''}`);
+  commit(`Zanja ${z.titulo} · ${fechaCorta(res.fecha)}: ${res.zh > 0 ? `+${fmt(res.zh, 1)} m de zanja (${fmt(zTot, 1)} de ${fmt(z.largo, 1)} m)` : 'zanjeo sin cambios'}${nT ? ` · +${fmt(mT, 1)} m de tendido en ${nT} circuito${nT > 1 ? 's' : ''}` : ''}${res.del.size ? ` · ${res.del.size} carga${res.del.size > 1 ? 's' : ''} quitada${res.del.size > 1 ? 's' : ''}` : ''}`);
 }
 document.addEventListener('input', (e) => { if (e.target.closest('#modal') && (e.target.id === 'avZ' || e.target.classList.contains('tm'))) avUpd(); });
 document.addEventListener('click', (e) => {
   const box = e.target.closest('#modal'); if (!box || !$('#avZ', box)) return;
+  if (e.target.closest('.avdel')) { e.target.closest('.avle').classList.toggle('quitar'); avUpd(); return; }
   if (e.target.id === 'avZall') { $('#avZ', box).value = $('#avZ', box).max; avUpd(); return; }
   const q = e.target.closest('[data-q]'); if (!q) return;
   const row = q.closest('.avc'), inp = $('.tm', row);
   if (q.dataset.q === '0') inp.value = '';
-  else if (q.dataset.q === 'z') inp.value = Math.min(Number($('#avZ', box).value) || 0, Number(inp.max) || 0);
+  else if (q.dataset.q === 'z') { const zt = (Number($('.avz', box).dataset.prev) || 0) + (Number($('#avZ', box).value) || 0); inp.value = Math.max(0, Math.min(zt - (Number(row.dataset.prev) || 0), Number(inp.max) || 0)) || ''; }
   else { $('#modal').classList.add('hidden'); setTimeout(() => tender(row.dataset.cid), 60); return; }
   avUpd();
 });
 function avUpd() {
   const box = $('#modal'), zi = $('#avZ', box); if (!zi) return;
-  const L = Number(zi.max) || 0, v = Math.max(0, Math.min(L, Number(zi.value) || 0));
+  const L = Number(zi.dataset.largo) || 0, prev = Number($('.avz', box).dataset.prev) || 0, v = Math.min(L, prev + Math.max(0, Number(zi.value) || 0));
   $('#avZb', box).style.width = (L ? (v / L) * 100 : 0) + '%';
-  $('#avZt', box).textContent = L ? `${fmt((v / L) * 100)} % · faltan ${fmt(L - v, 1)} m` : '';
+  $('#avZt', box).textContent = L ? `abierto ${fmt(v, 1)} de ${fmt(L, 1)} m (${fmt((v / L) * 100)} %) · faltan ${fmt(L - v, 1)} m` : '';
   $$('.avc', box).forEach((row) => {
-    const rc = R.circuitos.find((c) => c.id === row.dataset.cid), inp = $('.tm', row), lr = Number(inp.max) || 0, t = Math.max(0, Number(inp.value) || 0);
-    const pend = rc.fz.filter((f) => (rc.fasesInfo[f] || {}).estado !== 'ejecutado').length, cab = lr ? Math.min(1, t / lr) * rc.lenFase * pend : 0;
+    const rc = R.circuitos.find((c) => c.id === row.dataset.cid), inp = $('.tm', row), lr = Number(row.dataset.lr) || 0, t = (Number(row.dataset.prev) || 0) + Math.max(0, Number(inp.value) || 0), hoy = Math.max(0, Number(inp.value) || 0);
+    const pend = rc.fz.filter((f) => (rc.fasesInfo[f] || {}).estado !== 'ejecutado').length, cab = lr ? Math.min(1, hoy / lr) * rc.lenFase * pend : 0;
     inp.classList.toggle('bad', t > v + 0.01);
-    $('.avcab', row).innerHTML = t > 0 ? `≈ <b>${fmt(cab, 1)} m</b> de cable tendido (${fmt(lr ? Math.min(100, (t / lr) * 100) : 0)} %)${t > v + 0.01 ? ' · <span style="color:var(--bad)">más que la zanja abierta</span>' : ''}` : '';
+    $('.avcab', row).innerHTML = hoy > 0 ? `+${fmt(hoy, 1)} m este día ≈ <b>${fmt(cab, 1)} m</b> de cable · total ${fmt(t, 1)} de ${fmt(lr, 1)} m (${fmt(lr ? Math.min(100, (t / lr) * 100) : 0)} %)${t > v + 0.01 ? ' · <span style="color:var(--bad)">más que la zanja abierta</span>' : ''}` : '';
   });
 }

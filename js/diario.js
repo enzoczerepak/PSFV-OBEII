@@ -23,7 +23,7 @@ function puntasDe(rc) {
 function datosPorFecha() {
   const cMap = new Map(R.circuitos.map((c) => [c.id, c]));
   const dias = new Map(); let sinFecha = 0;
-  const dia = (d) => { if (!dias.has(d)) dias.set(d, { fecha: d, m: Object.fromEntries(CATK.map((c) => [c, 0])), sec: new Map(), circ: new Map(), puntas: [], zanjas: [], fund: [], nCond: 0, bobinas: new Set() }); return dias.get(d); };
+  const dia = (d) => { if (!dias.has(d)) dias.set(d, { fecha: d, m: Object.fromEntries(CATK.map((c) => [c, 0])), sec: new Map(), circ: new Map(), puntas: [], zanjas: [], zav: [], par: [], fund: [], nCond: 0, bobinas: new Set() }); return dias.get(d); };
   R.piezas.filter((p) => p.estado === 'ejecutado').forEach((p) => {
     if (!p.fecha) { sinFecha += p.len; return; }
     const D = dia(p.fecha), c = cMap.get(p.cid); if (!c) return;
@@ -32,6 +32,19 @@ function datosPorFecha() {
     const o = D.circ.get(c.id) || { c, fases: [], m: 0, bob: new Set(), teo: 0 };
     o.fases.push(p.fase); o.m += p.len; o.teo += p.teorico || 0; o.bob.add(p.bobina || 'sin bobina'); D.circ.set(c.id, o);
   });
+  // tendido parcial por fecha (avance de zanja): metros de recorrido de ese día × conductores; al completar el circuito,
+  // lo ya contado en días anteriores se descuenta del día en que se registró el tendido completo (no se cuenta dos veces)
+  R.circuitos.filter((c) => c.cat !== 'PAT' && typeof tendLog === 'function').forEach((c) => {
+    const sc = S.circuitos.find((x) => x.id === c.id); if (!sc) return; const L = tendLog(sc); if (!L.length) return;
+    const lr = c.linRef || Number(c.lineal) || c.zanjaLargo || 0; if (!lr) return;
+    const nf = c.fz.length, k = lr ? (c.lenFase * nf) / lr : 0; let tot = 0, acc = 0;
+    L.slice().sort((a, b) => String(a.f).localeCompare(String(b.f))).forEach((x) => { acc += x.m; const cab = x.m * k; tot += cab;
+      if (!x.f) { sinFecha += cab; return; } const D = dia(x.f); D.m[c.cat] += cab; D.par.push({ c, m: x.m, cab, acc, lr, u: x.u, aj: x.aj }); });
+    if (c.completo) { const ds = [...dias.values()].filter((D) => D.circ.has(c.id)).sort((a, b) => b.fecha.localeCompare(a.fecha)); let r = tot;
+      ds.forEach((D) => { if (r <= 0) return; const o = D.circ.get(c.id), q = Math.min(r, D.m[c.cat], o.m); D.m[c.cat] -= q; o.m -= q; o.desc = (o.desc || 0) + q; const kk = `${c.cat}|${c.seccion}`; D.sec.set(kk, Math.max(0, (D.sec.get(kk) || 0) - q)); r -= q; }); }
+  });
+  S.zanjas.forEach((sz) => { if (typeof zanLog !== 'function') return; const rz = R.zlist.find((x) => x.id === sz.id); if (!rz) return; let acc = 0;
+    zanLog(sz, rz.largo).slice().sort((a, b) => String(a.f).localeCompare(String(b.f))).forEach((x) => { acc += x.m; if (x.f) dia(x.f).zav.push({ z: rz, m: x.m, acc, u: x.u }); }); });
   R.circuitos.filter((c) => c.cat !== 'PAT').forEach((c) => {
     const sc = S.circuitos.find((x) => x.id === c.id); const p = (sc && sc.puntas) || {};
     ['o', 'd'].forEach((k) => { if (p[k] && p[k].fecha && Number(p[k].n) > 0) dia(p[k].fecha).puntas.push({ c, k, n: Number(p[k].n) }); });
@@ -83,11 +96,11 @@ function vDiario(el) {
 }
 // HTML del detalle de un día (pantalla y PDF)
 function diaHTML(D, pdf) {
-  if (!D) return `<div class="empty" style="padding:30px 10px"><b>Sin registros este día</b>Los tendidos aparecen acá con la fecha que se carga en Tender.</div>`;
+  if (!D) return `<div class="empty" style="padding:30px 10px"><b>Sin registros este día</b>Los tendidos aparecen acá con la fecha que se carga en Tender y los tendidos parciales con la fecha del avance de zanja.</div>`;
   const sec = [...D.sec.entries()].sort((a, b) => b[1] - a[1]);
   const maxS = Math.max(1, ...sec.map((x) => x[1]));
   const circ = [...D.circ.values()].sort((a, b) => (a.c.cat === b.c.cat ? a.c.idx - b.c.idx : catsUso().indexOf(a.c.cat) - catsUso().indexOf(b.c.cat)));
-  const nCirc = circ.filter((o) => o.c.cat !== 'PAT').length;
+  const nCirc = circ.filter((o) => o.c.cat !== 'PAT').length + new Set(D.par.filter((x) => !D.circ.has(x.c.id)).map((x) => x.c.id)).size;
   let h = `<div class="kpis k4" style="margin-bottom:14px">${kpi('Metros tendidos', D.total)}${kpi('Circuitos', nCirc, `${circ.length - nCirc ? `+ ${circ.length - nCirc} PAT` : ''}`)}${kpi('Conductores', D.nCond, '')}${kpi('Puntas colocadas', D.nPuntas, '')}</div>`;
   if (sec.length) h += `<div class="secbars">${sec.map(([k, v]) => { const [cat, s2] = k.split('|'); return `<div class="sb"><span><i class="cdot c-${cat}"></i>${cat} ${s2} mm²</span><div class="sbt"><div style="width:${((v / maxS) * 100).toFixed(1)}%;background:${SERIE[cat]}"></div></div><b>${fmt(v, 1)} m</b></div>`; }).join('')}</div>`;
   if (circ.length) {
@@ -95,6 +108,9 @@ function diaHTML(D, pdf) {
       ${circ.map((o) => { const c = o.c; const tot = c.fz.length; return `<tr><td><span class="cchip c-${c.cat}" style="margin:0;top:0">${c.cat}</span></td><td><b class="mono">${esc(c.cat === 'PAT' ? 'PAT ' + c.seccion : c.designacion)}</b></td><td>${esc(c.desde)} → ${esc(c.hasta)}</td><td class="num">${c.seccion}</td><td class="num">${o.fases.length === tot ? tot : `${o.fases.length}/${tot}`}</td><td class="num"><b>${fmt(o.m, 1)}</b></td><td class="num muted">${o.teo ? fmt(o.teo, 1) : '–'}</td><td>${[...o.bob].map(esc).join(', ')}</td></tr>`; }).join('')}
       </tbody></table>`;
   }
+  if (D.par.length) h += `<h4 class="dh">Tendido parcial (avance de zanja)</h4><table class="tbl dtbl"><thead><tr><th>Tipo</th><th>Circuito</th><th>Recorrido</th><th class="num">Este día</th><th class="num">Cable ≈</th><th class="num">Acumulado</th><th>Cargó</th></tr></thead><tbody>
+    ${D.par.map((x) => `<tr><td><span class="cchip c-${x.c.cat}" style="margin:0;top:0">${x.c.cat}</span></td><td><b class="mono">${esc(x.c.designacion)}</b>${x.c.completo ? ' <small class="muted">(después completado)</small>' : ''}</td><td>${esc(x.c.desde)} → ${esc(x.c.hasta)}</td><td class="num">${fmt(x.m, 1)} m${x.aj ? ' <small class="muted">carga anterior</small>' : ''}</td><td class="num">${fmt(x.cab, 1)} m</td><td class="num">${fmt(x.acc, 1)} / ${fmt(x.lr, 1)} m</td><td>${esc(x.u || '')}</td></tr>`).join('')}</tbody></table>`;
+  if (D.zav.length) h += `<h4 class="dh">Zanjeo</h4><div class="chips">${D.zav.map((x) => `<span class="chip">${esc(x.z.titulo)} · +${fmt(x.m, 1)} m <small>(${fmt(x.acc, 1)} de ${fmt(x.z.largo, 1)} m)</small></span>`).join('')}</div>`;
   if (D.puntas.length) h += `<h4 class="dh">Puntas colocadas</h4><div class="chips">${D.puntas.map((x) => `<span class="chip">${esc(x.c.designacion)} · ${esc(ladoNom(x.c, x.k))} · ${x.n}</span>`).join('')}</div>`;
   if (D.zanjas.length) h += `<h4 class="dh">Zanjas cerradas</h4><div class="chips">${D.zanjas.map((z) => `<span class="chip lista">${esc(z.titulo)} · ${fmt(z.largo, 1)} m</span>`).join('')}</div>`;
   if (D.fund.length) h += `<h4 class="dh">Fundaciones STS</h4><div class="chips">${D.fund.map((x) => `<span class="chip ${x.t === 'fin' ? 'lista' : ''}">${x.st} · ${esc(x.n)} · ${x.t === 'fin' ? 'terminada' : 'inicio'}</span>`).join('')}</div>`;

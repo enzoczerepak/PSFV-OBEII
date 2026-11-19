@@ -237,6 +237,12 @@
     const zj = [['Fecha de cierre', 'Zanja', 'Largo (m)', 'Circuitos']];
     ds.forEach((D) => D.zanjas.forEach((z) => zj.push([D.fecha, z.titulo, r1(z.largo), z.miembros.map((c) => c.designacion).join(', ')])));
     XLSX.utils.book_append_sheet(wb, sheet(zj, [14, 34, 10, 40]), 'Zanjas cerradas');
+    const tp = [['Fecha', 'Tipo', 'Circuito', 'Desde', 'Hasta', 'Recorrido tendido este día (m)', 'Cable aprox. (m)', 'Acumulado (m)', 'Recorrido total (m)', 'Cargó']];
+    ds.forEach((D) => (D.par || []).forEach((x) => tp.push([D.fecha, x.c.cat, x.c.designacion, x.c.desde, x.c.hasta, r1(x.m), r1(x.cab), r1(x.acc), r1(x.lr), x.u || ''])));
+    if (tp.length > 1) XLSX.utils.book_append_sheet(wb, sheet(tp, [12, 6, 14, 26, 26, 14, 12, 12, 12, 14]), 'Tendido parcial');
+    const zv = [['Fecha', 'Zanja', 'Abierto este día (m)', 'Acumulado (m)', 'Largo (m)', 'Cargó']];
+    ds.forEach((D) => (D.zav || []).forEach((x) => zv.push([D.fecha, x.z.titulo, r1(x.m), r1(x.acc), r1(x.z.largo), x.u || ''])));
+    if (zv.length > 1) XLSX.utils.book_append_sheet(wb, sheet(zv, [12, 34, 14, 12, 10, 14]), 'Zanjeo por día');
     return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   }
   function exportPuntas(state, R, H) {

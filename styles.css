@@ -1512,3 +1512,9 @@ tr.clk { cursor: pointer; } tr.clk:hover td { background: #fff7ed; }
 .trkv.tvon [data-p] { opacity: .18; transition: opacity .15s; } .trkv.tvon [data-p].tvhl { opacity: 1; } .trkv.tvon [data-p].tvhl * { stroke: #e0115f !important; stroke-width: 60; } .trkv.tvon .tvrow [data-p].tvhl * { stroke-width: 18; }
 .tbl tr[data-tag]:hover td { background: #fff0f5; }
 .rmacck .rmpan { border-color: #2f4b7c !important; background: #eef3fb; }
+/* registro por fecha del avance de zanja y del tendido parcial */
+.avlog { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 4px 0 2px; font-size: 12px; }
+.avle { background: var(--bg2, #f1f4f7); border: 1px solid var(--line, #e3e7ec); border-radius: 12px; padding: 1px 4px 1px 8px; display: inline-flex; align-items: center; gap: 4px; }
+.avle small { color: var(--muted, #667); } .avle .avdel { border: 0; background: none; cursor: pointer; color: #999; font-size: 14px; line-height: 1; padding: 0 3px; }
+.avle.quitar { text-decoration: line-through; opacity: .5; border-color: #d64545; } .avle.quitar .avdel { color: #d64545; }
+.avc { grid-template-columns: minmax(180px, 1fr) 190px auto; } .avc .avin { flex-wrap: wrap; gap: 2px 6px; } .avc .avin label { flex-basis: 100%; }
