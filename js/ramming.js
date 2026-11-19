@@ -129,10 +129,11 @@ function vHDist(el) {
   PUI = DISTUI;
   if (!window.REPLANTEO) { el.innerHTML = '<div class="card empty"><b>Falta el replanteo de hincas</b></div>'; return; }
   const C = ramCalc(), HA = (S.hincado || {}).avance || {}, tubo = DISTUI.tab === 'tubo', secs = [...new Set(C.L.map((r) => r.t.s))].sort();
+  if (DISTUI.tab === 'acc') return vHAcc(el, C, secs);
   actions(tubo ? [['PDF · plano de tubos de torque para imprimir', 'btn', () => ramImprimir('tubo')], ['Exportar Excel', 'btn', tuboExcel]]
     : [['PDF · plano de distribución para imprimir', 'btn', () => ramImprimir('dist')], ['Exportar DXF (AutoCAD)', 'btn', () => ramExportDxf('dist')], ['Exportar Excel', 'btn', distExcel]]);
   const nH = C.L.reduce((a, r) => a + r.n, 0), nCod = C.L.filter((r) => r.conCod).length, cods = new Set(); C.L.forEach((r) => r.H.forEach((h) => h.cod && cods.add(h.cod)));
-  const hech = C.L.filter((r) => HA[r.t.id]).reduce((a, r) => a + r.n, 0), tabs = `<div class="tools" style="margin-bottom:12px"><div class="seg" id="dT"><button data-v="hinc">Hincas</button><button data-v="tubo">Tubos de torque</button></div></div>`;
+  const hech = C.L.filter((r) => HA[r.t.id]).reduce((a, r) => a + r.n, 0), tabs = `<div class="tools" style="margin-bottom:12px"><div class="seg" id="dT"><button data-v="hinc">Hincas</button><button data-v="tubo">Tubos de torque</button><button data-v="acc">Accesorios</button></div></div>`;
   let kpi;
   if (tubo) {
     const m = ramConteo(C, 'tubo'), sum = (x) => Object.values(x).reduce((a, b) => a + b, 0), nT = [...m.values()].reduce((a, x) => a + sum(x), 0);
@@ -147,8 +148,7 @@ function vHDist(el) {
       <div class="card kpi"><div class="kl">Referencia</div><div class="kv" style="font-size:16px">${(window.PLANO.sts || []).length} STS · ${(window.PLANO.inv || []).length} inversores</div><div class="muted">ubicados en el plano</div></div>`;
   el.innerHTML = `${tabs}<div class="grid g4 stagger" style="margin-bottom:12px">${kpi}</div>
     <div id="rmB"></div>
-    <div class="card" style="margin-top:16px"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0;flex:1">${tubo ? 'Tubos de torque' : 'Hincas'} por sector · resumen</h3>${tubo && !window.READONLY ? '<button class="btn sm" id="tcE">Cargar marcas de pintura…</button>' : ''}</div><div class="tblwrap">${ramResTabla(C, tubo ? 'tubo' : 'dist', secs, 'tbl')}</div></div>
-    <div class="card" style="margin-top:16px"><h3>Accesorios por sector · motores, rodamientos, bulonería y demás</h3><div class="tblwrap" style="max-height:560px">${ramAccTabla(C, secs, 'tbl')}</div></div>`;
+    <div class="card" style="margin-top:16px"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0;flex:1">${tubo ? 'Tubos de torque' : 'Hincas'} por sector · resumen</h3>${tubo && !window.READONLY ? '<button class="btn sm" id="tcE">Cargar marcas de pintura…</button>' : ''}</div><div class="tblwrap">${ramResTabla(C, tubo ? 'tubo' : 'dist', secs, 'tbl')}</div></div>`;
   segBind('#dT', DISTUI.tab || 'hinc', (v) => { DISTUI.tab = v; render(false); });
   const tcE = $('#tcE', el); if (tcE) tcE.onclick = tuboMarcaEdit;
   ramPlano($('#rmB', el), C, null, tubo ? 'tubo' : 'dist');
@@ -397,6 +397,54 @@ function ramPlano(b, C, PG, modo = 'ram') {
       : sel ? ramDetalle(sel, PG) : '<div class="empty" style="padding:30px 10px"><b>Elegí un tracker en el plano</b><p class="muted">Vas a ver el perfil del terreno, la línea de cabezas y la altura libre y el empotramiento de cada hinca.</p></div>'}</div></div>`;
   if (!dist) segBind('#rmC', RAMUI.color, (v) => { RAMUI.color = v; render(false); });
   ramZoomBind(b);
+}
+// ---------- apartado Accesorios: plano de sectores y resumen del sector elegido ----------
+const SEC_COL = ['#4e79a7', '#f28e2b', '#59a14f', '#e15759', '#b07aa1', '#edc948', '#76b7b2', '#9c755f'];
+function ramSecSVG(C, secs, sel, txt = 30) {
+  const P = window.PLANO, col = (s) => SEC_COL[secs.indexOf(s) % SEC_COL.length], cen = {};
+  const R = P.trk.map((t) => { const q = ramRect(t); const c = cen[t.s] = cen[t.s] || { x: 0, y: 0, n: 0 }; c.x += q.x + q.w / 2; c.y += q.y + q.h / 2; c.n++;
+    return `<rect data-s="${t.s}" x="${q.x}" y="${q.y}" width="${q.w}" height="${q.h}" fill="${col(t.s)}" fill-opacity="${!sel || sel === t.s ? 0.85 : 0.25}" stroke="${sel === t.s ? '#111' : 'none'}" stroke-width="0.6"><title>Sector ${t.s} · ${t.id}</title></rect>`; }).join('');
+  const L = Object.entries(cen).map(([s, c]) => ramTxt(c.x / c.n, c.y / c.n + txt * 0.35, 'S' + s, txt, 'text-anchor="middle" font-weight="700" fill="#111" pointer-events="none"')).join('');
+  const xs = P.trk.map((t) => ramRect(t)), bb = [Math.min(...xs.map((q) => q.x)) - 10, Math.min(...xs.map((q) => q.y)) - 10, Math.max(...xs.map((q) => q.x + q.w)) - Math.min(...xs.map((q) => q.x)) + 20, Math.max(...xs.map((q) => q.y + q.h)) - Math.min(...xs.map((q) => q.y)) + 20];
+  return { svg: R + L + `<g class="rmref">${ramRefSVG(2.4, false)}</g>`, bb };
+}
+// resumen del sector: principales accesorios en tarjetas y la tabla completa
+function ramAccRes(C, sec) {
+  const { A, m } = accConteo(C), v = (re) => A.items.filter((i) => re.test(`${i.cat} ${i.desc}`)).reduce((a, i) => a + Object.entries(m.get(i.k) || {}).filter(([s]) => !sec || s === sec).reduce((q, [, x]) => q + x, 0), 0);
+  const K = [['Motores 5"', /Drive Unit.*\(5"\)/i], ['Motores 7"', /Drive Unit.*\(7"\)/i], ['Rodamientos', /^BEARING Bearing\(130/i], ['Rodamientos exteriores', /Outer Bearing/i], ['Amortiguadores', /^DAMPER Damper$/i], ['TCU', /^TCU Plastic/i], ['Correas Ω', /^PURLIN/i], ['U-bolts de correa', /Purlin U-bolt/i], ['Tapas de tubo', /End Cap/i], ['Remaches T8-9', /Rivet LMB/i], ['Bulones', /^FASTENER .*Bolt/i], ['Tuercas', /^FASTENER .*Nut/i]];
+  const nT = C.L.filter((r) => !sec || r.t.s === sec).length;
+  return `<div class="rmacck">${K.map(([n, re]) => `<div><small>${n}</small><b>${fmt(v(re))}</b></div>`).join('')}</div><p class="muted" style="margin:6px 0 10px">${sec ? `Sector ${sec}` : 'Todo el parque'} · ${fmt(nT)} trackers · cantidades del BOM de Trina por tipo de tracker, sin repuestos.</p>`;
+}
+function vHAcc(el, C, secs) {
+  const sel = DISTUI.accSec && secs.includes(DISTUI.accSec) ? DISTUI.accSec : null, M = ramSecSVG(C, secs, sel);
+  actions([['PDF · accesorios por sector', 'btn', () => ramAccPdf(C, secs)], ['Exportar Excel', 'btn', () => accExcel(C, secs)]]);
+  el.innerHTML = `<div class="tools" style="margin-bottom:12px"><div class="seg" id="dT"><button data-v="hinc">Hincas</button><button data-v="tubo">Tubos de torque</button><button data-v="acc">Accesorios</button></div></div>
+    <div class="rmgrid"><div class="card rmplano"><div class="tools" style="margin:0 0 8px"><div class="seg" id="dS"><button data-v="">Todo el parque</button>${secs.map((s) => `<button data-v="${s}">S${s}</button>`).join('')}</div></div>
+      <div class="rmwrap"><svg viewBox="${M.bb.join(' ')}" class="rmsvg rmsecs" preserveAspectRatio="xMidYMid meet" font-family="Arial">${M.svg}</svg></div>
+      <p class="hint" style="margin:6px 0 0">Tocá un sector en el plano (o arriba) para ver sus accesorios.</p></div>
+    <div class="card rmdet"><h3>${sel ? `Sector ${sel}` : 'Todo el parque'} · accesorios</h3>${ramAccRes(C, sel)}<div class="tblwrap" style="max-height:52vh">${ramAccTabla(C, sel ? [sel] : secs, 'tbl')}</div></div></div>
+    <div class="card" style="margin-top:16px"><h3>Accesorios por sector · motores, rodamientos, bulonería y demás</h3><div class="tblwrap" style="max-height:560px">${ramAccTabla(C, secs, 'tbl')}</div></div>`;
+  segBind('#dT', 'acc', (v) => { DISTUI.tab = v; render(false); });
+  segBind('#dS', sel || '', (v) => { DISTUI.accSec = v || null; render(false); });
+  $$('.rmsecs rect[data-s]', el).forEach((r) => { r.style.cursor = 'pointer'; r.onclick = () => { DISTUI.accSec = DISTUI.accSec === r.dataset.s ? null : r.dataset.s; render(false); }; });
+}
+async function accExcel(C, secs) {
+  const { A, m } = accConteo(C), wb = XLSX.utils.book_new();
+  const a = [['Categoría', 'Material', 'Descripción', 'Tamaño'].concat(A.tipos.map((t) => 'Por tracker ' + cfgTxt(t)), secs.map((s) => 'Sector ' + s), ['Total'])];
+  A.items.filter((i) => m.has(i.k)).forEach((i) => { const x = m.get(i.k); a.push([accCat(i.cat), i.k, i.desc, i.size || ''].concat(i.q, secs.map((s) => x[s] || 0), [secs.reduce((q, s) => q + (x[s] || 0), 0)])); });
+  const b = [['Sector'].concat(A.tipos.map(cfgTxt), ['Trackers'])]; secs.forEach((s) => { const L = C.L.filter((r) => r.t.s === s); b.push([s].concat(A.tipos.map((t) => L.filter((r) => `${r.t.t}|${r.t.z || 'Outer'}|${r.t.sl || 'N'}` === t).length), [L.length])); });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a), 'Accesorios por sector'); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(b), 'Trackers por tipo');
+  const p = await window.api.saveBinary(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), `Accesorios por sector ${today()}.xlsx`, 'xlsx', 'Excel');
+  if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
+}
+// PDF: plano de sectores con el resumen de cada uno y la tabla completa
+function ramAccPdf(C, secs) {
+  const A = ramArea('A3', false), M = ramSecSVG(C, secs, null, 34);
+  const k = secs.map((s) => `<div class="rmaccs"><b style="color:${SEC_COL[secs.indexOf(s) % SEC_COL.length]}">Sector ${s}</b>${ramAccRes(C, s)}</div>`).join('');
+  const p1 = `<section class="rmpg rmres-pg" data-o="L" style="width:${A.pw}mm;height:${A.ph}mm"><div class="rmpgh"><div><b>Accesorios por sector · plano de sectores y resumen</b><br>${esc(S.nombre || '')}</div><div style="text-align:right">BOM Trina · ${new Date().toLocaleDateString('es-AR')}</div></div>
+    <svg viewBox="${M.bb.join(' ')}" style="display:block;width:${A.pw - 16}mm;height:120mm" preserveAspectRatio="xMidYMid meet" font-family="Arial">${M.svg}</svg><div class="rmaccg">${k}</div></section>`;
+  const pags = [p1].concat(ramAccPag(C, {}, secs, A));
+  ramPrintPaginas(pags.join(''), `Accesorios por sector ${today()}.pdf`, 'A3', pags.map(() => 'L'));
 }
 function ramRefsTubo(C) {
   const m = ramConteo(C, 'tubo'), sum = (x) => Object.values(x).reduce((a, b) => a + b, 0);
@@ -877,11 +925,13 @@ function ramRotulo(p, i, tot, o) {
     <div class="rmrpie">${L.length} trackers · ${o.tubo ? `${fmt(L.reduce((q, r) => q + tubosDe(r.t).length, 0))} tubos` : `${fmt(nH)} hincas (${fmt(nM)} de motor)`} en esta hoja<br>${o.tubo ? `Tubos: Trina ${esc(TUBO_DOC)} · ` : o.dist ? `Distribución: Trina ${esc(TRINA_DIST_DOC)} · ` : ''}Replanteo: ${esc((RP.fuente || '').split(' · ')[0])} · numeración OBEII-GR-PL-003 r1<br>Hoja ${o.size} · ${new Date().toLocaleDateString('es-AR')} · pág. ${i + 1}/${tot}</div></div>`;
 }
 async function ramPrintPaginas(html, name, size, orden) {
+  // 1 mm menos de alto que la hoja: con el redondeo a píxeles, una hoja exacta a veces desborda y Chromium agrega una página en blanco
+  html = html.replace(/(<section class="rmpg[^"]*"[^>]*?height:)([\d.]+)mm/g, (m, a, h) => `${a}${(Number(h) - 1).toFixed(1)}mm`);
   const pa = $('#printArea'); pa.innerHTML = html;
   document.body.classList.add('pr-land', 'imprimiendo', 'pr-plano');
   await new Promise((r) => requestAnimationFrame(() => r()));
   document.documentElement.style.background = document.body.style.background = '#fff';
-  const p = await window.api.printPDF(name, orden && orden.includes('P') ? { size, orden } : { landscape: true, size });
+  const p = await window.api.printPDF(name, orden && orden.length ? { size, orden } : { landscape: true, size });
   document.body.classList.remove('imprimiendo', 'pr-plano');
   document.documentElement.style.background = document.body.style.background = '';
   pa.innerHTML = '';

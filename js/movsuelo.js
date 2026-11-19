@@ -594,7 +594,7 @@ function msPdf(sec, pend) {
   // hojas de detalle a escala 1:250 o mayor: cuánto bajar o subir en cada hinca
   const DT = msHojasDet(R); h += DT.html;
   const orden = [opc.o].concat(DT.orden, Array(Math.ceil(L.length / 34)).fill('L'));
-  ramPrintPaginas(h, `Movimiento de suelos sector ${sec} ${pend} % ${today()}.pdf`, 'A3', orden.includes('P') ? orden : undefined);
+  ramPrintPaginas(h, `Movimiento de suelos sector ${sec} ${pend} % ${today()}.pdf`, 'A3', orden);
 }
 
 // puntos intermedios del perfil (entre hincas) donde también hay que mover: el de mayor espesor de cada tramo continuo con movimiento

@@ -1489,3 +1489,8 @@ tr.clk { cursor: pointer; } tr.clk:hover td { background: #fff7ed; }
 .rmres.rmacc { font-size: 6.4pt; line-height: 1.15; margin: 1mm 0 2mm; } .rmres.rmacc th, .rmres.rmacc td { padding: 0.25mm 1.4mm; }
 .rmrestb .rmacat td { background: #eef1f5; } .tbl.rmrestb .rmacat td { background: var(--bg2, #f3f5f8); }
 .mssvg .mspl { display: none; } .mssvg.msdet .mspl { display: inline; }
+.rmacck { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.rmacck > div { border: 1px solid var(--line, #e3e7ec); border-radius: 8px; padding: 6px 10px; } .rmacck small { display: block; color: var(--muted, #667); font-size: 11px; } .rmacck b { font-size: 17px; }
+.rmaccg { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2.5mm; align-content: start; font-size: 7pt; margin-top: 3mm; }
+.rmaccg .rmacck { grid-template-columns: repeat(4, 1fr); gap: 1.2mm; } .rmaccg .rmacck > div { border: 0.25mm solid #bbb; border-radius: 1mm; padding: 0.8mm 1.5mm; } .rmaccg .rmacck small { font-size: 5.8pt; } .rmaccg .rmacck b { font-size: 9pt; }
+.rmaccg p { font-size: 6pt; margin: 1mm 0 0 !important; } .rmaccs { border: 0.3mm solid #999; padding: 2mm; border-radius: 1mm; } .rmaccs > b { font-size: 10pt; display: block; margin-bottom: 1mm; }
