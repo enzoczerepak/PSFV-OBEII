@@ -1480,3 +1480,9 @@ tr.clk { cursor: pointer; } tr.clk:hover td { background: #fff7ed; }
 .rmrcnt em { font-style: normal; font-weight: 700; color: #222; float: right; }
 .rmrcnt .rmrch { font-size: 6pt; color: #666; text-transform: uppercase; letter-spacing: .03em; border-bottom: 0.2mm solid #ccc; }
 .rmrc .rmrcnt { grid-template-columns: 1fr 1fr; }
+.tbl.rmrestb i, .tbl i.rmsw, i.rmsw { display: inline-block; width: 12px; height: 12px; border: 1px solid #555; vertical-align: -2px; margin-right: 4px; }
+.tbl.rmrestb svg { width: 15px !important; height: 15px !important; vertical-align: -3px; }
+.tbl.rmrestb .rmmal { color: var(--bad, #d64545); font-weight: 700; }
+.tbl.rmrestb .rmrest td { font-weight: 600; }
+.tbl.rmcfg { margin-top: 6px; }
+.card .rmrnota { font-size: 12.5px; color: var(--muted, #667); margin-top: 8px; white-space: normal; }
