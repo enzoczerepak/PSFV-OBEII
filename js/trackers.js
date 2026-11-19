@@ -168,7 +168,7 @@ function vTrkEnt(el) {
         <td>${r.ds.length ? `<span class="pill p-bad">${r.ds.length} diferencia${r.ds.length > 1 ? 's' : ''}</span>${sr.length ? ' <small class="tneg">sin reclamar</small>' : ' <small class="muted">reclamadas</small>'}` : '<span class="pill p-done">✓ conforme</span>'}</td>
         <td style="white-space:nowrap"><button class="btn sm ghost" data-a="pdf" title="Constancia de recepción en PDF">PDF</button>${window.READONLY ? '' : '<button class="btn sm ghost" data-a="e">✎</button>'}</td></tr>`; }).join('') || '<tr><td colspan="8" class="muted" style="padding:20px">Todavía no se registraron entregas. Usá <b>+ Recepción</b> o <b>Importar packing list…</b></td></tr>'}
     </tbody></table></div>
-    <div class="card" style="margin-top:16px"><h3>Cómo controlar una entrega</h3><ol class="hlist"><li>Con el remito o el <i>packing list</i> en mano, tocá <b>+ Recepción</b> (o <b>Importar packing list…</b> si lo tenés en Excel: se cargan solos los códigos y cantidades declaradas).</li>
+    <div class="card" style="margin-top:16px"><h3>Cómo controlar una entrega</h3><ol class="hlist"><li>Con el remito o el <i>packing list</i> en mano, tocá <b>+ Recepción</b> (o <b>Importar packing list…</b> en PDF o Excel; podés elegir varios a la vez, uno por camión: se cargan solos los códigos y cantidades declaradas, y los números de material que Trina cambió se cruzan con el BOM por número de plano).</li>
       <li>Por cada código, cargá lo <b>declarado</b> en el remito, lo que <b>contaste</b> conforme y lo que llegó <b>dañado</b>. Si coincide, el botón <b>= declarado</b> lo completa.</li>
       <li>Las diferencias (faltantes, dañados, códigos que no están en el BOM) quedan marcadas y pasan a <b>Reclamos al fabricante</b>, desde donde se arma el reporte para Trina.</li></ol></div>`;
   $$('tr.trow', el).forEach((tr) => { tr.onclick = (ev) => { const a = ev.target.closest('[data-a]'); if (a && a.dataset.a === 'pdf') return trkPdfEnt(tr.dataset.id); trkEditEnt(tr.dataset.id); }; });
@@ -182,7 +182,7 @@ async function trkEditEnt(id, pre) {
   const opt = I.B.items.map((i) => `<option value="${esc(i.k)}">${esc(i.desc)}${i.size ? ' ' + esc(i.size) : ''}${i.largo ? ' · ' + i.largo + ' mm' : ''}</option>`).join('');
   const fila = (l) => { const k = trkKey(l.mat), it = idx.get(k), o = est.get(k), propio = e0 && (e0.lin || []).find((x) => trkKey(x.mat) === k);
     const pend = o ? Math.max(0, o.tot - o.rec + (propio ? Number(propio.rec) || 0 : 0)) : null;
-    return `<tr data-k="${esc(k)}"><td class="mono">${esc(k)}${it ? '' : ' <span class="pill p-bad">fuera del BOM</span>'}</td><td>${it ? trkDescH(it) : `<input type="text" class="tl-desc" value="${esc(l.desc || '')}" placeholder="Descripción del remito">`}<small class="muted" style="display:block">${it ? `falta recibir ${fmt(pend)} de ${fmt(it.tot)}` : ''}</small></td>
+    return `<tr data-k="${esc(k)}" data-plc="${esc(l.plc || '')}"><td class="mono">${esc(k)}${it ? '' : ' <span class="pill p-bad">fuera del BOM</span>'}</td><td>${it ? trkDescH(it) : `<input type="text" class="tl-desc" value="${esc(l.desc || '')}" placeholder="Descripción del remito">`}${l.plc ? `<small class="muted" style="display:block">en packing list: <span class="mono">${esc(l.plc)}</span></small>` : ''}<small class="muted" style="display:block">${it ? `falta recibir ${fmt(pend)} de ${fmt(it.tot)}` : ''}</small></td>
       <td><input type="number" class="tl-decl" min="0" step="1" value="${l.decl ?? ''}"></td><td><input type="number" class="tl-rec" min="0" step="1" value="${l.rec ?? ''}"></td><td><input type="number" class="tl-dan" min="0" step="1" value="${l.dan || ''}" placeholder="0"></td>
       <td class="tl-dif"></td><td><input type="text" class="tl-obs" value="${esc(l.obs || '')}" placeholder="Opcional"></td><td><button class="btn sm ghost tl-eq" title="Recibido = declarado">=</button><button class="btn sm ghost tl-x" title="Quitar">✕</button></td></tr>`; };
   setTimeout(() => trkEntBind(fila), 30);
@@ -194,7 +194,7 @@ async function trkEditEnt(id, pre) {
       <div class="tblwrap" style="max-height:46vh"><table class="tbl trkent"><thead><tr><th>Código</th><th>Descripción</th><th class="n">Declarado</th><th class="n">Recibido OK</th><th class="n">Dañado</th><th>Diferencia</th><th>Observación</th><th></th></tr></thead><tbody id="teB">${(e.lin || []).map(fila).join('')}</tbody></table></div>
       <div id="teS" class="muted" style="margin-top:8px"></div>`,
     buttons: (e0 ? [['Eliminar', 'btn danger', () => 'del']] : []).concat([['Cancelar', 'btn', () => null], ['Guardar entrega', 'btn pri', (box) => {
-      const lin = $$('#teB tr', box).map((tr) => ({ mat: tr.dataset.k, decl: Number($('.tl-decl', tr).value) || 0, rec: Number($('.tl-rec', tr).value) || 0, dan: Number($('.tl-dan', tr).value) || 0, obs: $('.tl-obs', tr).value.trim(),
+      const lin = $$('#teB tr', box).map((tr) => ({ mat: tr.dataset.k, ...(tr.dataset.plc ? { plc: tr.dataset.plc } : {}), decl: Number($('.tl-decl', tr).value) || 0, rec: Number($('.tl-rec', tr).value) || 0, dan: Number($('.tl-dan', tr).value) || 0, obs: $('.tl-obs', tr).value.trim(),
         ...(idx.has(tr.dataset.k) ? {} : { desc: ($('.tl-desc', tr) || { value: '' }).value.trim() }) })).filter((l) => l.decl || l.rec || l.dan);
       if (!lin.length) { toast('Agregá al menos un código con cantidades', { err: true }); return false; }
       return { fecha: $('#teF', box).value || today(), remito: $('#teR', box).value.trim(), cont: $('#teC', box).value.trim(), transp: $('#teT', box).value.trim(), resp: $('#teP', box).value.trim(), obs: $('#teO', box).value.trim(), lin };
@@ -232,31 +232,103 @@ function trkEntBind(fila) {
     if (ev.target.closest('.tl-eq')) { $('.tl-rec', tr).value = Math.max(0, (Number($('.tl-decl', tr).value) || 0) - (Number($('.tl-dan', tr).value) || 0)); upd(); } });
   upd();
 }
-// packing list en Excel: se buscan las columnas de código y cantidad, y se abre la entrega con lo declarado
-async function trkImportPL(f0) {
-  if (window.READONLY) return;
-  const f = f0 && f0.data ? f0 : await window.api.pickExcel(); if (!f) return;
-  const nombre = String(f.path || '').split(/[\\/]/).pop().replace(/\.[^.]+$/, '');
-  let rows = []; try { const wb = XLSX.read(new Uint8Array(f.data), { type: 'array' }); wb.SheetNames.forEach((sn) => { rows = rows.concat(XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' })); }); } catch (e) { toast('No se pudo leer el archivo', { err: true }); return; }
+// ---------- importación de packing lists ----------
+// Trina despacha con números de material distintos de los del BOM (ej. hinca 26050-PW606-1A: BOM QA040718, packing list QA041114).
+// Lo que coincide siempre es el número de plano, que viene en la descripción: se cruza por código y, si no está, por plano.
+function trkMatch(code, desc) {
+  const B = trkS().bom; if (!B) return null;
+  const k = trkKey(code), byK = B.items.find((i) => i.k === k); if (byK) return { it: byK, como: 'código' };
+  const D = String(desc || '').toUpperCase();
+  const toks = (D.match(/[0-9A-Z]{3,}(?:-[0-9A-Z]+)+|[A-Z]{5}\d{9}/g) || []).map(trkKey);
+  for (const t of toks) { const h = B.items.filter((i) => (i.dib || []).some((d) => trkKey(d) === t)); if (h.length === 1) return { it: h[0], como: 'plano' }; }
+  // plano cortado en dos renglones (ej. "VG1P-0118-MS0S-" + "2007"): se compara sin guiones finales
+  const Dn = trkKey(D).replace(/-/g, '');
+  const h = B.items.filter((i) => (i.dib || []).some((d) => { const dn = trkKey(d).replace(/-/g, ''); return dn.length >= 8 && Dn.includes(dn); }));
+  if (h.length === 1) return { it: h[0], como: 'plano' };
+  return null;
+}
+// lectura del texto de un packing list PDF de Trina (uno o varios contenedores por archivo)
+function trkParsePLPdf(paginas) {
+  const num = (s) => Number(String(s).replace(/\./g, '').replace(',', '.'));
+  const esNum = (s) => /^\d{1,3}(\.\d{3})*(,\d+)?$|^\d+(,\d+)?$/.test(String(s).trim());
+  const reCod = /^[A-Z]{2,}\d{6,}$/;
+  const pls = []; let cur = null;
+  for (const pg of paginas) {
+    const fil = [];
+    pg.items.filter((t) => String(t.s).trim()).forEach((t) => { let f = fil.find((r) => Math.abs(r.y - t.y) < 2.5); if (!f) { f = { y: t.y, c: [] }; fil.push(f); } f.c.push({ x: t.x, s: String(t.s).trim() }); });
+    fil.sort((a, b) => b.y - a.y); fil.forEach((f) => f.c.sort((a, b) => a.x - b.x));
+    const val = (re) => { for (const f of fil) { const i = f.c.findIndex((c) => re.test(c.s)); if (i >= 0 && f.c[i + 1]) return f.c[i + 1].s; } return ''; };
+    const plNo = val(/^PACKING LIST NO/i);
+    if (plNo || !cur) { cur = { pl: plNo, cont: '', bl: '', lin: [], tot: null }; pls.push(cur); }
+    cur.cont = val(/^CONTAINERS? NO/i) || cur.cont; cur.bl = val(/^BL NO/i) || cur.bl;
+    fil.forEach((f, fi) => {
+      const c = f.c;
+      const tI = c.findIndex((x) => /^TOTAL:?$/i.test(x.s)); if (tI >= 0 && c[tI + 1] && esNum(c[tI + 1].s)) { cur.tot = num(c[tI + 1].s); return; }
+      if (c.length < 4 || !/^\d+$/.test(c[0].s) || !reCod.test(c[1].s)) return;
+      const n1 = c.findIndex((x, i) => i > 1 && esNum(x.s)); if (n1 < 0 || !c[n1 + 1] || !esNum(c[n1 + 1].s)) return;
+      let desc = c.slice(2, n1).map((x) => x.s).join(' ');
+      if (!desc) { // descripción en dos renglones, arriba y abajo de la fila
+        const x0 = c[1].x + 20, x1 = c[n1].x - 5, cerca = fil.filter((g, gi) => gi !== fi && Math.abs(g.y - f.y) < 14 && !(g.c[0] && /^\d+$/.test(g.c[0].s) && g.c[1] && reCod.test(g.c[1].s)));
+        desc = cerca.sort((a, b) => b.y - a.y).map((g) => g.c.filter((x) => x.x > x0 && x.x < x1).map((x) => x.s).join(' ')).filter(Boolean).join(' ');
+      }
+      cur.lin.push({ pos: Number(c[0].s), plc: c[1].s, desc: desc.replace(/\s+/g, ' ').trim(), uni: num(c[n1 + 1].s) });
+    });
+  }
+  return pls.filter((p) => p.lin.length);
+}
+// lectura de un packing list en Excel: columnas de código, cantidad y descripción
+function trkParsePLXlsx(data) {
+  let rows = []; const wb = XLSX.read(new Uint8Array(data), { type: 'array' }); wb.SheetNames.forEach((sn) => { rows = rows.concat(XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' })); });
   const nrm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
-  const reC = /material ?(number|no|n°|code|nr)|part ?(number|no)|item code|codigo|^material$|sap/, reQ = /q'?ty|quantity|cantidad|pcs|cant\b/;
-  const B = trkS().bom, idx = new Map(B.items.map((i) => [i.k, i]));
-  const tot = new Map(); let hi = -1, cC = -1, cQ = -1, cD = -1;
+  const reC = /material ?(number|no|n°|code|nr)|part ?(number|no)|item code|codigo|^material$|^item$|sap/, reQ = /total units|q'?ty|quantity|cantidad|pcs|cant\b/;
+  const lin = []; let hi = -1, cC = -1, cQ = -1, cD = -1;
   rows.forEach((r, i) => {
     const hd = r.map(nrm), c1 = hd.findIndex((c) => reC.test(c)), c2 = hd.findIndex((c, j) => j !== c1 && reQ.test(c));
     if (c1 >= 0 && c2 >= 0) { hi = i; cC = c1; cQ = c2; cD = hd.findIndex((c) => /descrip/.test(c)); return; }
     if (hi < 0) return;
     const k = trkKey(r[cC]), q = Number(String(r[cQ]).replace(',', '.'));
     if (!k || !isFinite(q) || q <= 0 || /total/i.test(k)) return;
-    const o = tot.get(k) || { mat: k, decl: 0, desc: cD >= 0 ? String(r[cD]).trim() : '' }; o.decl += q; tot.set(k, o);
+    lin.push({ plc: k, desc: cD >= 0 ? String(r[cD]).trim() : '', uni: q });
   });
-  // sin encabezado reconocible: se buscan códigos del BOM en cualquier columna, con la cantidad numérica de la misma fila
-  if (!tot.size) rows.forEach((r) => { const j = r.findIndex((c) => idx.has(trkKey(c))); if (j < 0) return; const q = r.slice(j + 1).map((c) => Number(c)).find((n) => isFinite(n) && n > 0); if (!q) return; const k = trkKey(r[j]); const o = tot.get(k) || { mat: k, decl: 0 }; o.decl += q; tot.set(k, o); });
-  if (!tot.size) { toast('No encontré códigos de material y cantidades en el archivo', { err: true, ms: 7000 }); return; }
-  const lin = [...tot.values()].map((o) => Object.assign(o, { rec: o.decl }));
-  const fuera = lin.filter((l) => !idx.has(l.mat)).length;
-  toast(`${lin.length} códigos leídos del packing list${fuera ? ` · ${fuera} no están en el BOM` : ''}: revisá lo recibido y guardá`, { ms: 8000 });
-  trkEditEnt(null, { remito: nombre, lin });
+  if (!lin.length) { const B = trkS().bom; rows.forEach((r) => { const j = r.findIndex((c) => trkMatch(c, '')); if (j < 0) return; const q = r.slice(j + 1).map((c) => Number(c)).find((n) => isFinite(n) && n > 0); if (q) lin.push({ plc: trkKey(r[j]), desc: '', uni: q }); }); }
+  return lin.length ? [{ pl: '', cont: '', bl: '', lin, tot: null }] : [];
+}
+// una entrega por archivo (camión): se suman los contenedores y se agrupa por código del BOM
+function trkPLaEntrega(nombre, pls) {
+  const tot = new Map(); let nPlano = 0; const avisos = [];
+  pls.forEach((p) => {
+    const s = p.lin.reduce((a, l) => a + l.uni, 0);
+    if (p.tot != null && Math.abs(s - p.tot) > 0.5) avisos.push(`${p.pl || 'packing list'}: las líneas suman ${fmt(s)} y el total dice ${fmt(p.tot)}`);
+    p.lin.forEach((l) => {
+      const m = trkMatch(l.plc, l.desc), k = m ? m.it.k : trkKey(l.plc);
+      if (m && m.como === 'plano') nPlano++;
+      const o = tot.get(k) || { mat: k, decl: 0, plc: new Set(), desc: m ? '' : l.desc }; o.decl += l.uni; if (trkKey(l.plc) !== k) o.plc.add(l.plc); tot.set(k, o);
+    });
+  });
+  const lin = [...tot.values()].map((o) => ({ mat: o.mat, decl: o.decl, rec: o.decl, desc: o.desc, plc: [...o.plc].join(', '), obs: o.plc.size ? `En packing list: ${[...o.plc].join(', ')}` : '' }));
+  const plsN = pls.map((p) => p.pl).filter(Boolean), conts = pls.map((p) => p.cont).filter(Boolean);
+  const m = nombre.match(/SHSM\d+[A-Z]?/i);
+  return { pre: { remito: m ? m[0].toUpperCase() : nombre, cont: conts.join(' · '), obs: plsN.length ? `PL ${plsN.join(', ')}${pls[0].bl ? ` · BL ${pls[0].bl}` : ''}` : '', lin },
+    nPlano, avisos, nCod: lin.length, fuera: lin.filter((l) => !trkMatch(l.mat, '')).length, uni: lin.reduce((a, l) => a + l.decl, 0) };
+}
+async function trkImportPL() {
+  if (window.READONLY) return;
+  if (!trkS().bom) { toast('Primero cargá el BOM de Trina', { err: true }); return; }
+  let fs = window.api.pickPackingList ? await window.api.pickPackingList() : null;
+  if (!window.api.pickPackingList) { const f = await window.api.pickExcel(); fs = f ? [f] : null; }
+  if (!fs || !fs.length) return;
+  const T = trkS();
+  for (const [n, f] of fs.entries()) {
+    const nombre = String(f.path || '').split(/[\\/]/).pop().replace(/\.[^.]+$/, '');
+    let pls = [];
+    try { pls = f.paginas ? trkParsePLPdf(f.paginas) : f.data ? trkParsePLXlsx(f.data) : []; } catch (e) { pls = []; }
+    if (f.error || !pls.length) { toast(`${nombre}: no encontré códigos y cantidades${f.error ? ` (${f.error})` : ''}`, { err: true, ms: 8000 }); continue; }
+    const r = trkPLaEntrega(nombre, pls);
+    if (T.ent.some((e) => trkKey(e.remito) === trkKey(r.pre.remito)) && !(await confirmar('Entrega ya cargada', `Ya hay una entrega con remito <b>${esc(r.pre.remito)}</b>. ¿La cargo de nuevo?`, 'Cargar igual'))) continue;
+    toast(`${fs.length > 1 ? `${n + 1}/${fs.length} · ` : ''}${r.pre.remito}: ${pls.length} contenedor${pls.length > 1 ? 'es' : ''}, ${fmt(r.uni)} unidades en ${r.nCod} códigos${r.nPlano ? ` · ${r.nPlano} líneas cruzadas por número de plano` : ''}${r.fuera ? ` · ${r.fuera} fuera del BOM` : ''}. Revisá lo recibido y guardá`, { ms: 10000 });
+    if (r.avisos.length) toast(r.avisos.join(' · '), { err: true, ms: 12000 });
+    await trkEditEnt(null, r.pre);
+  }
 }
 
 // ---------- reclamos al fabricante ----------
