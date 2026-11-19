@@ -7,7 +7,7 @@
   // Con una PC de versión anterior no se intercambian fundaciones (si no, la PC vieja las borraría).
   const PROTO = 5; // 3: cada cambio lleva la revisión del servidor sobre la que se hizo · 4: al actualizar, el cliente primero toma todo del servidor · 5: tipos de 2 letras (usuarios, historial, montaje) y fin del reenvío sin fin
   // 'hc' catálogo y distribución de hincas, 'ht:' hincado por tracker, 'hr:' recepciones de hincas
-  const nuevo = (k) => k === 'ms' || k.startsWith('tp:') || k === 'pk' || k.startsWith('pb:') || k.startsWith('hl:') || k.startsWith('us:') || k.startsWith('mo:') || k === 'tb' || k.startsWith('te:') || k.startsWith('tn:') || k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('la:') || k.startsWith('sv:');
+  const nuevo = (k) => k === 'ms' || k === 'tc' || k.startsWith('tp:') || k === 'pk' || k.startsWith('pb:') || k.startsWith('hl:') || k.startsWith('us:') || k.startsWith('mo:') || k === 'tb' || k.startsWith('te:') || k.startsWith('tn:') || k.startsWith('f:') || k.startsWith('k:') || k.startsWith('p:') || k === 'km' || k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:') || k.startsWith('m:') || k.startsWith('w:') || k.startsWith('e:') || k === 'fc' || k.startsWith('fo:') || k === 'lc' || k.startsWith('lv:') || k === 'lu' || k.startsWith('lu:') || k.startsWith('la:') || k.startsWith('sv:');
   const conocido = (k) => k === 'cfg' || k === 'comp' || k === 'km' || nuevo(k) || KINDS.some(([p]) => k.startsWith(p + ':'));
 
   // JSON con claves ordenadas: el orden interno de los campos no cuenta como cambio
@@ -27,6 +27,7 @@
     if (S.hincado) {
       m.set('hc', { catalogo: S.hincado.catalogo || [], matriz: S.hincado.matriz || {}, ram: S.hincado.ram || null });
       Object.entries(S.hincado.avance || {}).forEach(([id, v]) => { if (v) m.set('ht:' + id, v); });
+      if (S.hincado.tuboCol) m.set('tc', S.hincado.tuboCol); // marcas de color de los tubos de torque
       if (S.hincado.mov) m.set('ms', S.hincado.mov); // movimiento de suelos: parámetros y terreno por sector
       (S.hincado.recep || []).forEach((r) => m.set('hr:' + r.id, r));
     }
@@ -75,7 +76,7 @@
   // registros de tipos conocidos que una versión anterior guardó como "desconocidos" (usuarios, historial, montaje): a su lugar
   function rescatar(S) {
     const O = S.__otros; if (!O) return 0; let n = 0;
-    Object.keys(O).forEach((k) => { const ix = k.indexOf(':'); if ((ix > 0 && KINDS.some(([p]) => p === k.slice(0, ix))) || k === 'ms' || k.startsWith('tp:')) { aplicar(S, k, false, O[k]); delete O[k]; n++; } });
+    Object.keys(O).forEach((k) => { const ix = k.indexOf(':'); if ((ix > 0 && KINDS.some(([p]) => p === k.slice(0, ix))) || k === 'ms' || k === 'tc' || k.startsWith('tp:')) { aplicar(S, k, false, O[k]); delete O[k]; n++; } });
     if (!Object.keys(O).length) delete S.__otros;
     return n;
   }
@@ -87,6 +88,7 @@
     if (k === 'cfg') { if (!d && v) { S.nombre = v.nombre; S.params = v.params; S.fuente = v.fuente; if (v.parque) S.parque = v.parque; } return; }
     if (k === 'comp') { if (!d && v) S.compromiso = v.compromiso || {}; return; }
     if (k === 'km') { S.cronoMeta = d ? null : v; return; }
+    if (k === 'tc') { S.hincado = S.hincado || { catalogo: [], matriz: {}, avance: {}, recep: [] }; if (d) delete S.hincado.tuboCol; else S.hincado.tuboCol = v; return; }
     if (k === 'ms') { S.hincado = S.hincado || { catalogo: [], matriz: {}, avance: {}, recep: [] }; if (d) delete S.hincado.mov; else S.hincado.mov = v; if (typeof MSC !== 'undefined') MSC = null; return; }
     if (k.startsWith('tp:')) { const id = k.slice(3); S.topo = (S.topo || []).filter((t) => t.id !== id); if (!d && v) S.topo.push(v); if (typeof MSC !== 'undefined') MSC = null; return; }
     if (k === 'hc' || k.startsWith('ht:') || k.startsWith('hr:')) {

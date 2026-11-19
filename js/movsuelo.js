@@ -29,6 +29,7 @@ const MS_DEF = {
   angMax: 60,      // giro máximo del tracker (°)
   anchoMod: 2382,  // ancho del módulo en sentido E-O (mm): el borde queda a ancho/2 · cos(giro) del eje
   fuente: {},      // terreno por sector: 'tin' (layout) o id de una topografía cargada
+  rugMax: 300,     // rugosidad máxima admisible por tracker (mm), método de topografía (planilla RugosidadArea)
   final: {},       // superficie final de diseño a verificar por sector (PVCase / Civil 3D), id de una topografía de tipo 'final'
 };
 const MSUI = { tab: 'plano', sec: null, sel: null, vb: null, pend: null, ver: { curvas: true, lim: true, vol: true, ptos: false } };
@@ -160,7 +161,8 @@ function msTracker(t, H, P, terr, pend) {
     if (m.mov < 0) { corte -= m.mov * m.w * P.franja; cMax = Math.max(cMax, -m.mov); } else { relleno += m.mov * m.w * P.franja; rMax = Math.max(rMax, m.mov); } });
   M.forEach((m) => { m.desp = P.despNom / 1000 + (a + b * m.d) - m.zf - lat * m.sEO; }); // despeje a giro máximo, lado alto (m)
   const despMin = Math.min(...M.map((m) => m.desp)), nDespC = M.filter((m) => m.porDesp && m.mov < -1e-4).length;
-  H.forEach((h) => { const G = a + b * h.d; h.cab = G + h.nom; h.zf = Math.min(G + h.hi, Math.max(G + h.lo, h.z)); h.mov = h.zf - h.z; h.rev0 = h.cab - h.z; h.rev = h.cab - h.zf; });
+  // en la hinca vale el movimiento de la franja en ese punto (incluye el despeje del módulo, que puede pedir bajar más que la regulación)
+  H.forEach((h) => { const G = a + b * h.d, mp = M.find((m) => m.pila === h); h.cab = G + h.nom; h.zf = mp ? mp.zf : Math.min(G + h.hi, Math.max(G + h.lo, h.z)); h.mov = h.zf - h.z; h.rev0 = h.cab - h.z; h.rev = h.cab - h.zf; });
   const nVal = H.filter((h) => Math.abs(h.mov) > umb + 1e-6).length;
   // pendiente E-O del terreno bajo el tracker (gradiente de la superficie)
   let eo = null; H.forEach((h) => { const s0 = eoAt(h.x, h.y); if (s0 != null) eo = Math.max(eo || 0, s0 * 100); });
@@ -230,7 +232,7 @@ function vMovSuelo(el) {
   const secs = msSecs(); if (!secs.length) { el.innerHTML = '<div class="card empty">Sin plano de trackers.</div>'; return; }
   if (!MSUI.sec || !secs.includes(MSUI.sec)) MSUI.sec = secs[0];
   const P = msP(), pend = MSUI.pend != null ? MSUI.pend : P.pendNS, R = msCalc(MSUI.sec, pend), ro = window.READONLY;
-  actions([['Cargar topografía (CSV / Excel / LandXML)', 'btn pri', msImportar], ['Exportar Excel', 'btn', () => msExcel(MSUI.sec, pend)], ['PDF del plano', 'btn', () => msPdf(MSUI.sec, pend)], ['Terreno final para Civil 3D / PVCase', 'btn', () => msExportTF(MSUI.sec, pend)]]);
+  actions([['Cargar topografía (CSV / Excel / LandXML)', 'btn pri', msImportar], ['Exportar Excel', 'btn', () => msExcel(MSUI.sec, pend)], ['PDF del plano y detalle punto a punto', 'btn', () => msPdf(MSUI.sec, pend)], ['Replanteo para topografía (CSV)', 'btn', () => msReplanteoCSV(MSUI.sec, pend)], ['Terreno final para Civil 3D / PVCase', 'btn', () => msExportTF(MSUI.sec, pend)]]);
   if (!R) { el.innerHTML = '<div class="card empty">Faltan las cotas de las hincas del sector.</div>'; return; }
   const f3 = (v) => fmt(v, 0) + ' m³', fu = R.terr.set;
   el.innerHTML = `<div class="card mstop">
@@ -247,7 +249,7 @@ function vMovSuelo(el) {
       <div class="card kpi"><div class="kl">${R.aporte > 0 ? 'Aporte de material' : 'Sobrante de corte'}</div><div class="kv">${f3(R.aporte > 0 ? R.aporte : R.sobra)}</div><div class="muted">${R.aporte > 0 ? 'el corte no alcanza para rellenar' : 'todo el relleno sale del corte'}</div></div>
       <div class="card kpi"><div class="kl">Hincas con movimiento</div><div class="kv">${fmt(R.nMov)}<small> / ${fmt(R.nH)}</small></div><div class="muted">${fmt(R.nTrk)} de ${fmt(R.L.length)} trackers · <span style="color:${R.nVal ? '#b45309' : 'inherit'};font-weight:600">${fmt(R.nVal)} con más de ${P.umbral} mm (validación Trina)</span></div></div></div>
     ${R.eoFuera || R.nsFuera || R.sinDato ? `<div class="card hint mswarn">${R.nsFuera ? `<b>${R.nsFuera}</b> trackers tienen terreno con pendiente N-S mayor que ${fmt(pend, 1)} % (se corrige con el movimiento). ` : ''}${R.eoFuera ? `<b>${R.eoFuera}</b> trackers tienen terreno con pendiente E-O mayor que ${fmt(P.pendEO, 1)} %: Trina pide consultar a su ingeniería (no se corrige con este cálculo). ` : ''}${R.sinDato ? `<b>${R.sinDato}</b> hincas no tienen punto en la topografía elegida: se interpolaron con las hincas medidas del mismo tracker.` : ''}</div>` : ''}
-    <div class="seg rmtabs" id="msT"><button data-v="plano">🗺️ Plano</button><button data-v="trk">📋 Trackers</button><button data-v="esc">📈 Escenarios</button><button data-v="ver">✅ Verificación</button><button data-v="topo">📍 Topografías</button><button data-v="par">⚙️ Parámetros</button></div>
+    <div class="seg rmtabs" id="msT"><button data-v="plano">🗺️ Plano</button><button data-v="trk">📋 Trackers</button><button data-v="esc">📈 Escenarios</button><button data-v="rug">📏 Rugosidad</button><button data-v="ver">✅ Verificación</button><button data-v="topo">📍 Topografías</button><button data-v="par">⚙️ Parámetros</button></div>
     <div id="msB" style="margin-top:12px"></div>`;
   $('#msSec', el).onchange = (e) => { MSUI.sec = e.target.value; MSUI.sel = null; MSUI.vb = null; render(false); };
   $('#msFu', el).onchange = (e) => { const m = msP(); m.fuente[MSUI.sec] = e.target.value; msGuardarP(m, `Movimiento de suelos: terreno del sector ${MSUI.sec} = ${e.target.selectedOptions[0].textContent}`); };
@@ -257,7 +259,7 @@ function vMovSuelo(el) {
   const pg = $('#msPg', el); if (pg) pg.onclick = () => { const m = msP(); m.pendNS = pend; MSUI.pend = null; msGuardarP(m, `Movimiento de suelos: pendiente N-S máxima = ${pend} %`); };
   const pr = $('#msPr', el); if (pr) pr.onclick = () => { MSUI.pend = null; render(false); };
   segBind('#msT', MSUI.tab, (v) => { MSUI.tab = v; render(false); });
-  ({ plano: msPlano, trk: msTabla, esc: msEscen, ver: msVerTab, topo: msTopos, par: msPar })[MSUI.tab]($('#msB', el), R);
+  ({ plano: msPlano, trk: msTabla, esc: msEscen, rug: msRugTab, ver: msVerTab, topo: msTopos, par: msPar })[MSUI.tab]($('#msB', el), R);
 }
 
 // plano: curvas de nivel, franjas de corte/relleno y zonas fuera de pendiente
@@ -278,6 +280,13 @@ function msPlanoSVG(R, o = {}) {
     const sel = !o.print && MSUI.sel === r.t.id;
     g += `<g data-t="${r.t.id}" class="mstrk${sel ? ' sel' : ''}"><rect x="${x.toFixed(2)}" y="${(y0 - P.ext).toFixed(2)}" width="${P.franja}" height="${(r.H[r.H.length - 1].d + 2 * P.ext).toFixed(2)}" fill="transparent" stroke="${sel ? '#c25e00' : '#7d8794'}" stroke-width="${sel ? 0.45 : 0.12}"/>`;
     g += r.H.map((h) => `<circle cx="${(h.x - OX).toFixed(2)}" cy="${(OY - h.y).toFixed(2)}" r="${Math.abs(h.mov) > P.umbral / 1000 ? 0.55 : 0.32}" fill="${Math.abs(h.mov) > P.umbral / 1000 ? '#b45309' : '#333'}"/>`).join('');
+    // punto a punto: cuánto bajar (corte, rojo) o subir (relleno, azul) el terreno en cada hinca, en metros
+    if (o.det || !o.print) { const tp = mm ? 1.45 * mm : 0.55, cls = o.print ? '' : ' class="mspl"';
+      g += r.H.map((h) => { const v = Math.round(h.mov * 100) / 100, c = v < 0 ? '#b3261e' : v > 0 ? '#1f5fa8' : '#888', t = v ? (v < 0 ? '−' : '+') + fmt(Math.abs(v), 2) : '0';
+        return ramTxt(h.x - OX + P.franja / 2 + tp * 0.25, OY - h.y + tp * 0.35, t, tp, `fill="${c}" font-weight="${v ? 700 : 400}"${cls}`); }).join('');
+      // entre hincas: el punto de mayor espesor de cada tramo con movimiento (cruz chica y valor en cursiva)
+      g += msInter(r).map((q) => { const v = Math.round(q.mov * 100) / 100, c = v < 0 ? '#b3261e' : '#1f5fa8', X = r.xA - OX, Y = OY - q.y;
+        return `<path d="M${(X - 0.3).toFixed(2)} ${Y.toFixed(2)}h0.6M${X.toFixed(2)} ${(Y - 0.3).toFixed(2)}v0.6" stroke="${c}" stroke-width="0.12"${cls}/>` + ramTxt(X + P.franja / 2 + tp * 0.25, Y + tp * 0.35, (v < 0 ? '−' : '+') + fmt(Math.abs(v), 2), tp * 0.85, `fill="${c}" font-style="italic"${cls}`); }).join(''); }
     g += ramTxt(r.xA - OX, y0 - P.ext - tT * 0.7, r.t.id.replace('TRK-', ''), tT, 'text-anchor="middle" font-weight="700"');
     if (V.vol && r.corte + r.relleno >= 1) g += ramTxt(r.xA - OX, y0 + r.H[r.H.length - 1].d + P.ext + tV * 1.6, `C ${fmt(r.corte)} · R ${fmt(r.relleno)}`, tV, 'text-anchor="middle" class="msvol"');
     g += '</g>'; });
@@ -299,7 +308,8 @@ function msPlano(b, R) {
 }
 function msZoom(b, bb) {
   const svg = $('.mssvg', b); if (!svg) return;
-  const vbA = () => svg.getAttribute('viewBox').split(' ').map(Number), set = (v) => { MSUI.vb = v; svg.setAttribute('viewBox', v.map((x) => x.toFixed(2)).join(' ')); };
+  const vbA = () => svg.getAttribute('viewBox').split(' ').map(Number), set = (v) => { MSUI.vb = v; svg.setAttribute('viewBox', v.map((x) => x.toFixed(2)).join(' ')); svg.classList.toggle('msdet', v[2] < 160); };
+  svg.classList.toggle('msdet', vbA()[2] < 160);
   const pt = (e) => { const r = svg.getBoundingClientRect(), v = vbA(), s = Math.max(v[2] / r.width, v[3] / r.height); return [v[0] + v[2] / 2 + (e.clientX - r.left - r.width / 2) * s, v[1] + v[3] / 2 + (e.clientY - r.top - r.height / 2) * s, s]; };
   const zoom = (f, cx, cy) => { const v = vbA(); if (cx == null) { cx = v[0] + v[2] / 2; cy = v[1] + v[3] / 2; } if (v[2] * f < 15 && f < 1) return; set([cx - (cx - v[0]) * f, cy - (cy - v[1]) * f, v[2] * f, v[3] * f]); };
   svg.addEventListener('wheel', (e) => { e.preventDefault(); const [x, y] = pt(e); zoom(e.deltaY > 0 ? 1.25 : 0.8, x, y); }, { passive: false });
@@ -352,6 +362,54 @@ function msTabla(b, R) {
       <td class="n" style="color:${r.eo > R.P.pendEO ? '#b45309' : 'inherit'}">${r.eo == null ? '—' : fmt(r.eo, 1) + ' %'}</td><td class="n">${fmt(r.corte, 1)}</td><td class="n">${fmt(r.relleno, 1)}</td><td class="n">${fmt(r.cMax, 2)}</td><td class="n">${fmt(r.rMax, 2)}</td><td class="n">${r.nMov} / ${r.H.length}</td><td class="n">${r.nVal || ''}</td><td class="n" style="color:${r.despMin < R.P.despMin / 1000 - 0.005 ? '#c0392b' : 'inherit'}">${fmt(r.despMin * 1000)} mm</td><td class="n">${r.amort ? fmt(r.amort, 1) + ' mm' : '—'}</td></tr>`).join('')}
     </tbody></table></div></div>`;
   $$('tr[data-t]', b).forEach((tr) => { tr.onclick = () => { MSUI.sel = tr.dataset.t; MSUI.tab = 'plano'; render(false); }; });
+}
+// ---------- rugosidad (método de topografía, planilla RugosidadArea) ----------
+// Por tracker, con las hincas de norte a sur: pendiente = (cota 1ª − cota última) / distancia horizontal entre ellas;
+// cota de referencia de cada hinca = cota 1ª + (Norte − Norte 1ª) × pendiente (recta entre las hincas extremas);
+// delta = cota ref − cota; rugosidad = máx(delta) − mín(delta). Se marca si supera rugMax (0,30 m).
+function msRug(H, campo = 'z') {
+  const a = H[0], b = H[H.length - 1], dist = Math.hypot(a.x - b.x, a.y - b.y); if (!dist || H.some((h) => h[campo] == null)) return null;
+  const G = (a[campo] - b[campo]) / dist, D = H.map((h) => a[campo] + (h.y - a.y) * G - h[campo]);
+  return { G, D, rug: Math.max(...D) - Math.min(...D) };
+}
+function msRugTab(b, R) {
+  const P = R.P, lim = (P.rugMax || 300) / 1000, F = R.L.map((r) => ({ r, tn: msRug(r.H, 'z'), fin: msRugDis(r) })).filter((x) => x.tn).sort((p, q) => q.tn.rug - p.tn.rug);
+  const nS = F.filter((x) => x.tn.rug > lim).length, nF = F.filter((x) => x.fin && x.fin.rug > lim + 1e-6).length, med = F.length ? F.map((x) => x.tn.rug).sort((p, q) => p - q)[Math.floor(F.length / 2)] : 0;
+  b.innerHTML = `<div class="grid g4" style="margin-bottom:12px">
+      <div class="card kpi"><div class="kl">Trackers analizados</div><div class="kv">${fmt(F.length)}</div><div class="muted">${esc(R.terr.nombre)}</div></div>
+      <div class="card kpi"><div class="kl">Superan ${fmt(lim, 2)} m en terreno natural</div><div class="kv" style="color:${nS ? '#c0392b' : 'inherit'}">${fmt(nS)}</div><div class="muted">${fmt(F.length ? nS / F.length * 100 : 0, 0)} % de los trackers</div></div>
+      <div class="card kpi"><div class="kl">Rugosidad del terreno natural</div><div class="kv">${fmt(F.length ? F[0].tn.rug : 0, 2)} m</div><div class="muted">máxima · mediana ${fmt(med, 2)} m</div></div>
+      <div class="card kpi"><div class="kl">Superan ${fmt(lim, 2)} m después del movimiento</div><div class="kv" style="color:${nF ? '#c0392b' : '#2f9e5b'}">${fmt(nF)}</div><div class="muted">terreno final contra la línea de diseño (${fmt(R.pend, 1)} %)</div></div></div>
+    <div class="card"><div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;flex:1">Rugosidad por tracker · método de topografía</h3>
+      <label class="rmchk" style="display:flex;gap:6px;align-items:center">Rugosidad máxima <input type="number" id="msRgM" value="${P.rugMax || 300}" min="50" max="1000" step="10" style="width:80px" ${window.READONLY ? 'disabled' : ''}> mm</label>
+      <button class="btn sm" id="msRgX">Excel con el formato de topografía</button></div>
+      <p class="hint" style="margin:6px 0 10px">Igual que la planilla de topografía: por tracker se traza la recta entre la primera y la última hinca (de norte a sur); en cada hinca, delta = cota de esa recta − cota del terreno; rugosidad = delta máximo − delta mínimo. Se marca en rojo si supera ${fmt(lim, 2)} m (la regulación de la hinca, −100 / +200 mm, cubre 300 mm). La columna "después del movimiento" mide el terreno final de este módulo contra la línea de diseño del tracker (la que siguen las cabezas de hinca), que no es la recta entre extremos.</p>
+      <div class="tblwrap" style="max-height:600px"><table class="tbl"><thead><tr><th>Tracker</th><th>Tipo</th><th class="n">Hincas</th><th class="n">Pendiente (recta extremos)</th><th class="n">Rugosidad terreno natural (m)</th><th class="n">Delta mín / máx (m)</th><th class="n">Rugosidad después del movimiento (m)</th><th class="n">Corte + relleno (m³)</th></tr></thead><tbody>
+      ${F.map(({ r, tn, fin }) => `<tr data-t="${r.t.id}" class="clk"><td><b>${r.t.id}</b></td><td>${r.t.t}</td><td class="n">${r.H.length}</td><td class="n">${fmt(tn.G * 100, 2)} %</td><td class="n" style="${tn.rug > lim ? 'color:#c0392b;font-weight:700' : ''}">${fmt(tn.rug, 3)}</td><td class="n">${fmt(Math.min(...tn.D), 3)} / ${fmt(Math.max(...tn.D), 3)}</td><td class="n" style="${fin && fin.rug > lim + 1e-6 ? 'color:#c0392b;font-weight:700' : ''}">${fin ? fmt(fin.rug, 3) : '—'}</td><td class="n">${fmt(r.corte + r.relleno, 1)}</td></tr>`).join('')}
+      </tbody></table></div></div>`;
+  $$('tr[data-t]', b).forEach((tr) => { tr.onclick = () => { MSUI.sel = tr.dataset.t; MSUI.tab = 'plano'; render(false); }; });
+  $('#msRgX', b).onclick = () => msRugExcel(R);
+  const im = $('#msRgM', b); if (im) im.onchange = () => { const m = msP(), v = Number(im.value); if (!(v > 0)) return; m.rugMax = v; msGuardarP(m, `Movimiento de suelos: rugosidad máxima = ${v} mm`); };
+}
+// rugosidad del terreno final respecto de la línea de diseño del tracker (la que siguen las cabezas): delta = terreno final − línea
+function msRugDis(r) { const D = r.H.map((h) => h.zf - (r.a + r.b * h.d)); return { D, rug: Math.max(...D) - Math.min(...D) }; }
+// Excel igual a la planilla de topografía, con fórmulas: Tracker, Hinca, Punto, Norte, Este, Elevación, Pendiente, Cota ref, Delta H, Rugosidad
+async function msRugExcel(R) {
+  const lim = (R.P.rugMax || 300) / 1000, ws = {}, set = (c, v) => { ws[c] = typeof v === 'object' && v ? v : { v, t: typeof v === 'number' ? 'n' : 's' }; };
+  set('A2', `Sector ${R.sec}`); set('C3', 'Analisis de rugosidad de terreno'); set('L3', `Terreno: ${R.terr.nombre}`);
+  ['Tracker', 'Hinca', 'Punto', 'Norte', 'Este', 'Elevacion', 'Pendiente', 'Cota ref', 'Delta H.', 'Rugosidad', 'Estado', 'Rugosidad final'].forEach((h, j) => set(String.fromCharCode(65 + j) + 5, h));
+  let row = 6;
+  R.L.forEach((r) => { const r0 = row, r1 = row + r.H.length - 1, fin = msRugDis(r);
+    r.H.forEach((h, k) => { const i = row;
+      if (!k) { set('A' + i, Number(String(r.t.id).replace(/\D/g, '')) || r.t.id); set('G' + i, { f: `(F${i}-F${r1})/(SQRT((D${i}-D${r1})^2+(E${i}-E${r1})^2))`, t: 'n', z: '0.00%' }); set('H' + i, { f: `F${i}`, t: 'n' });
+        set('J' + i, { f: `MAX(I${r0}:I${r1})-MIN(I${r0}:I${r1})`, t: 'n', z: '0.000' }); set('K' + i, { f: `IF(J${i}>${lim},"Supera","OK")`, t: 's' }); if (fin) set('L' + i, { v: Math.round(fin.rug * 1000) / 1000, t: 'n', z: '0.000' }); }
+      else set('H' + i, { f: `H${r0}+(D${i}-D${r0})*G${r0}`, t: 'n' });
+      set('B' + i, h.n); set('D' + i, { v: Math.round(h.y * 1000) / 1000, t: 'n', z: '0.000' }); set('E' + i, { v: Math.round(h.x * 1000) / 1000, t: 'n', z: '0.000' }); set('F' + i, { v: Math.round(h.z * 1000) / 1000, t: 'n', z: '0.000' });
+      set('I' + i, { f: `H${i}-F${i}`, t: 'n', z: '0.000' }); row++; }); });
+  ws['!ref'] = `A1:L${row - 1}`; ws['!cols'] = [8, 6, 7, 13, 13, 10, 10, 10, 9, 10, 8, 12].map((w) => ({ wch: w }));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Hoja1');
+  const p = await window.api.saveBinary(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), `Rugosidad sector ${R.sec} ${today()}.xlsx`, 'xlsx', 'Excel');
+  if (p) toast('Excel guardado', { action: ['Abrir', () => window.api.openPath(p)] });
 }
 // escenarios de pendiente máxima para comparar
 function msEscen(b, R) {
@@ -511,7 +569,8 @@ async function msExcel(sec, pend) {
     .concat(R.L.map((r) => [r.t.id, r.t.t, r3(Math.abs(r.pendT)), r3(Math.abs(r.pend)), r3(r.grad), r3(r.eo), r3(r.corte), r3(r.relleno), r3(r.cMax), r3(r.rMax), r.nMov, r.nVal, Math.round(r.despMin * 1000), r.amort]));
   const hin = [['Tracker', 'Hinca', 'Motor', 'Código', 'X', 'Y', 'Terreno actual', 'Dato', 'Cota cabeza', 'Alt. libre nominal', 'Alt. libre sin mover', 'Terreno final', 'Movimiento (+ relleno / − corte)', 'Alt. libre final', 'Alt. libre mín.', 'Alt. libre máx.']]
     .concat(R.L.flatMap((r) => r.H.map((h) => [r.t.id, h.n, h.motor ? 'M' : '', h.cod || '', r3(h.x), r3(h.y), r3(h.z), h.fz, r3(h.cab), r3(h.nom), r3(h.rev0), r3(h.zf), r3(h.mov), r3(h.rev), r3(h.rmin), r3(h.rmax)])));
-  [['Resumen', res, [44, 30]], ['Escenarios', esc0, [22, 12, 12, 12, 14, 12]], ['Trackers', trk, [10, 7, 12, 12, 11, 11, 10, 10, 11, 11, 11, 9, 13]], ['Hincas', hin, [10, 6, 6, 10, 12, 12, 11, 10, 11, 10, 11, 11, 14, 10, 10, 10]]].forEach(([n, a, w]) => {
+  const rpl = [['Punto', 'Tracker', 'Norte', 'Este', 'Cota terreno actual', 'Cota de proyecto', 'Acción', 'Bajar (m)', 'Subir (m)']].concat(msReplanteo(R).map((q) => [q.p, q.t, r3(q.y), r3(q.x), r3(q.z), r3(q.zf), Math.abs(q.mov) < 0.005 ? 'sin movimiento' : q.mov < 0 ? 'bajar (corte)' : 'subir (relleno)', q.mov < -0.005 ? r3(-q.mov) : null, q.mov > 0.005 ? r3(q.mov) : null]));
+  [['Resumen', res, [44, 30]], ['Replanteo punto a punto', rpl, [16, 10, 13, 13, 12, 12, 15, 10, 10]], ['Escenarios', esc0, [22, 12, 12, 12, 14, 12]], ['Trackers', trk, [10, 7, 12, 12, 11, 11, 10, 10, 11, 11, 11, 9, 13]], ['Hincas', hin, [10, 6, 6, 10, 12, 12, 11, 10, 11, 10, 11, 11, 14, 10, 10, 10]]].forEach(([n, a, w]) => {
     const s = XLSX.utils.aoa_to_sheet(a); s['!cols'] = w.map((x) => ({ wch: x })); XLSX.utils.book_append_sheet(wb, s, n); });
   const p = await window.api.saveBinary(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), `Movimiento de suelos sector ${sec} ${pend} % ${today()}.xlsx`, 'xlsx', 'Excel');
   if (p) toast('Excel guardado');
@@ -532,10 +591,58 @@ function msPdf(sec, pend) {
   for (let i = 0; i < L.length; i += 34) h += `<section class="rmpg" data-o="L" style="width:420mm;height:297mm"><div class="mspdfh"><div><b>Trackers con movimiento · Sector ${sec} · pendiente N-S máx. ${fmt(pend, 1)} %</b></div></div>
     <table class="tbl mspdft"><thead><tr><th>Tracker</th><th>Tipo</th><th>Pend. terreno</th><th>Pend. tracker</th><th>E-O terreno</th><th>Corte (m³)</th><th>Relleno (m³)</th><th>Corte máx. (m)</th><th>Relleno máx. (m)</th><th>Hincas con mov.</th><th>&gt; ${P.umbral} mm</th><th>Amortiguador L</th></tr></thead><tbody>
     ${L.slice(i, i + 34).map((r) => `<tr><td>${r.t.id}</td><td>${r.t.t}</td><td>${fmt(Math.abs(r.pendT), 1)} %</td><td>${fmt(Math.abs(r.pend), 1)} %</td><td>${r.eo == null ? '—' : fmt(r.eo, 1) + ' %'}</td><td>${fmt(r.corte, 1)}</td><td>${fmt(r.relleno, 1)}</td><td>${fmt(r.cMax, 2)}</td><td>${fmt(r.rMax, 2)}</td><td>${r.nMov} / ${r.H.length}</td><td>${r.nVal || ''}</td><td>${r.amort ? fmt(r.amort, 1) + ' mm' : '—'}</td></tr>`).join('')}</tbody></table></section>`;
-  const orden = [opc.o].concat(Array(Math.ceil(L.length / 34)).fill('L'));
+  // hojas de detalle a escala 1:250 o mayor: cuánto bajar o subir en cada hinca
+  const DT = msHojasDet(R); h += DT.html;
+  const orden = [opc.o].concat(DT.orden, Array(Math.ceil(L.length / 34)).fill('L'));
   ramPrintPaginas(h, `Movimiento de suelos sector ${sec} ${pend} % ${today()}.pdf`, 'A3', orden.includes('P') ? orden : undefined);
 }
 
+// puntos intermedios del perfil (entre hincas) donde también hay que mover: el de mayor espesor de cada tramo continuo con movimiento
+function msInter(r, umb = 0.01) {
+  const M = r.M, out = []; let i = 0;
+  while (i < M.length) { if (Math.abs(M[i].mov) < umb || M[i].pila) { i++; continue; } let j = i, b = i; const sg = Math.sign(M[i].mov);
+    while (j + 1 < M.length && Math.abs(M[j + 1].mov) >= umb && Math.sign(M[j + 1].mov) === sg) { j++; if (Math.abs(M[j].mov) > Math.abs(M[b].mov)) b = j; }
+    if (!M.slice(i, j + 1).some((m) => m.pila)) out.push(M[b]); i = j + 1; }
+  return out;
+}
+// hojas de detalle del movimiento: el sector partido entre trackers (como el plano de hincas) hasta llegar a 1:250 o mejor
+function msHojasDet(R) {
+  const T = R.L.map((r) => Object.assign({}, ramRect(r.t), { id: r.t.id })), sec = R.sec, P = R.P;
+  // A3 vertical a 1:250: franjas por columnas de trackers (cortes en los huecos E-O) y, dentro de cada franja, cortes N-S entre filas de trackers
+  const esc = 250, m = esc / 1000, port = true, pw = 297, ph = 420, W = pw - 16, Hm = ph - 16 - 24, Wm = W * m - 6, HmM = Hm * m - 8;
+  const cj = (t) => ramCaja([t]), grupos = [];
+  const xs = T.slice().sort((p, q) => cj(p).x0 - cj(q).x0); let col = [];
+  const cortaY = (G) => { const L = G.slice().sort((p, q) => cj(p).y0 - cj(q).y0); let cur = [], y0 = null;
+    L.forEach((t) => { const c = cj(t); if (!cur.length) { cur = [t]; y0 = c.y0; return; } if (c.y1 - y0 > HmM && (c.y0 >= Math.max(...cur.map((q) => cj(q).y1)) - 0.5 || c.y0 - y0 > HmM * 0.55)) { grupos.push(cur); cur = [t]; y0 = c.y0; } else cur.push(t); });
+    if (cur.length) grupos.push(cur); };
+  let x0 = null; xs.forEach((t) => { const c = cj(t); if (!col.length) { col = [t]; x0 = c.x0; return; } if (c.x1 - x0 > Wm) { cortaY(col); col = [t]; x0 = c.x0; } else col.push(t); });
+  if (col.length) cortaY(col);
+  const S0 = msPlanoSVG(R, { print: true, det: true, mpm: m, ver: { curvas: true, lim: false, vol: true, ptos: false } });
+  const todas = grupos.map((g) => ramCaja(g)), BB = ramCaja(T);
+  const croq = (i) => { const w = BB.x1 - BB.x0, hh = BB.y1 - BB.y0, k = Math.min(46 / w, 16 / hh);
+    return `<svg viewBox="${BB.x0} ${BB.y0} ${w} ${hh}" style="width:${(w * k).toFixed(1)}mm;height:${(hh * k).toFixed(1)}mm">${T.map((t) => `<rect x="${t.x}" y="${t.y}" width="${t.w}" height="${t.h}" fill="#bbb"/>`).join('')}${todas.map((c, j) => `<rect x="${c.x0}" y="${c.y0}" width="${c.x1 - c.x0}" height="${c.y1 - c.y0}" fill="${j === i ? 'rgba(194,94,0,.35)' : 'none'}" stroke="${j === i ? '#c25e00' : '#555'}" stroke-width="${(0.3 / k).toFixed(2)}"/><text x="${(c.x0 + c.x1) / 2}" y="${(c.y0 + c.y1) / 2}" font-size="${(3.2 / k).toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-weight="700">${j + 1}</text>`).join('')}</svg>`; };
+  const html = grupos.map((g, i) => { const c = todas[i], vb = [c.x0 - 3, c.y0 - 3, W * m, Hm * m];
+    const L = R.L.filter((r) => g.some((t) => t.id === r.t.id)), co = L.reduce((a, r) => a + r.corte, 0), re = L.reduce((a, r) => a + r.relleno, 0), nb = L.reduce((a, r) => a + r.H.filter((h) => h.mov < -0.005).length, 0), ns = L.reduce((a, r) => a + r.H.filter((h) => h.mov > 0.005).length, 0);
+    return `<section class="rmpg" data-o="P" style="width:${pw}mm;height:${ph}mm"><div class="mspdfh" style="height:20mm;box-sizing:border-box"><div><b>Movimiento de suelos · detalle punto a punto · Sector ${sec} · hoja ${i + 1} de ${grupos.length}</b><br>Escala 1:${esc} · en cada hinca: <b style="color:#b3261e">−0,00 bajar (corte)</b> · <b style="color:#1f5fa8">+0,00 subir (relleno)</b> · <i>+ entre hincas: punto de mayor espesor del tramo</i> · metros, respecto del terreno actual (${esc_(R.terr.nombre)})</div>
+      <div style="display:flex;gap:4mm;align-items:flex-end">${croq(i)}<div class="mspdfk"><div><small>Corte</small><b style="color:#c0392b">${fmt(co)} m³</b></div><div><small>Relleno</small><b style="color:#1f5fa8">${fmt(re)} m³</b></div><div><small>Hincas a bajar / subir</small><b>${nb} / ${ns}</b></div><div><small>Norte</small><b>▲</b></div></div></div></div>
+      <svg viewBox="${vb.map((v) => v.toFixed(2)).join(' ')}" style="display:block;width:${W}mm;height:${Hm}mm" font-family="Arial">${S0.defs}${S0.g}</svg>
+      <div class="msley pr"><span><i style="background:${msColor(-1.2)}"></i>Corte</span><span><i style="background:${msColor(-0.3)}"></i></span><span><i style="background:#e3e7ec"></i>Sin movimiento</span><span><i style="background:${msColor(0.3)}"></i></span><span><i style="background:${msColor(1.2)}"></i>Relleno</span><span>Franja ${fmt(P.franja, 1)} m · curvas cada ${fmt(P.equi, 2)} m · pendiente N-S máx. ${fmt(R.pend, 1)} % · ${new Date().toLocaleDateString('es-AR')}</span></div></section>`; }).join('');
+  return { html, orden: grupos.map(() => 'P') };
+}
+// replanteo punto a punto para topografía: hincas y puntas de la franja, con cota actual, cota de proyecto y cuánto bajar o subir
+function msReplanteo(R) {
+  const L = []; R.L.forEach((r) => { const x = r.xA, s = r.M[0], e = r.M[r.M.length - 1], pr = (m, nom, y) => L.push({ p: nom, t: r.t.id, x, y, z: m.z, zf: m.zf, mov: m.mov });
+    const I = msInter(r).filter((q) => q !== r.M[0] && q !== r.M[r.M.length - 1]); pr(s, `${r.t.id}-N`, r.H[0].y - s.d);
+    r.H.forEach((h, k) => { L.push({ p: `${r.t.id}-H${h.n}`, t: r.t.id, x: h.x, y: h.y, z: h.z, zf: h.zf, mov: h.mov }); const nx = r.H[k + 1]; I.filter((q) => q.d > h.d && (!nx || q.d < nx.d)).forEach((q, j) => pr(q, `${r.t.id}-H${h.n}${nx ? '-' + nx.n : 'S'}${I.length > 1 ? '' : ''}${j ? '.' + (j + 1) : ''}`, r.H[0].y - q.d)); });
+    I.filter((q) => q.d < r.H[0].d).forEach((q) => pr(q, `${r.t.id}-N-H1`, r.H[0].y - q.d)); pr(e, `${r.t.id}-S`, r.H[0].y - e.d); });
+  return L;
+}
+async function msReplanteoCSV(sec, pend) {
+  const R = msCalc(sec, pend); if (!R) return; const r3 = (v) => (Math.round(v * 1000) / 1000).toFixed(3);
+  const txt = ['Punto,Norte,Este,Cota proyecto,Descripcion'].concat(msReplanteo(R).map((q) => `${q.p},${r3(q.y)},${r3(q.x)},${r3(q.zf)},${Math.abs(q.mov) < 0.005 ? 'SIN MOV' : (q.mov < 0 ? 'BAJAR ' : 'SUBIR ') + Math.abs(q.mov).toFixed(2)}`)).join('\r\n');
+  const p = await window.api.saveBinary(new TextEncoder().encode(txt), `Replanteo movimiento de suelos sector ${sec} ${today()}.csv`, 'csv', 'CSV');
+  if (p) toast('Replanteo guardado: Punto, Norte, Este, Cota de proyecto y BAJAR / SUBIR en metros');
+}
 // ---------- superficie final de diseño (PVCase / Civil 3D): lectura, verificación contra Trina y comparación ----------
 // LandXML: <P id="..">Norte Este Cota</P> (superficies TIN) y <CgPoint name="..">Norte Este Cota</CgPoint> (puntos)
 function msLandXML(t) {

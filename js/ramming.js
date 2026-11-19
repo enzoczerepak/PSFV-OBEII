@@ -22,11 +22,23 @@ const ramP = () => { const H = S.hincado || (S.hincado = {}); const r = H.ram ||
   if (r.pendMax === 10) r.pendMax = 5; // valores provisorios anteriores
   if (!r.trv) { if (r.pendMax === 5) r.pendMax = 15; delete r.revMin; r.trv = 1; } // criterios del manual de montaje Trina (15 %, regulación −200/+100)
   H.ram = Object.assign({}, RAM_DEF, r); return H.ram; };
-const ramZ = (id) => (window.COTAS_HINCAS && window.COTAS_HINCAS.z[id]) || null;
+// cota del terreno en cada hinca, según el terreno elegido para el sector: 'layout' (cotas del replanteo), 'mov' (terreno final
+// del cálculo de movimiento de suelos) o el id de una topografía cargada (relevamiento después del movimiento: el que vale para hincar)
+const ramTerrSrc = (s) => ((ramP().terr || {})[s]) || 'layout';
+let RAMZC = new Map();
+function ramZ(t) {
+  const id = t.id, src = ramTerrSrc(t.s), lay = (window.COTAS_HINCAS && window.COTAS_HINCAS.z[id]) || null;
+  if (src === 'layout' || typeof msCalc !== 'function') return lay;
+  if (src === 'mov') { const R = msCalc(t.s), r = R && R.map.get(id); if (!r) return lay; const z = []; r.H.forEach((h) => { z[h.i] = h.zf; }); return z; }
+  let terr = RAMZC.get(t.s + '|' + src); if (terr === undefined) { terr = msSets().some((x) => x.id === src) ? msTerreno(t.s, src) : null; RAMZC.set(t.s + '|' + src, terr); }
+  const rp = repDe(id); if (!terr || !rp || !rp.p) return lay;
+  return rp.p.map((p, i) => { const q = terr.pila({ x: p[0], y: p[1], zt: lay ? lay[i] : null }); return q.z; });
+}
+const ramTerrTxt = (src) => (src === 'layout' ? 'cotas del replanteo (layout)' : src === 'mov' ? 'terreno final del cálculo de movimiento de suelos' : ((msSets().find((x) => x.id === src) || {}).nombre || 'topografía'));
 
 // ---------- cálculo por tracker ----------
 function ramTracker(t, P) {
-  const rp = repDe(t.id), zs = ramZ(t.id); if (!rp || !rp.p || !zs || zs.length !== rp.p.length) return null;
+  const rp = repDe(t.id), zs = ramZ(t); if (!rp || !rp.p || !zs || zs.length !== rp.p.length) return null;
   const cods = posDe(t), conCod = P.usarCodigos && cods.length === rp.p.length && cods.every(Boolean);
   // de norte a sur (y decreciente); la distancia se mide desde la primera hinca
   const H = rp.p.map((p, i) => ({ i, x: p[0], y: p[1], z: zs[i], cod: conCod ? cods[i] : '' })).sort((a, b) => b.y - a.y);
@@ -54,8 +66,8 @@ function ramTracker(t, P) {
 const RAM_EST = { ok: ['Dentro de tolerancia', '#2f9e5b'], ajus: ['OK con línea de cabezas corrida', '#7cc49a'], salto: ['Salto de altura entre hincas vecinas', '#f0a23b'], pend: ['Pendiente N-S mayor a la máxima', '#e07b39'], fuera: ['Hincas fuera de tolerancia', '#d64545'], sin: ['Sin cotas', '#c9d0da'] };
 let RAMC = null;
 function ramCalc() {
-  const P = ramP(), key = JSON.stringify(P) + '|' + JSON.stringify(S.hincado.matriz || {});
-  if (RAMC && RAMC.key === key) return RAMC;
+  const P = ramP(), usaMov = Object.values(P.terr || {}).includes('mov'), key = JSON.stringify(P) + '|' + JSON.stringify(S.hincado.matriz || {}) + '|' + (S.topo || []).map((x) => x.id + x.n + x.cargado).join(',') + (usaMov ? '|' + JSON.stringify(S.hincado.mov || {}) : '');
+  if (RAMC && RAMC.key === key) return RAMC; RAMZC = new Map();
   const L = (window.PLANO ? window.PLANO.trk : []).map((t) => ramTracker(t, P) || { t, est: 'sin', H: [], n: 0 });
   RAMC = { key, L, map: new Map(L.map((r) => [r.t.id, r])) }; RAMCAB = null;
   return RAMC;
@@ -104,7 +116,7 @@ function ramPrecargaHTML(C) {
   return `<div class="card hpre"><div class="hpreh"><span class="pill p-warn">PRECARGA</span><b>Ramming plan en condición de precarga</b><span class="muted">· las alturas son orientativas: no usar para hincar</span></div>
     <div class="hprec"><div><h4>Datos cargados</h4><ul>
       <li>✓ Posición de cada hinca: <b>${esc((RP.fuente || '').split(' · ')[0])}</b>, numeración de mesas OBEII-GR-PL-003 r1 · ${fmt(RP.nHincas || 0)} hincas.</li>
-      <li>✓ Cota de terreno natural por hinca: superficie TIN del relevamiento (OBEII-GR-PL-003 r1).</li>
+      <li>✓ Cota de terreno por hinca: ${[...new Set((window.PLANO.trk || []).map((t) => t.s))].sort().map((x) => `S${x} ${esc(ramTerrTxt(ramTerrSrc(x)))}`).join(' · ')}.</li>
       <li>${cods ? '✓' : '·'} Código, largo y altura libre de cada hinca: Trina CIV-DW-26050-2402-0B y MEC-DW-26050-3401-0A${cods ? '' : ' (distribución incompleta)'}.</li>
       <li>✓ Pendiente N-S del tracker hasta ${fmt(ramP().pendMax, 1)} % y regulación de hincado −200 / +100 mm (manual Trina ARI-GR-MN-4301-0A).</li></ul></div>
     <div><h4>Falta para que sea definitivo</h4><ol>
@@ -124,11 +136,10 @@ function vHDist(el) {
   let kpi;
   if (tubo) {
     const m = ramConteo(C, 'tubo'), sum = (x) => Object.values(x).reduce((a, b) => a + b, 0), nT = [...m.values()].reduce((a, x) => a + sum(x), 0);
-    const sobre = [...m.entries()].filter(([c, x]) => { const i = tuboInfo(c); return i.neto != null && sum(x) > i.neto; }).map(([c]) => c);
     const conT = C.L.filter((r) => tubosDe(r.t).length).length, metros = C.L.reduce((a, r) => a + tubosDe(r.t).reduce((q, c) => q + TUBO_LARGO[c], 0), 0) / 1000;
     kpi = `<div class="card kpi"><div class="kl">Trackers con tubos</div><div class="kv">${fmt(conT)}<small> / ${fmt(C.L.length)}</small></div><div class="muted">Trina ${esc(TUBO_DOC)}</div></div>
       <div class="card kpi"><div class="kl">Tubos de torque</div><div class="kv">${fmt(nT)}</div><div class="muted">${m.size} tipos · ${fmt(metros, 0)} m de viga</div></div>
-      <div class="card kpi"><div class="kl">Contra el BOM neto</div><div class="kv" style="font-size:16px">${sobre.length ? `<span class="tneg">${sobre.length} tipo${sobre.length > 1 ? 's' : ''} por encima</span>` : '<span class="tpos">dentro del BOM</span>'}</div><div class="muted">${sobre.length ? esc(sobre.join(', ')) + ' · cubierto con repuestos' : 'según la configuración del layout'}</div></div>
+      <div class="card kpi"><div class="kl">Marcas de color de los tubos</div><div class="kv" style="font-size:16px">${(() => { const n = TUBO_ORD.filter((c) => m.has(c) && tuboMarca(c).length).length; return n ? `${n} de ${m.size} tipos` : '<span class="muted">sin cargar</span>'; })()}</div><div class="muted">pintura en los extremos, según lo recibido en obra</div></div>
       <div class="card kpi"><div class="kl">Referencia</div><div class="kv" style="font-size:16px">${(window.PLANO.sts || []).length} STS · ${(window.PLANO.inv || []).length} inversores</div><div class="muted">ubicados en el plano</div></div>`;
   } else kpi = `<div class="card kpi"><div class="kl">Trackers con distribución</div><div class="kv">${fmt(nCod)}<small> / ${fmt(C.L.length)}</small></div><div class="muted">Trina ${esc(TRINA_DIST_DOC)}</div></div>
       <div class="card kpi"><div class="kl">Hincas en el plano</div><div class="kv">${fmt(nH)}</div><div class="muted">${cods.size} códigos distintos</div></div>
@@ -136,8 +147,10 @@ function vHDist(el) {
       <div class="card kpi"><div class="kl">Referencia</div><div class="kv" style="font-size:16px">${(window.PLANO.sts || []).length} STS · ${(window.PLANO.inv || []).length} inversores</div><div class="muted">ubicados en el plano</div></div>`;
   el.innerHTML = `${tabs}<div class="grid g4 stagger" style="margin-bottom:12px">${kpi}</div>
     <div id="rmB"></div>
-    <div class="card" style="margin-top:16px"><h3>${tubo ? 'Tubos de torque' : 'Hincas'} por sector · resumen</h3><div class="tblwrap">${ramResTabla(C, tubo ? 'tubo' : 'dist', secs, 'tbl')}</div></div>`;
+    <div class="card" style="margin-top:16px"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0;flex:1">${tubo ? 'Tubos de torque' : 'Hincas'} por sector · resumen</h3>${tubo && !window.READONLY ? '<button class="btn sm" id="tcE">Cargar marcas de pintura…</button>' : ''}</div><div class="tblwrap">${ramResTabla(C, tubo ? 'tubo' : 'dist', secs, 'tbl')}</div></div>
+    <div class="card" style="margin-top:16px"><h3>Accesorios por sector · motores, rodamientos, bulonería y demás</h3><div class="tblwrap" style="max-height:560px">${ramAccTabla(C, secs, 'tbl')}</div></div>`;
   segBind('#dT', DISTUI.tab || 'hinc', (v) => { DISTUI.tab = v; render(false); });
+  const tcE = $('#tcE', el); if (tcE) tcE.onclick = tuboMarcaEdit;
   ramPlano($('#rmB', el), C, null, tubo ? 'tubo' : 'dist');
 }
 async function distExcel() {
@@ -164,6 +177,18 @@ const TUBO_CFG = {
 const TUBO_COL = { 'PG132-1A': '#e15759', 'PG132-2A': '#f28e2b', 'PG133-1A': '#8c564b', 'PG132-3A': '#4e79a7', 'PG132-4A': '#76b7b2', 'PG132-5A': '#59a14f', 'PG132-6A': '#b07aa1', 'PG132-7A': '#e6b800' };
 const TUBO_ORD = ['PG132-1A', 'PG132-2A', 'PG133-1A', 'PG132-3A', 'PG132-4A', 'PG132-5A', 'PG132-6A', 'PG132-7A'];
 const tubosDe = (t) => TUBO_CFG[`${t.t}|${t.z || 'Outer'}`] || [];
+// marca de pintura de cada tipo de tubo (en los extremos), cargada en obra: no figura en los planos de Trina
+const TCOL = Object.assign({ Amarillo: '#f2c200', Naranja: '#f28e2b', Marrón: '#8c564b', Celeste: '#5ab8ff' }, HCOL);
+const tuboMarca = (c) => (((S.hincado || {}).tuboCol || {})[c] || []).filter((x) => x && x !== 'Sin marca');
+const tuboMarcaH = (c) => { const L = tuboMarca(c); return L.length ? L.map((x) => `<i class="rmsw" style="background:${TCOL[x] || '#fff'}"></i>${esc(x)}`).join(' ') : '<span class="muted">sin dato</span>'; };
+async function tuboMarcaEdit() {
+  if (window.READONLY) return;
+  const M = (S.hincado.tuboCol = S.hincado.tuboCol || {}), opts = (v) => ['', ...Object.keys(TCOL).filter((x) => x !== 'Sin marca')].map((x) => `<option value="${x}" ${x === (v || '') ? 'selected' : ''}>${x || '—'}</option>`).join('');
+  const r = await modal({ title: 'Marcas de pintura de los tubos de torque', sub: 'Los planos de Trina no traen código de colores para las vigas. Cargá la pintura que trae cada tipo en los extremos, según lo recibido en obra.', wide: true,
+    body: `<div class="tblwrap"><table class="tbl"><thead><tr><th>Tubo</th><th>Sección · largo</th><th>Color 1</th><th>Color 2</th></tr></thead><tbody>${TUBO_ORD.map((c) => { const i = tuboInfo(c), v = M[c] || []; return `<tr data-c="${c}"><td><i class="rmsw" style="background:${i.col}"></i><b>26050-${c}</b></td><td>${esc(i.size)} · ${fmt(i.largo)} mm</td><td><select class="tc1">${opts(v[0])}</select></td><td><select class="tc2">${opts(v[1])}</select></td></tr>`; }).join('')}</tbody></table></div>`,
+    buttons: [['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (b) => { const o = {}; $$('tr[data-c]', b).forEach((tr) => { const L = [$('.tc1', tr).value, $('.tc2', tr).value].filter(Boolean); if (L.length) o[tr.dataset.c] = L; }); return o; }]] });
+  if (!r) return; S.hincado.tuboCol = r; commit('Marcas de pintura de los tubos de torque actualizadas');
+}
 // datos de la viga en el BOM de Trina (sección, largo, cantidades); sin BOM, los largos del plano
 const TUBO_LARGO = { 'PG132-1A': 11500, 'PG132-2A': 9097, 'PG133-1A': 10000, 'PG132-3A': 10000, 'PG132-4A': 11500, 'PG132-5A': 9097, 'PG132-6A': 9000, 'PG132-7A': 6428 };
 function tuboInfo(c) {
@@ -181,7 +206,8 @@ function ramTuboSVG(t, L, txt) {
   const xs = L[0].x, mot = L.find((q) => q.h.motor) || L[Math.floor(L.length / 2)], tub = tubosDe(t);
   const tot = tub.reduce((a, c) => a + TUBO_LARGO[c] / 1000, 0); let y = mot.y - tot / 2, g = ramTxt(xs, Math.min(y, L[0].y) - txt * 0.45, t.id.replace('TRK-', 'TR '), txt * 1.05, 'text-anchor="middle" font-weight="700" class="rmtid2"');
   tub.forEach((c) => { const l = TUBO_LARGO[c] / 1000, ym = y + l / 2;
-    g += `<rect x="${(xs - 0.55).toFixed(2)}" y="${y.toFixed(2)}" width="1.1" height="${l.toFixed(2)}" fill="${TUBO_COL[c]}" stroke="#222" stroke-width="0.06"/>`
+    const mk = tuboMarca(c), band = (y0) => mk.map((x, q) => `<rect x="${(xs - 0.55 + q * 1.1 / mk.length).toFixed(2)}" y="${y0.toFixed(2)}" width="${(1.1 / mk.length).toFixed(2)}" height="0.7" fill="${TCOL[x] || '#fff'}" stroke="#222" stroke-width="0.04"/>`).join('');
+    g += `<rect x="${(xs - 0.55).toFixed(2)}" y="${y.toFixed(2)}" width="1.1" height="${l.toFixed(2)}" fill="${TUBO_COL[c]}" stroke="#222" stroke-width="0.06"/>` + (mk.length ? band(y + 0.05) + band(y + l - 0.75) : '')
       + ramTxt(xs + 0.8, ym + txt * 0.3, esc(c.replace('PG13', '13')), txt * 0.8, 'text-anchor="start" class="rmhl"');
     y += l; });
   L.forEach(({ h, x, y: yy }) => { g += `<rect x="${(x - 0.35).toFixed(2)}" y="${(yy - 0.35).toFixed(2)}" width="0.7" height="0.7" fill="${h.motor ? '#000' : '#fff'}" stroke="#555" stroke-width="0.06"/>`; });
@@ -197,12 +223,12 @@ function ramResumen(C, o, secs, A) {
 }
 // tabla de resumen: nomograma (colores o sección) y cantidades por sector; cls 'rmres' (PDF) o 'tbl' (pantalla)
 function ramResTabla(C, modo, secs, cls) {
-  const tubo = modo === 'tubo', m = ramConteo(C, modo), cods = [...m.keys()].sort((a, b) => (tubo ? TUBO_ORD.indexOf(a) - TUBO_ORD.indexOf(b) : a.localeCompare(b)));
+  const tubo = modo === 'tubo', m = ramConteo(C, modo), cods = [...m.keys()].filter((c) => secs.some((s) => (m.get(c)[s] || 0) > 0)).sort((a, b) => (tubo ? TUBO_ORD.indexOf(a) - TUBO_ORD.indexOf(b) : a.localeCompare(b)));
   const nT = (s) => C.L.filter((r) => r.t.s === s).length, sum = (x) => secs.reduce((a, s) => a + (x[s] || 0), 0);
   let head, fila;
   if (tubo) {
-    head = '<th>Color</th><th>Plano Trina</th><th>Material BOM</th><th>Sección</th><th class="n">Largo (mm)</th>';
-    fila = (c) => { const i = tuboInfo(c); return `<td><i style="background:${i.col}"></i></td><td><b>26050-${esc(c)}</b></td><td>${esc(i.k)}</td><td>${esc(i.size)}</td><td class="n">${fmt(i.largo)}</td>`; };
+    head = '<th>Color en el plano</th><th>Marca de pintura (obra)</th><th>Tubo (plano Trina)</th><th>Sección</th><th class="n">Largo (mm)</th>';
+    fila = (c) => { const i = tuboInfo(c); return `<td><i style="background:${i.col}"></i></td><td>${tuboMarcaH(c)}</td><td><b>26050-${esc(c)}</b></td><td>${esc(i.size)}</td><td class="n">${fmt(i.largo)}</td>`; };
   } else {
     head = '<th>Colores</th><th>Código</th><th>Tipo</th><th>Suelo</th><th>Perfil</th><th class="n">Largo (mm)</th><th>Cabeza (arriba)</th><th>Punta (abajo)</th>';
     const full = new Map(); C.L.forEach((r) => r.H.forEach((h) => h.cod && full.set(ramCodCorto(h.cod), h.cod)));
@@ -210,16 +236,55 @@ function ramResTabla(C, modo, secs, cls) {
       return `<td>${ramDosCol(k)}</td><td><b>${esc(c)}</b></td><td>${esc(k.tipo || '')}</td><td>${k.suelo === 'B' ? 'blando' : 'normal'}</td><td>${esc(k.perfil || '')}</td><td class="n">${fmt(k.largo || 0)}</td><td>${esc(hColSup(k) || 'sin color')}</td><td>${esc(k.color || '')}</td>`; };
   }
   const tot = secs.map((s) => cods.reduce((a, c) => a + (m.get(c)[s] || 0), 0));
-  const bom = tubo ? '<th class="n">BOM neto</th><th class="n">BOM con repuestos</th>' : '';
-  const tabla = `<table class="${cls} rmrestb"><thead><tr>${head}${secs.map((s) => `<th class="n">Sector ${s}</th>`).join('')}<th class="n">Total</th>${bom}</tr></thead><tbody>
-    ${cods.map((c) => { const x = m.get(c), i = tubo ? tuboInfo(c) : null, t = sum(x); return `<tr>${fila(c)}${secs.map((s) => `<td class="n">${x[s] ? fmt(x[s]) : '–'}</td>`).join('')}<td class="n"><b>${fmt(t)}</b></td>${tubo ? `<td class="n ${i.neto != null && t > i.neto ? 'rmmal' : ''}">${i.neto != null ? fmt(i.neto) : '–'}</td><td class="n ${i.tot != null && t > i.tot ? 'rmmal' : ''}">${i.tot != null ? fmt(i.tot) : '–'}</td>` : ''}</tr>`; }).join('')}
-    <tr class="rmrest"><td colspan="${tubo ? 5 : 8}"><b>Total ${tubo ? 'tubos' : 'hincas'}</b></td>${tot.map((n) => `<td class="n"><b>${fmt(n)}</b></td>`).join('')}<td class="n"><b>${fmt(tot.reduce((a, b) => a + b, 0))}</b></td>${tubo ? '<td></td><td></td>' : ''}</tr>
-    <tr class="rmrest"><td colspan="${tubo ? 5 : 8}">Trackers</td>${secs.map((s) => `<td class="n">${fmt(nT(s))}</td>`).join('')}<td class="n">${fmt(secs.reduce((a, s) => a + nT(s), 0))}</td>${tubo ? '<td></td><td></td>' : ''}</tr></tbody></table>`;
+  const tabla = `<table class="${cls} rmrestb"><thead><tr>${head}${secs.map((s) => `<th class="n">Sector ${s}</th>`).join('')}<th class="n">Total</th></tr></thead><tbody>
+    ${cods.map((c) => { const x = m.get(c), t = sum(x); return `<tr>${fila(c)}${secs.map((s) => `<td class="n">${x[s] ? fmt(x[s]) : '–'}</td>`).join('')}<td class="n"><b>${fmt(t)}</b></td></tr>`; }).join('')}
+    <tr class="rmrest"><td colspan="${tubo ? 5 : 8}"><b>Total ${tubo ? 'tubos' : 'hincas'}</b></td>${tot.map((n) => `<td class="n"><b>${fmt(n)}</b></td>`).join('')}<td class="n"><b>${fmt(tot.reduce((a, b) => a + b, 0))}</b></td></tr>
+    <tr class="rmrest"><td colspan="${tubo ? 5 : 8}">Trackers</td>${secs.map((s) => `<td class="n">${fmt(nT(s))}</td>`).join('')}<td class="n">${fmt(secs.reduce((a, s) => a + nT(s), 0))}</td></tr></tbody></table>`;
   const cfg = tubo ? `<h4>Tubos por configuración de tracker (de norte a sur)</h4><table class="${cls} rmrestb rmcfg"><thead><tr><th>Configuración</th><th>Tubos</th>${secs.map((s) => `<th class="n">Trackers S${s}</th>`).join('')}</tr></thead><tbody>
       ${Object.entries(TUBO_CFG).map(([k, L]) => `<tr><td>${esc(cfgTxt(k + '|N').replace(/ · suelo normal/, ''))}</td><td>${L.map((c) => `<i style="background:${TUBO_COL[c]}"></i>${esc(c)}`).join(' ')}</td>${secs.map((s) => { const n = C.L.filter((r) => r.t.s === s && `${r.t.t}|${r.t.z || 'Outer'}` === k).length; return `<td class="n">${n ? fmt(n) : '–'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>
-      <p class="rmrnota">Vigas □130 de acero galvanizado; el espesor cambia con la posición: 3,0 mm la PG133-1A del centro de los 1P52 exteriores; 2,2 mm la PG132-4A, 5A y 7A; 2,5 mm el resto. Las cantidades salen de la configuración de cada tracker en el layout; el BOM incluye repuestos. En rojo, lo que el layout pide por encima del BOM.</p>`
+      <p class="rmrnota">Vigas □130 de acero galvanizado; el espesor cambia con la posición: 3,0 mm la PG133-1A del centro de los 1P52 exteriores; 2,2 mm la PG132-4A, 5A y 7A; 2,5 mm el resto. Las cantidades salen de la configuración de cada tracker en el layout. Color en el plano: solo para distinguir los tubos en el dibujo; marca de pintura: la que traen los tubos en los extremos, cargada en obra.</p>`
     : `<p class="rmrnota"><b>Nomograma de colores Trina:</b> cada hinca lleva dos marcas de pintura. Cabeza (triángulo de arriba en el plano): rojo = general en suelo normal, azul = general en suelo blando, sin color = hinca motor. Punta (triángulo de abajo): color del largo y perfil según la tabla. Código Trina arriba de cada hinca; M = hinca motor.</p>`;
   return tabla + cfg;
+}
+// ============ accesorios por sector: BOM de Trina, cantidades por tracker de cada tipo (configuración × suelo) ============
+const ACC_TIPOS = ['1P52|Outer|N', '1P52|Border|N', '1P52|Inner|N', '1P26|Outer|N', '1P26|Border|N', '1P52|Outer|B', '1P52|Border|B', '1P52|Inner|B', '1P26|Outer|B', '1P26|Border|B'];
+const ACC_ORD = ['DRIVE UNIT', 'MECH. PARTS', 'BEARING', 'DAMPER', 'PURLIN', 'FASTENER', 'TCU', 'ACCESSORIES'];
+function accItems() {
+  const B = (S.trackers && S.trackers.bom) || window.BOM_TRINA, B0 = window.BOM_TRINA || { items: [] }; if (!B) return { items: [], tipos: ACC_TIPOS };
+  const q0 = new Map(B0.items.filter((i) => i.q).map((i) => [i.k, i.q])), tipos = B.tipos || B0.tipos || ACC_TIPOS;
+  return { tipos, items: B.items.map((i) => Object.assign({}, i, { q: i.q || q0.get(i.k) })).filter((i) => i.q && i.q.some(Boolean) && !/^(POST|BEAM)$/i.test(i.cat)) };
+}
+// cantidad de cada accesorio por sector = Σ trackers del sector × cantidad por tracker de su tipo
+function accConteo(C) {
+  const A = accItems(), ix = (t) => A.tipos.indexOf(`${t.t}|${t.z || 'Outer'}|${t.sl || 'N'}`), m = new Map();
+  C.L.forEach((r) => { const j = ix(r.t); if (j < 0) return; A.items.forEach((it) => { const v = it.q[j]; if (!v) return; const x = m.get(it.k) || {}; x[r.t.s] = (x[r.t.s] || 0) + v; m.set(it.k, x); }); });
+  return { A, m };
+}
+const accCat = (c) => (typeof trkCat === 'function' ? trkCat(c)[0] : c);
+function ramAccTabla(C, secs, cls, parte) {
+  const { A, m } = accConteo(C), its = A.items.filter((i) => m.has(i.k) && secs.some((s) => (m.get(i.k)[s] || 0) > 0)).sort((a, b) => (ACC_ORD.indexOf(String(a.cat).toUpperCase()) - ACC_ORD.indexOf(String(b.cat).toUpperCase())) || String(a.desc).localeCompare(String(b.desc)));
+  if (!its.length) return '<p class="muted">Falta el BOM de Trina con las cantidades por tipo de tracker.</p>';
+  let cat = '', h = []; const NP = 40;
+  its.forEach((i) => { const x = m.get(i.k), c = String(i.cat).toUpperCase();
+    if (c !== cat) { cat = c; h.push(`<tr class="rmacat"><td colspan="${3 + secs.length + 1}"><b>${esc(accCat(i.cat))}</b></td></tr>`); }
+    h.push(`<tr><td>${esc(i.k)}</td><td>${esc(i.desc)}${i.size ? ` <span class="muted">${esc(i.size)}</span>` : ''}</td><td class="n">${esc(A.tipos.map((t, j) => i.q[j]).filter((v, j, L) => L.indexOf(v) === j).join(' / '))}</td>${secs.map((s) => `<td class="n">${x[s] ? fmt(x[s]) : '–'}</td>`).join('')}<td class="n"><b>${fmt(secs.reduce((a, s) => a + (x[s] || 0), 0))}</b></td></tr>`); });
+  if (parte === 'n') return Math.ceil(h.length / NP);
+  const filas = parte == null ? h : h.slice(parte * NP, (parte + 1) * NP), ult = parte == null || (parte + 1) * NP >= h.length;
+  return `<table class="${cls} rmrestb rmacc"><thead><tr><th>Material</th><th>Descripción</th><th class="n">Por tracker</th>${secs.map((s) => `<th class="n">Sector ${s}</th>`).join('')}<th class="n">Total</th></tr></thead><tbody>${filas.join('')}</tbody></table>${ult ? `
+    <p class="rmrnota">Cantidades por tracker según su tipo (1P52 / 1P26 · exterior, borde, interior · suelo normal o blando) en el BOM de Trina ${esc(((S.trackers && S.trackers.bom) || window.BOM_TRINA || {}).doc || '')}, multiplicadas por los trackers de cada sector en el layout. Sin repuestos ni extras. "Por tracker": los valores distintos según el tipo.</p>` : ''}`;
+}
+function ramAccPag(C, o, secs, A) {
+  const n = ramAccTabla(C, secs, 'rmres', 'n') || 1;
+  return Array.from({ length: n }, (_, k) => `<section class="rmpg rmres-pg" data-o="L" style="width:${A.pw}mm;height:${A.ph}mm">
+    <div class="rmpgh"><div><b>Accesorios por sector · motores, rodamientos, bulonería y demás${n > 1 ? ` (${k + 1} de ${n})` : ''}</b><br>${esc(S.nombre || '')}</div><div style="text-align:right">BOM Trina · ${new Date().toLocaleDateString('es-AR')}</div></div>
+    ${ramAccTabla(C, secs, 'rmres', k)}</section>`);
+}
+// línea corta de accesorios principales del sector para el recuadro de cada hoja
+function ramAccRot(C, sec) {
+  const { A, m } = accConteo(C), v = (re) => A.items.filter((i) => re.test(`${i.cat} ${i.desc}`)).reduce((a, i) => a + ((m.get(i.k) || {})[sec] || 0), 0);
+  const L = [['motores 5"', /Drive Unit.*\(5"\)/i], ['motores 7"', /Drive Unit.*\(7"\)/i], ['rodamientos', /^BEARING Bearing\(130/i], ['amortiguadores', /^DAMPER Damper$/i], ['TCU', /^TCU Plastic/i], ['correas Ω', /^PURLIN/i], ['U-bolts de correa', /Purlin U-bolt/i], ['tapas de tubo', /End Cap/i]]
+    .map(([n, re]) => [n, v(re)]).filter(([, x]) => x);
+  return L.length ? `<p class="rmrnota"><b>Accesorios del sector ${sec}:</b> ${L.map(([n, x]) => `${fmt(x)} ${n}`).join(' · ')}. Bulonería y demás desde la pág. 2.</p>` : '';
 }
 const ramDosCol = (k) => { const t = HCOL[hColSup(k)] || '#fff', b = HCOL[k.color] && HCOL[k.color] !== 'transparent' ? HCOL[k.color] : '#fff';
   return `<svg viewBox="0 0 10 10" width="12" height="12" style="vertical-align:-2px;margin-right:4px"><rect x=".5" y=".5" width="9" height="9" fill="#fff" stroke="#666"/><path d="M.5 .5H9.5L5 5Z" fill="${t}" stroke="#888" stroke-width=".4"/><path d="M.5 9.5H9.5L5 5Z" fill="${b}" stroke="#888" stroke-width=".4"/></svg>`; };
@@ -335,21 +400,21 @@ function ramPlano(b, C, PG, modo = 'ram') {
 }
 function ramRefsTubo(C) {
   const m = ramConteo(C, 'tubo'), sum = (x) => Object.values(x).reduce((a, b) => a + b, 0);
-  return [...m.keys()].sort((a, b) => TUBO_ORD.indexOf(a) - TUBO_ORD.indexOf(b)).map((c) => { const i = tuboInfo(c); return `<span title="${esc(i.k)} · ${esc(i.size)}"><i style="background:${i.col}"></i>${esc(c)} <small class="muted">${fmt(i.largo / 1000, 2)} m · ${fmt(sum(m.get(c)))}</small></span>`; }).join('')
+  return [...m.keys()].sort((a, b) => TUBO_ORD.indexOf(a) - TUBO_ORD.indexOf(b)).map((c) => { const i = tuboInfo(c); return `<span title="${esc(i.size)}"><i style="background:${i.col}"></i>${esc(c)} <small class="muted">${fmt(i.largo / 1000, 2)} m · ${fmt(sum(m.get(c)))}${tuboMarca(c).length ? ' · pintura ' + esc(tuboMarca(c).join(' y ').toLowerCase()) : ''}</small></span>`; }).join('')
     + '<span><i style="background:#000;border:1px solid #000"></i>hinca motor (M)</span><span><i style="background:#fff;border:1.5px solid #c25e00"></i>Inversor</span><span><i style="background:#fff;border:1.5px solid #1f2a37"></i>STS</span>';
 }
 function ramDetTubo(r) {
   const HA = (S.hincado || {}).avance || {}, L = tubosDe(r.t);
   return `<div class="rmdh"><h3>${r.t.id} <span class="muted" style="font-weight:400">· frame ${esc((repDe(r.t.id) || {}).fr || '')} · S${r.t.s}</span></h3>${HA[r.t.id] ? `<span class="pill p-done">hincado ${fechaCorta(HA[r.t.id].f)}</span>` : ''}</div>
     <div class="rmkv"><span>Configuración <b>${esc(cfgTxt(cfgDe(r.t)))}</b></span><span>${L.length} tubos · ${fmt(L.reduce((a, c) => a + TUBO_LARGO[c], 0) / 1000, 2)} m</span></div>
-    <div class="tblwrap" style="max-height:60vh"><table class="tbl"><thead><tr><th>#</th><th>Tubo (plano Trina)</th><th>Material BOM</th><th>Sección</th><th class="n">Largo (mm)</th></tr></thead><tbody>
-    ${L.map((c, k) => { const i = tuboInfo(c); return `<tr><td>${k + 1}</td><td><i class="rmsw" style="background:${i.col}"></i><b>26050-${esc(c)}</b></td><td>${esc(i.k)}</td><td>${esc(i.size)}</td><td class="n">${fmt(i.largo)}</td></tr>`; }).join('')}</tbody></table></div>
+    <div class="tblwrap" style="max-height:60vh"><table class="tbl"><thead><tr><th>#</th><th>Tubo (plano Trina)</th><th>Marca de pintura</th><th>Sección</th><th class="n">Largo (mm)</th></tr></thead><tbody>
+    ${L.map((c, k) => { const i = tuboInfo(c); return `<tr><td>${k + 1}</td><td><i class="rmsw" style="background:${i.col}"></i><b>26050-${esc(c)}</b></td><td>${tuboMarcaH(c)}</td><td>${esc(i.size)}</td><td class="n">${fmt(i.largo)}</td></tr>`; }).join('')}</tbody></table></div>
     <p class="hint">Tubos de norte a sur según Trina ${esc(TUBO_DOC)}.</p>`;
 }
 async function tuboExcel() {
   const C = ramCalc(), wb = XLSX.utils.book_new(), secs = [...new Set(C.L.map((r) => r.t.s))].sort(), m = ramConteo(C, 'tubo');
-  const a = [['Plano Trina', 'Material BOM', 'Sección', 'Largo (mm)'].concat(secs.map((s) => 'Sector ' + s), ['Total', 'BOM neto', 'BOM con repuestos'])];
-  TUBO_ORD.filter((c) => m.has(c)).forEach((c) => { const i = tuboInfo(c), x = m.get(c), t = secs.reduce((q, s) => q + (x[s] || 0), 0); a.push(['26050-' + c, i.k, i.size, i.largo].concat(secs.map((s) => x[s] || 0), [t, i.neto, i.tot])); });
+  const a = [['Plano Trina', 'Material', 'Sección', 'Largo (mm)', 'Marca de pintura'].concat(secs.map((s) => 'Sector ' + s), ['Total'])];
+  TUBO_ORD.filter((c) => m.has(c)).forEach((c) => { const i = tuboInfo(c), x = m.get(c), t = secs.reduce((q, s) => q + (x[s] || 0), 0); a.push(['26050-' + c, i.k, i.size, i.largo, tuboMarca(c).join(' y ') || 'sin dato'].concat(secs.map((s) => x[s] || 0), [t])); });
   const b = [['Tracker', 'Frame', 'Sector', 'Configuración'].concat(Array.from({ length: 6 }, (_, i) => 'Tubo ' + (i + 1) + ' (N→S)'))];
   C.L.forEach((r) => b.push([r.t.id, (repDe(r.t.id) || {}).fr || '', r.t.s, cfgTxt(cfgDe(r.t))].concat(tubosDe(r.t).map((c) => '26050-' + c))));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a), 'Por tubo y sector'); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(b), 'Por tracker');
@@ -460,6 +525,8 @@ function ramPar(b) {
       ${f('difMax', 'Salto máximo de altura libre entre hincas vecinas', 'm', '0.05', 'Se marca como aviso.')}
       <label class="rmchk"><input type="checkbox" data-k="usarCodigos" ${P.usarCodigos ? 'checked' : ''} ${ro ? 'disabled' : ''} style="width:auto"><span>Usar largo, altura y empotramiento de cada código de hinca (cuando esté cargada la distribución de Trina, reemplaza a los valores de arriba)${cods ? '' : '<small class="muted">La distribución por posición todavía no está completa en Catálogo y distribución: mientras tanto se usan los valores de arriba, motor y general por separado.</small>'}</span></label></div></div>
     <div><div class="card" style="margin-bottom:12px"><h3>Estado del plan</h3><label class="rmchk"><input type="checkbox" data-k="precarga" ${P.precarga ? 'checked' : ''} ${ro ? 'disabled' : ''} style="width:auto"><span><b>Ramming plan en precarga</b>: alturas orientativas, no apto para hincar. Destildar recién cuando estén la topografía final, la discretización confirmada y la validación de Trina.</span></label></div>
+    <div class="card" style="margin-bottom:12px"><h3>Terreno para el ramming plan</h3><p class="hint" style="margin:0 0 8px">Proceso: limpieza → pre nivelación → relevamiento → cálculo y ejecución del movimiento de suelos (nivelación y compactación) → <b>nuevo relevamiento punto a punto</b> → rugosidad y control de niveles y pendientes → ramming plan sobre el terreno trabajado. Cargá el relevamiento posterior en Movimiento de suelos › Topografías y elegilo acá.</p><div class="form rmform">
+      ${[...new Set((window.PLANO.trk || []).map((t) => t.s))].sort().map((x) => { const v = ramTerrSrc(x); return `<label>Sector ${x}<select class="rmTerr" data-s="${x}" ${ro ? 'disabled' : ''}><option value="layout" ${v === 'layout' ? 'selected' : ''}>Cotas del replanteo (layout)</option><option value="mov" ${v === 'mov' ? 'selected' : ''}>Terreno final calculado (movimiento de suelos)</option>${(typeof msSetsA === 'function' ? msSetsA() : []).map((t) => `<option value="${t.id}" ${v === t.id ? 'selected' : ''}>Topografía: ${esc(t.nombre)}</option>`).join('')}</select></label>`; }).join('')}</div></div>
     <div class="card"><h3>Programa</h3><div class="form rmform">
       ${f('hincadoras', 'Hincadoras trabajando', '', '1')}
       ${f('rend', 'Rendimiento por hincadora', 'hincas/día', '5')}
@@ -472,6 +539,7 @@ function ramPar(b) {
     <p class="hint">Los valores por defecto son de referencia: confirmalos con el manual de instalación de Trina (Vanguard 1P) y el estudio geotécnico. Todo se recalcula al cambiar un valor.</p>`;
   $$('[data-k]', b).forEach((i) => { i.onchange = () => { const k = i.dataset.k, H = S.hincado; H.ram = Object.assign({}, ramP());
     H.ram[k] = i.type === 'checkbox' ? i.checked : i.type === 'number' ? Number(i.value) : i.value || null; RAMC = null; commit(`Ramming plan: ${k} = ${H.ram[k]}`); }; });
+  $$('.rmTerr', b).forEach((sel) => { sel.onchange = () => { const H = S.hincado; H.ram = Object.assign({}, ramP()); H.ram.terr = Object.assign({}, H.ram.terr || {}, { [sel.dataset.s]: sel.value }); RAMC = null; commit(`Ramming plan: terreno del sector ${sel.dataset.s} = ${ramTerrTxt(sel.value)}`); }; });
   const rs = $('#rmRes', b); if (rs) rs.onclick = () => { S.hincado.ram = Object.assign({}, RAM_DEF); RAMC = null; commit('Ramming plan: parámetros por defecto'); };
 }
 async function ramExcel() {
@@ -676,11 +744,11 @@ function ramGrilla(T, k, size) {
 function ramRotDim(size, nCod, dist, croqAsp, comp) {
   if (comp) { // compacto, para sectores llenos sin hueco grande: códigos en 3 columnas y esquema más chico
     const W = size === 'A4' ? 64 : 76, cw = W - 7, ch = Math.min(22, cw * croqAsp), lin = dist ? Math.ceil(Math.max(nCod, 1) / 2) + 4 : 4;
-    return { W, ch, comp: true, H: 21 + ch + 6 + lin * 3.4 + 12 + (dist ? 12 : 0) };
+    return { W, ch, comp: true, H: 21 + ch + 6 + lin * 3.4 + 12 + (dist ? 22 : 0) };
   }
   const W = size === 'A4' ? 80 : 96, cw = W - 8, ch = Math.min(size === 'A4' ? 30 : 40, cw * croqAsp);
   const lin = dist ? Math.ceil(Math.max(nCod, 1) / 2) + 5 : 5;
-  return { W, ch, H: 25 + ch + 7 + lin * 3.7 + 16 + (dist ? 13 : 0) };
+  return { W, ch, H: 25 + ch + 7 + lin * 3.7 + 16 + (dist ? 23 : 0) };
 }
 const RAM_ESC_MAX = 400; // con "usar menos hojas": una hoja más solo si sin ella la escala queda más chica que 1:400
 // obstáculos de la hoja (en metros): trackers con su rótulo, inversores y STS
@@ -758,6 +826,7 @@ function ramCroquis(p, mw = 46, mh = 15) {
 }
 function ramPdfPlano(o) {
   const C = ramCalc(), HA = (S.hincado || {}).avance || {}, hojas = ramHojas(C, o), tubo = o.modo === 'tubo', dist = o.modo === 'dist' || tubo;
+  const secsR = [...new Set(hojas.map((h) => h.s))], nPre = dist && hojas.length ? 1 + (ramAccTabla(C, secsR, 'rmres', 'n') || 1) : 0;
   const tit = tubo ? 'Plano de distribución de tubos de torque' : dist ? 'Plano de distribución de hincas' : 'Ramming plan · altura libre', pre = !dist && ramP().precarga;
   const pags = hojas.map((p, i) => {
     const txt = Math.max(0.55, Math.min(1.2, 2.6 * p.esc / 1000)), A = p.A;
@@ -775,12 +844,12 @@ function ramPdfPlano(o) {
     if (pre) g += `<text x="${p.x0 + p.W / 2}" y="${p.y0 + p.H / 2}" font-size="${(p.W / 9).toFixed(1)}" text-anchor="middle" dominant-baseline="middle" fill="#c0392b" fill-opacity="0.10" font-weight="700" transform="rotate(-30 ${p.x0 + p.W / 2} ${p.y0 + p.H / 2})">PRECARGA</text>`;
     return `<section class="rmpg" data-o="${p.port ? 'P' : 'L'}" style="width:${A.pw}mm;height:${A.ph}mm">
       <svg viewBox="${p.x0.toFixed(2)} ${p.y0.toFixed(2)} ${p.W.toFixed(2)} ${p.H.toFixed(2)}" style="display:block;width:${A.W}mm;height:${A.H}mm" font-family="Arial">${g}</svg>
-      ${ramRotulo(p, i + (dist ? 1 : 0), hojas.length + (dist ? 1 : 0), { tit, dist, tubo, pre, size: o.size, C })}</section>`;
+      ${ramRotulo(p, i + nPre, hojas.length + nPre, { tit, dist, tubo, pre, size: o.size, C })}</section>`;
   });
   // distribución: primera hoja con el nomograma y las cantidades por sector
-  const secsR = [...new Set(hojas.map((h) => h.s))];
-  if (dist && hojas.length) pags.unshift(ramResumen(C, o, secsR, ramArea(o.size, false)));
-  const orden = (dist && hojas.length ? ['L'] : []).concat(hojas.map((p) => (p.port ? 'P' : 'L')));
+  const accP = dist && hojas.length ? ramAccPag(C, o, secsR, ramArea(o.size, false)) : [];
+  if (dist && hojas.length) pags.unshift(ramResumen(C, o, secsR, ramArea(o.size, false)), ...accP);
+  const orden = (dist && hojas.length ? ['L'].concat(accP.map(() => 'L')) : []).concat(hojas.map((p) => (p.port ? 'P' : 'L')));
   // hojas verticales y apaisadas: se imprimen por separado y se unen en orden (Chromium no mezcla bien orientaciones)
   ramPrintPaginas(pags.join(''), `${tubo ? 'Plano de distribución de tubos de torque' : dist ? 'Plano de distribución de hincas' : 'Ramming plan' + (pre ? ' PRECARGA' : '')} ${o.sec === 'all' ? 'todos los sectores' : 'sector ' + o.sec} ${today()}.pdf`, o.size, orden);
 }
@@ -792,12 +861,13 @@ function ramRotulo(p, i, tot, o) {
   let ref;
   const LS = o.C.L.filter((r) => r.t.s === p.s);
   if (o.tubo) { const m = new Map(), ms = ramConteo({ L: LS }, 'tubo'); L.forEach((r) => tubosDe(r.t).forEach((c) => m.set(c, (m.get(c) || 0) + 1)));
-    ref = `<div class="rmrcod rmrcnt"><span class="rmrch">Tubo · hoja / sector</span><span class="rmrch">Tubo · hoja / sector</span>${[...m.keys()].sort((a, b) => TUBO_ORD.indexOf(a) - TUBO_ORD.indexOf(b)).map((c) => { const i = tuboInfo(c); return `<span><i style="background:${i.col}"></i><b>${esc(c)}</b> <small>${R.comp ? '' : esc(String(i.size).replace('□', '□ ')) + ' · '}${fmt(i.largo / 1000, 2)} m</small> <em>${fmt(m.get(c))} / ${fmt(sum(ms.get(c)))}</em></span>`; }).join('')}</div>`
-      + `<p class="rmrnota">Vigas □130 de norte a sur, con su largo real, centradas en la hinca motor (M). Color y código del plano Trina 26050-PGxxx (${esc(TUBO_DOC)}). Resumen por sector y BOM en la pág. 1.</p>`;
+    ref = `<div class="rmrcod rmrcnt"><span class="rmrch">Tubo · hoja / sector</span><span class="rmrch">Tubo · hoja / sector</span>${[...m.keys()].sort((a, b) => TUBO_ORD.indexOf(a) - TUBO_ORD.indexOf(b)).map((c) => { const i = tuboInfo(c); return `<span><i style="background:${i.col}"></i><b>${esc(c)}</b> <small>${R.comp ? '' : esc(String(i.size).replace('□', '□ ')) + ' · '}${fmt(i.largo / 1000, 2)} m</small>${tuboMarca(c).map((x) => `<i style="background:${TCOL[x] || '#fff'};width:2.2mm;height:2.2mm;margin:0 0 0 0.8mm"></i>`).join('')} <em>${fmt(m.get(c))} / ${fmt(sum(ms.get(c)))}</em></span>`; }).join('')}</div>`
+      + `<p class="rmrnota">Vigas □130 de norte a sur, con su largo real, centradas en la hinca motor (M). Color y código del plano Trina 26050-PGxxx (${esc(TUBO_DOC)}). Bandas en los extremos: marca de pintura de obra. Resumen por sector en la pág. 1.</p>`;
   } else if (o.dist) { const m = new Map(), ms = ramConteo({ L: LS }, 'dist'); L.forEach((r) => r.H.forEach((h) => { const k = h.cod && hcat(h.cod); if (k) { const c = ramCodCorto(h.cod), x = m.get(c) || { k, n: 0 }; x.n++; m.set(c, x); } }));
     ref = (m.size ? `<div class="rmrcod rmrcnt"><span class="rmrch">Código · hoja / sector</span><span class="rmrch">Código · hoja / sector</span>${[...m.entries()].sort().map(([c, x]) => `<span>${ramDosCol(x.k)}<b>${esc(c)}</b> <em>${fmt(x.n)} / ${fmt(sum(ms.get(c)))}</em></span>`).join('')}</div>` : '<p><b>Falta la distribución de Trina</b> (Catálogo y distribución).</p>')
-      + `<p class="rmrnota">Colores: triángulo de arriba = cabeza (rojo general suelo normal, azul general suelo blando, sin color motor); de abajo = punta (largo y perfil). Sector ${p.s}: ${fmt([...ms.values()].reduce((q, x) => q + sum(x), 0))} hincas. Nomograma completo y cantidades por sector en la pág. 1.</p>`;
+      + `<p class="rmrnota">Colores: triángulo de arriba = cabeza (rojo general suelo normal, azul general suelo blando, sin color motor); de abajo = punta (largo y perfil). Sector ${p.s}: ${fmt([...ms.values()].reduce((q, x) => q + sum(x), 0))} hincas. Nomograma y cantidades por sector en la pág. 1.</p>`;
   } else ref = '<div class="rmrcod"><span><i style="background:#58b368"></i>Dentro de tolerancia</span><span><i style="background:#f0a23b"></i>Salto con la vecina</span><span><i style="background:#d64545"></i>Fuera de tolerancia</span></div><p class="rmrnota">Rótulo de cada hinca: número (norte a sur) · altura libre (m).</p>';
+  if (o.dist) ref += ramAccRot(o.C, p.s);
   ref += '<div class="rmrcod"><span><i style="background:#fff;border:0.5mm solid #000"></i>M = hinca motor</span><span><i style="background:#fff;border:0.35mm solid #c25e00"></i>Inversor</span><span><i style="background:#fff;border:0.35mm solid #1f2a37"></i>STS</span><span>✕ tracker hincado</span></div>';
   return `<div class="rmrot${R.comp ? ' rmrc' : ''}" style="${pos};width:${R.W}mm;max-height:${R.H.toFixed(0)}mm;overflow:hidden">
     <div class="rmrt"><b>${o.tit}</b>${o.pre ? '<span class="rmpre">PRECARGA · no apto para hincar</span>' : ''}<div>${esc(S.nombre || '')}</div></div>

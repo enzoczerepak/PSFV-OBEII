@@ -30,6 +30,10 @@ function trkParseBOM(wb, nombre) {
     const dato = (re) => { for (let i = 0; i < hi; i++) { const r = rows[i]; for (let j = 0; j < r.length; j++) if (re.test(nrm(r[j]))) {
       for (let k = j + 1; k < r.length; k++) { const v = txt(r[k]); if (v && !ROT.test(nrm(v))) return v; if (v) break; }
       if (rows[i + 1] && txt(rows[i + 1][j])) return txt(rows[i + 1][j]); } } return ''; };
+    // cantidades por tracker de cada tipo (columnas "Quantities for Each type": suelo normal y blando × 1P52/1P26 exterior, borde, interior)
+    const TIP = ['1P52|Outer', '1P52|Border', '1P52|Inner', '1P26|Outer', '1P26|Border'], cT = [];
+    hd.forEach((c, j) => { const mm = /^1p(52|26)(outer|border|inner)$/.exec(c); if (mm && j > C.tot) cT.push({ j, k: `1P${mm[1]}|${mm[2][0].toUpperCase() + mm[2].slice(1)}` }); });
+    const tipos = cT.length === 10 ? cT.map((c, i) => `${c.k}|${i < 5 ? 'N' : 'B'}`) : null;
     const m = new Map();
     rows.slice(hi + 1).forEach((r) => {
       const mat = trkKey(r[C.mat]) || trkKey(r[C.dib]); const tot = num(r[C.tot]), neto = num(r[C.neto]);
@@ -37,13 +41,14 @@ function trkParseBOM(wb, nombre) {
       const o = m.get(mat) || { k: mat, dib: [], cat: txt(r[C.cat]), desc: txt(r[C.desc]), size: txt(r[C.size]), mat: txt(r[C.matl]), trat: txt(r[C.trat]), largo: num(r[C.largo]) || null, peso: num(r[C.peso]) || null, neto: 0, rep: 0, ext: 0, tot: 0, n: 0 };
       const d = txt(r[C.dib]); if (d && d !== 'NA' && !o.dib.includes(d)) o.dib.push(d);
       o.neto += neto; o.rep += num(r[C.rep]); o.ext += num(r[C.ext]); o.tot += tot || neto; o.n++;
+      if (tipos) { const q = cT.map((c) => num(r[c.j])); if (q.some(Boolean)) o.q = (o.q || Array(10).fill(0)).map((v, i) => v + q[i]); }
       if (o.mat === '0') o.mat = ''; if (o.trat === '0') o.trat = '';
       m.set(mat, o);
     });
     if (!m.size) continue;
     const items = [...m.values()];
     return { fuente: nombre || '', hoja: sn, proyecto: dato(/projectname/), nro: dato(/projectno/), doc: dato(/documentno/), nTrk: Number(dato(/totalamountoftrackers/)) || null,
-      mw: Number(dato(/totalcapacity/)) || null, fecha: today(), items };
+      mw: Number(dato(/totalcapacity/)) || null, fecha: today(), items, ...(tipos ? { tipos } : {}) };
   }
   return null;
 }
