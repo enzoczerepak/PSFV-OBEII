@@ -29,8 +29,16 @@ function avanceGeneral() {
   try { if (window.PLANO) { F.push(['Estructuras', monInfo('arm').p, '#3fb27f', 'tarm']); F.push(['Paneles', monInfo('pan').p, '#f0a23b', 'tpan']); } } catch (_) {}
   return F;
 }
+// estado de cada frente: en ejecución (avance entre 0 y 100 %), sin iniciar (0 %) o terminado
+function estadoFrentes() {
+  const F = avanceGeneral();
+  try { const cs = R.circuitos.filter((c) => c.cat !== 'PAT' && c.cat !== 'LA').map((c) => puntasDe(c)), a = cs.reduce((q, x) => q + x.col, 0), b = cs.reduce((q, x) => q + x.tot, 0); if (b) F.splice(1, 0, ['Puntas de cable', a / b, '#e0457b', 'puntas']); } catch (_) {}
+  try { const I = trkInfo(); if (I.B) F.push(['Materiales de trackers', I.p, '#3fb27f', 'trec']); } catch (_) {}
+  return F.map(([n, p, col, go]) => ({ n, p, col, go, st: p >= 0.9999 ? 'term' : p > 0 ? 'curso' : 'sin' }));
+}
 function paraHoyHTML() {
-  const P = pendientesHoy(), F = avanceGeneral(), D = pdiaDatos(today());
+  const P = pendientesHoy(), E = estadoFrentes(), F = E.filter((f) => f.st === 'curso').map((f) => [f.n, f.p, f.col, f.go]), D = pdiaDatos(today());
+  const chips = (k) => E.filter((f) => f.st === k).map((f) => `<button class="phchip" data-go="${f.go}">${esc(f.n)}</button>`).join('');
   const hecho = [];
   if ((D.cab || []).length) hecho.push(`${fmt(D.cab.reduce((a, c) => a + c.m, 0))} m de cable`);
   if (D.hinc && D.hinc.trk) hecho.push(`${D.hinc.trk} trackers hincados`);
@@ -43,8 +51,9 @@ function paraHoyHTML() {
       ${P.length ? `<div class="phl">${P.map((p, i) => `<button class="phi" style="--c:${p.col}" ${p.go ? `data-go="${p.go}"` : `data-ph="${i}"`}><span class="phe">${p.ico}</span><span>${esc(p.txt)}</span><i class="pha">›</i></button>`).join('')}</div>`
         : '<p class="muted" style="margin:6px 0">Todo al día: no hay pendientes.</p>'}
       <div class="phd"><span><b>Hoy se cargó:</b> ${hecho.length ? hecho.join(' · ') : '<span class="muted">nada todavía</span>'}</span><button class="btn sm" data-go="pdia">Parte diario</button></div></div>
-    <div class="card phc"><div class="phh"><h3>Avance general</h3><button class="btn sm" data-go="avance">Detalle</button></div>
-      ${F.map(([n, p, c, g]) => `<div class="mrow phr" data-go="${g}"><span>${n}</span><div class="sbt"><div style="width:${(Math.min(1, p) * 100).toFixed(1)}%;background:${c}"></div></div><b>${fmt(p * 100)}%</b></div>`).join('')}</div>
+    <div class="card phc"><div class="phh"><h3>Frentes en ejecución</h3><button class="btn sm" data-go="avance">Detalle</button></div>
+      ${F.length ? F.map(([n, p, c, g]) => `<div class="mrow phr" data-go="${g}"><span>${n}</span><div class="sbt"><div style="width:${(Math.min(1, p) * 100).toFixed(1)}%;background:${c}"></div></div><b>${fmt(p * 100)}%</b></div>`).join('') : '<p class="muted" style="margin:6px 0">Ningún frente con avance cargado todavía.</p>'}
+      ${chips('sin') ? `<div class="phfr"><span class="muted">Sin iniciar:</span>${chips('sin')}</div>` : ''}${chips('term') ? `<div class="phfr"><span class="muted">Terminados:</span>${chips('term')}</div>` : ''}</div>
   </div>`;
 }
 function bindParaHoy(el) {

@@ -1528,3 +1528,6 @@ tr.clk { cursor: pointer; } tr.clk:hover td { background: #fff7ed; }
 .tetot .tdok b { color: #2f9e5b; } .tetot .tdneg { border-color: #e9b4b4; background: #fff6f6; } .tetot .tdneg b { color: #c0392b; }
 .tbl tr.ttot td { background: var(--bg2, #f3f5f8); border-top: 2px solid var(--line, #d9dee5); }
 .tbl tr.stk0 td { color: var(--muted, #8a94a3); } .tbl tr.stk0 td b { font-weight: 500; }
+
+.phfr{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;font-size:12.5px}.phchip{border:1px solid var(--line,#e2e7ee);background:transparent;border-radius:999px;padding:2px 10px;font-size:12px;cursor:pointer;color:inherit}.phchip:hover{background:rgba(0,0,0,.05)}
+.inimods-sin .mcard,.inimods-term .mcard{opacity:.7}

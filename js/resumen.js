@@ -26,7 +26,7 @@ function heroHTML() {
   const ts = R.resumen.reduce((a, r) => a + r.tendido + (r.parcial || 0), 0), tr = R.resumen.reduce((a, r) => a + r.requerido, 0);
   const fi = STSL.map((x) => fundInfo(x)), fA = fi.length ? fi.reduce((a, i) => a + i.done, 0) / (fi.length * ETAPAS.length) : 0;
   const HI = window.PLANO && S.hincado ? hincInfo() : null;
-  const mini = (t, v, c) => `<div class="hstat"><b style="color:${c}">${fmt(v * 100)}%</b><span>${t}</span></div>`;
+  const mini = (t, v, c, siempre) => !siempre && !(v > 0 && v < 0.9999) ? '' : `<div class="hstat"><b style="color:${c}">${fmt(v * 100)}%</b><span>${t}</span></div>`;
   // nubes: cantidad y tono según el clima
   const nN = { despejado: 2, parcial: 5, nublado: 10, niebla: 6, llovizna: 9, lluvia: 11, tormenta: 12 }[cond] || 2;
   const grande = ['nublado', 'llovizna', 'lluvia', 'tormenta'].includes(cond) ? 1.55 : 1;
@@ -48,7 +48,7 @@ function heroHTML() {
       ${filas.map((i) => { const x = 40 + i * 68; return `<g transform="translate(${x} 166)"><path d="M0 0v18" class="hposte"/><g class="htrk" style="transform:rotate(${ang.toFixed(1)}deg)"><rect x="-27" y="-4" width="54" height="7" rx="1.2" fill="url(#hpan)"/><path d="M-13.5 -4v7M0 -4v7M13.5 -4v7" class="hceld"/></g></g>`; }).join('')}
       <path d="M0 184h${W}" class="hsuelo"/></svg>
     <div class="hizq"><div class="htxt"><div class="hsal">${saludo}</div><h2>${esc(S.nombre || ED.app)}</h2><div class="hfecha">${ahora.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · ${trk}</div></div>
-    <div class="hstats">${mini('tendido', tr ? ts / tr : 0, '#7fe0c4')}${(() => { const T = foTotales(); return T.tubo ? mini('fibra óptica', T.col / T.tubo, '#9fd3ff') : ''; })()}${mini('fundaciones', fA, '#ffd166')}${(() => { const I = salaInfo(); return I.done || I.curso.length ? mini('edificio O&M', I.p, '#d4c8ff') : ''; })()}${HI ? mini('hincado', HI.trk.length ? HI.nH / HI.trk.length : 0, '#c9b6ff') : ''}${(S.cronoTareas || []).length ? mini('cronograma', cronoCalc().P.pct / 100, '#9fd3ff') : ''}</div></div>
+    <div class="hstats">${mini('tendido', tr ? ts / tr : 0, '#7fe0c4')}${(() => { const T = foTotales(); return T.tubo ? mini('fibra óptica', T.col / T.tubo, '#9fd3ff') : ''; })()}${mini('fundaciones', fA, '#ffd166')}${(() => { const I = salaInfo(); return I.done || I.curso.length ? mini('edificio O&M', I.p, '#d4c8ff') : ''; })()}${HI ? mini('hincado', HI.trk.length ? HI.nH / HI.trk.length : 0, '#c9b6ff') : ''}${(S.cronoTareas || []).length ? mini('cronograma', cronoCalc().P.pct / 100, '#9fd3ff', true) : ''}</div></div>
     ${typeof climaWidgetHTML === 'function' ? climaWidgetHTML() : ''}</div>`;
 }
 function vResumen(el) {
@@ -58,6 +58,10 @@ function vResumen(el) {
     + `<details class="inidet"${abierto ? ' open' : ''}><summary>Detalle por frente de obra</summary>${modulosHTML()}</details>`;
   if (typeof bindEvCurso === 'function') bindEvCurso(el);
   bindParaHoy(el);
+  // detalle: primero los frentes en ejecución; los sin iniciar y los terminados van al final, separados
+  try { const E = estadoFrentes(), st = (g) => (E.find((f) => f.go === g) || {}).st, grid = $('.inidet .mods', el);
+    if (grid) [['sin', 'Frentes sin iniciar'], ['term', 'Frentes terminados']].forEach(([k, t]) => { const cs = $$(':scope > .mcard', grid).filter((c) => st(c.dataset.go) === k); if (!cs.length) return;
+      const h = document.createElement('h2'); h.className = 'sech'; h.textContent = t; const g = document.createElement('div'); g.className = 'grid stagger mods inimods-' + k; cs.forEach((c) => g.appendChild(c)); grid.after(h); h.after(g); }); } catch (_) {}
   const det = $('.inidet', el); det.ontoggle = () => { try { localStorage.setItem('iniDet', det.open ? '1' : '0'); } catch (_) {} };
   $$('[data-go]', el).forEach((c) => { c.onclick = () => go(c.dataset.go); });
   bindClima(); climaCarga();

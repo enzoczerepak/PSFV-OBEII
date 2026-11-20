@@ -478,13 +478,13 @@ const TIPO_COL = { '1P52|Outer': '#e15759', '1P52|Border': '#f28e2b', '1P52|Inne
 const TIPO_ORD = ['1P52|Outer|N', '1P52|Outer|B', '1P52|Border|N', '1P52|Border|B', '1P52|Inner|N', '1P52|Inner|B', '1P26|Outer|N', '1P26|Outer|B', '1P26|Border|N', '1P26|Border|B'];
 const tipoTxt = (k) => { const [t, z, sl] = k.split('|'); return `${t} ${HZ[z] || z} (${z})${sl ? ` · ${HSL[sl]}` : ''}`; };
 function tipoConteo(C) { const m = new Map(); C.L.forEach((r) => { const k = cfgDe(r.t), x = m.get(k) || {}; x[r.t.s] = (x[r.t.s] || 0) + 1; m.set(k, x); }); return m; }
-function tipoSVG(C, sel, txt = 30) {
-  const P = window.PLANO, cen = {}, xs = P.trk.map((t) => ramRect(t));
-  const R = P.trk.map((t, i) => { const q = xs[i], c = cen[t.s] = cen[t.s] || { x: 0, y: 0, n: 0 }; c.x += q.x + q.w / 2; c.y += q.y + q.h / 2; c.n++; const k = `${t.t}|${t.z || 'Outer'}`, bl = (t.sl || 'N') === 'B';
+function tipoSVG(C, sel, txt = 30, solo = false) {
+  const P = window.PLANO, cen = {}, T = solo && sel ? P.trk.filter((t) => t.s === sel) : P.trk, xs = T.map((t) => ramRect(t));
+  const R = T.map((t, i) => { const q = xs[i], c = cen[t.s] = cen[t.s] || { x: 0, y: 0, n: 0 }; c.x += q.x + q.w / 2; c.y += q.y + q.h / 2; c.n++; const k = `${t.t}|${t.z || 'Outer'}`, bl = (t.sl || 'N') === 'B';
     return `<rect data-s="${t.s}" x="${q.x}" y="${q.y}" width="${q.w}" height="${q.h}" fill="${TIPO_COL[k] || '#999'}" fill-opacity="${!sel || sel === t.s ? 0.9 : 0.25}" stroke="${bl ? '#111' : 'none'}" stroke-width="${bl ? 0.9 : 0}" stroke-dasharray="${bl ? '2 1.2' : ''}"><title>${t.id} · S${t.s} · ${esc(tipoTxt(cfgDe(t)))}</title></rect>`; }).join('');
   const L = Object.entries(cen).map(([s, c]) => ramTxt(c.x / c.n, c.y / c.n + txt * 0.35, 'S' + s, txt, 'text-anchor="middle" font-weight="700" fill="#111" class="rmhl" pointer-events="none"')).join('');
   const bb = [Math.min(...xs.map((q) => q.x)) - 10, Math.min(...xs.map((q) => q.y)) - 10, Math.max(...xs.map((q) => q.x + q.w)) - Math.min(...xs.map((q) => q.x)) + 20, Math.max(...xs.map((q) => q.y + q.h)) - Math.min(...xs.map((q) => q.y)) + 20];
-  return { svg: R + L + `<g class="rmref">${ramRefSVG(2.4, false)}</g>`, bb };
+  return { svg: R + L + (solo ? '' : `<g class="rmref">${ramRefSVG(2.4, false)}</g>`), bb };
 }
 function tipoTabla(C, secs, cls) {
   const m = tipoConteo(C), ks = TIPO_ORD.filter((k) => m.has(k)).concat([...m.keys()].filter((k) => !TIPO_ORD.includes(k))), sum = (x) => secs.reduce((a, s) => a + (x[s] || 0), 0);
@@ -501,7 +501,9 @@ function tipoTabla(C, secs, cls) {
 const tipoLeyenda = () => Object.entries(TIPO_COL).map(([k, c]) => `<span><i style="background:${c}"></i>${esc(tipoTxt(k))}</span>`).join('') + '<span><i style="background:#fff;border:1.5px dashed #111"></i>suelo blando</span>';
 function vHTipos(el, C, secs) {
   const sel = DISTUI.tipoSec && secs.includes(DISTUI.tipoSec) ? DISTUI.tipoSec : null, M = tipoSVG(C, sel), ss = sel ? [sel] : secs, m = tipoConteo(C);
-  actions([['PDF · tipos de tracker por sector', 'btn', () => tipoPdf(C, secs)], ['Exportar Excel', 'btn', () => tipoExcel(C, secs)]]);
+  actions([['PDF · todo el parque', 'btn', () => tipoPdf(C, secs)], ['PDF · todo el parque + una hoja por sector', 'btn', () => tipoPdf(C, secs, 'all')],
+    ...(sel ? [[`PDF · sector ${sel}`, 'btn', () => tipoPdf(C, secs, sel)], [`Exportar Excel · sector ${sel}`, 'btn', () => tipoExcel(C, [sel])]] : []),
+    ['Exportar Excel · todo el parque (con una hoja por sector)', 'btn', () => tipoExcel(C, secs)]]);
   const L = C.L.filter((r) => ss.includes(r.t.s)), n = (f) => L.filter(f).length;
   el.innerHTML = `<div class="tools" style="margin-bottom:12px"><div class="seg" id="dT"><button data-v="hinc">Hincas</button><button data-v="tubo">Tubos de torque</button><button data-v="acc">Accesorios</button><button data-v="tipo">Tipos de tracker</button></div></div>
     <div class="grid g4 stagger" style="margin-bottom:12px">
@@ -524,23 +526,36 @@ function vHTipos(el, C, secs) {
   if (typeof vHCat === 'function') { const a0 = window.actions; window.actions = () => {}; try { vHCat($('#hcatB', el)); } finally { window.actions = a0; } }
 }
 async function tipoExcel(C, secs) {
-  const m = tipoConteo(C), wb = XLSX.utils.book_new(), ks = TIPO_ORD.filter((k) => m.has(k));
+  const m = tipoConteo(C), wb = XLSX.utils.book_new(), ks = TIPO_ORD.filter((k) => m.has(k) && secs.some((s) => m.get(k)[s])), uno = secs.length === 1;
+  C = { ...C, L: C.L.filter((r) => secs.includes(r.t.s)) };
   const a = [['Tracker', 'Posición', 'Posición (Trina)', 'Suelo', 'Paneles por tracker'].concat(secs.map((s) => 'Sector ' + s), ['Total'])];
   ks.forEach((k) => { const [t, z, sl] = k.split('|'), x = m.get(k); a.push([t, HZ[z] || z, z, HSL[sl], t === '1P26' ? 26 : 52].concat(secs.map((s) => x[s] || 0), [secs.reduce((q, s) => q + (x[s] || 0), 0)])); });
   const sec = (s) => C.L.filter((r) => r.t.s === s);
   a.push([], ['Total trackers', '', '', '', ''].concat(secs.map((s) => sec(s).length), [C.L.length]), ['Paneles solares', '', '', '', ''].concat(secs.map((s) => sec(s).reduce((q, r) => q + (r.t.t === '1P26' ? 26 : 52), 0)), [C.L.reduce((q, r) => q + (r.t.t === '1P26' ? 26 : 52), 0)]), ['Hincas', '', '', '', ''].concat(secs.map((s) => sec(s).reduce((q, r) => q + r.n, 0)), [C.L.reduce((q, r) => q + r.n, 0)]));
   const b = [['Tracker', 'Frame', 'Sector', 'Tipo', 'Posición', 'Posición (Trina)', 'Suelo', 'Hincas', 'Paneles']];
   C.L.forEach((r) => b.push([r.t.id, (repDe(r.t.id) || {}).fr || '', r.t.s, r.t.t, HZ[r.t.z || 'Outer'], r.t.z || 'Outer', HSL[r.t.sl || 'N'], r.n, r.t.t === '1P26' ? 26 : 52]));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a), 'Tipos por sector'); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(b), 'Por tracker');
-  const p = await window.api.saveBinary(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), `Tipos de tracker por sector ${today()}.xlsx`, 'xlsx', 'Excel');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a), uno ? 'Sector ' + secs[0] : 'Tipos por sector');
+  if (!uno) secs.forEach((s) => { const Ls = C.L.filter((r) => r.t.s === s), c = [['Sector ' + s], [], ['Tracker', 'Posición', 'Posición (Trina)', 'Suelo', 'Paneles por tracker', 'Cantidad']];
+    ks.forEach((k) => { const [t, z, sl] = k.split('|'), q = m.get(k)[s] || 0; if (q) c.push([t, HZ[z] || z, z, HSL[sl], t === '1P26' ? 26 : 52, q]); });
+    c.push([], ['Total trackers', '', '', '', '', Ls.length], ['Paneles solares', '', '', '', '', Ls.reduce((q, r) => q + (r.t.t === '1P26' ? 26 : 52), 0)], ['Hincas', '', '', '', '', Ls.reduce((q, r) => q + r.n, 0)], [], ['Tracker', 'Frame', 'Tipo', 'Posición', 'Suelo', 'Hincas']);
+    Ls.forEach((r) => c.push([r.t.id, (repDe(r.t.id) || {}).fr || '', r.t.t, HZ[r.t.z || 'Outer'], HSL[r.t.sl || 'N'], r.n]));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(c), 'Sector ' + s); });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(b), 'Por tracker');
+  const p = await window.api.saveBinary(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), `Tipos de tracker ${uno ? 'sector ' + secs[0] : 'por sector'} ${today()}.xlsx`, 'xlsx', 'Excel');
   if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
 }
-function tipoPdf(C, secs) {
+function tipoPdf(C, secs, modo) {
   const A = ramArea('A3', false), M = tipoSVG(C, null, 34);
+  const hoja = (s) => { const Ms = tipoSVG(C, s, 18, true), Ls = C.L.filter((r) => r.t.s === s), q = (f) => Ls.filter(f).length;
+    return `<section class="rmpg rmres-pg" data-o="L" style="width:${A.pw}mm;height:${A.ph}mm"><div class="rmpgh"><div><b>Tipos de tracker · Sector ${s}</b><br>${esc(S.nombre || '')}</div><div style="text-align:right">${fmt(Ls.length)} trackers · ${fmt(q((r) => (r.t.z || 'Outer') === 'Outer'))} exteriores · ${fmt(q((r) => r.t.z === 'Border'))} de borde · ${fmt(q((r) => r.t.z === 'Inner'))} interiores · ${fmt(q((r) => r.t.sl === 'B'))} en suelo blando<br>Layout · BOM Trina · ${new Date().toLocaleDateString('es-AR')}</div></div>
+    <svg viewBox="${Ms.bb.join(' ')}" style="display:block;width:${A.pw - 16}mm;height:165mm" preserveAspectRatio="xMidYMid meet" font-family="Arial">${Ms.svg}</svg>
+    <div class="rmrcod" style="margin:2mm 0">${tipoLeyenda()}</div>${tipoTabla(C, [s], 'rmres')}</section>`; };
+  if (modo && modo !== 'all') return ramPrintPaginas(hoja(modo), `Tipos de tracker sector ${modo} ${today()}.pdf`, 'A3', ['L']);
   const p1 = `<section class="rmpg rmres-pg" data-o="L" style="width:${A.pw}mm;height:${A.ph}mm"><div class="rmpgh"><div><b>Tipos de tracker por sector</b><br>${esc(S.nombre || '')}</div><div style="text-align:right">Layout · BOM Trina · ${new Date().toLocaleDateString('es-AR')}</div></div>
     <svg viewBox="${M.bb.join(' ')}" style="display:block;width:${A.pw - 16}mm;height:135mm" preserveAspectRatio="xMidYMid meet" font-family="Arial">${M.svg}</svg>
     <div class="rmrcod" style="margin:2mm 0">${tipoLeyenda()}</div>${tipoTabla(C, secs, 'rmres')}</section>`;
-  ramPrintPaginas(p1, `Tipos de tracker por sector ${today()}.pdf`, 'A3', ['L']);
+  const pags = [p1].concat(modo === 'all' ? secs.map(hoja) : []);
+  ramPrintPaginas(pags.join(''), `Tipos de tracker ${modo === 'all' ? 'parque y sectores' : 'por sector'} ${today()}.pdf`, 'A3', pags.map(() => 'L'));
 }
 // ---------- apartado Accesorios: plano de sectores y resumen del sector elegido ----------
 const SEC_COL = ['#4e79a7', '#f28e2b', '#59a14f', '#e15759', '#b07aa1', '#edc948', '#76b7b2', '#9c755f'];
