@@ -353,7 +353,7 @@ function ramInvCab() {
   return RAMCAB;
 }
 function ramRect(t) {
-  const r = ramCalc().map.get(t.id); if (!r || !r.n) return { x: t.x, y: t.y, w: t.w, h: t.h };
+  const r = ramCalc().map.get(t.id); if (!r || !r.n) return { x: t.x - t.w / 2, y: t.y - t.h / 2, w: t.w, h: t.h }; // PLANO.trk: x, y = centro del tracker
   const [OX, OY] = window.PLANO.origen, ys = r.H.map((h) => h.y), yN = Math.max(...ys), yS = Math.min(...ys), xm = r.H.reduce((q, h) => q + h.x, 0) / r.n;
   return { x: xm - OX - t.w / 2, y: OY - yN - 1.75, w: t.w, h: yN - yS + 3.5 };
 }
