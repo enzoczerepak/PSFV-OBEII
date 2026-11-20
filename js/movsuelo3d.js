@@ -4,7 +4,7 @@
    trackers (tubo de torque y mesa de módulos) a su altura de diseño, con el giro que se elija.
    Terreno natural: cómo está hoy, con lo que hay que cortar o rellenar pintado encima.
    Terreno final: las franjas a la cota después del movimiento, con las hincas y los trackers como quedarían. */
-const M3 = { th: 0.65, ph: 0.62, dist: 0, tgt: [0, 0, 0], exag: 3, giro: 30, modo: 'nat', ver: { mov: true, iso: true, curvas: true, hinc: true, trk: true, eq: true },
+const M3 = { th: 0.65, ph: 0.62, dist: 0, tgt: [0, 0, 0], exag: 3, kmov: 6, giro: 30, modo: 'nat', ver: { mov: true, iso: true, curvas: true, hinc: true, trk: true, eq: true },
   R: null, cam: null, scene: null, raf: 0, pick: [], el: null, tip: null, key: '', obj: {}, info: null };
 
 function ms3Tab(b, R) {
@@ -14,6 +14,7 @@ function ms3Tab(b, R) {
       <div class="seg sm" id="m3Modo"><button data-v="nat">Terreno natural</button><button data-v="fin">Terreno final (después del movimiento)</button></div>
       <div class="seg sm m3cap" id="m3Cap"><button data-k="mov" class="${on('mov')}">Corte / relleno</button><button data-k="iso" class="${on('iso')}" title="Curvas de igual espesor de corte y relleno cada 5 cm, en degradé">Curvas de corte / relleno</button><button data-k="curvas" class="${on('curvas')}">Curvas de nivel</button><button data-k="hinc" class="${on('hinc')}">Hincas</button><button data-k="trk" class="${on('trk')}">Trackers</button><button data-k="eq" class="${on('eq')}">STS e inversores</button></div>
       <label class="m3sl">Exageración vertical <b id="m3Ev">×${M3.exag}</b><input type="range" id="m3E" min="1" max="10" step="1" value="${M3.exag}"></label>
+      <label class="m3sl" title="Cuánto se agranda la loma (corte) y la hondonada (relleno) respecto del terreno final">Exageración del corte / relleno <b id="m3Kv">×${M3.kmov}</b><input type="range" id="m3K" min="1" max="20" step="1" value="${M3.kmov}"></label>
       <label class="m3sl">Giro de los trackers <b id="m3Gv">${M3.giro}°</b><input type="range" id="m3G" min="-60" max="60" step="5" value="${M3.giro}"></label>
     </div>
     <div class="s3d m3d" id="m3d"><div class="s3tip" hidden></div>
@@ -25,6 +26,7 @@ function ms3Tab(b, R) {
   $$('#m3Modo button', b).forEach((x) => { x.classList.toggle('on', x.dataset.v === M3.modo); x.onclick = () => { M3.modo = x.dataset.v; $$('#m3Modo button', b).forEach((y) => y.classList.toggle('on', y === x)); ms3Escena(R); }; });
   $$('#m3Cap button', b).forEach((x) => { x.onclick = () => { const k = x.dataset.k; V[k] = !V[k]; x.classList.toggle('on', V[k]); ms3Vis(); }; });
   let te = 0; $('#m3E', b).oninput = (e) => { M3.exag = Number(e.target.value); $('#m3Ev', b).textContent = '×' + M3.exag; clearTimeout(te); te = setTimeout(() => ms3Escena(R), 150); };
+  let tk = 0; $('#m3K', b).oninput = (e) => { M3.kmov = Number(e.target.value); $('#m3Kv', b).textContent = '×' + M3.kmov; clearTimeout(tk); tk = setTimeout(() => ms3Escena(R), 150); };
   let tg = 0; $('#m3G', b).oninput = (e) => { M3.giro = Number(e.target.value); $('#m3Gv', b).textContent = M3.giro + '°'; clearTimeout(tg); tg = setTimeout(() => ms3Paneles(), 60); };
   ms3Montar(b, R);
 }
@@ -89,68 +91,55 @@ function ms3Escena(R) {
   const zAll = R.L.flatMap((r) => r.M.map((m) => Math.min(m.z, m.zf))), z0 = Math.min(...zAll), z1 = Math.max(...R.L.flatMap((r) => r.M.map((m) => Math.max(m.z, m.zf))));
   const X = (x) => x - cx, Z = (y) => cy - y, Y = (z) => (z - z0) * k;
   const bb = { x0: Math.min(...xs) - 18, x1: Math.max(...xs) + 18, y0: Math.min(...ysA) - 18, y1: Math.max(...ysA) + 18 };
-  // ---- terreno: malla regular sobre la superficie ----
-  const sup = terr.sup, area = (bb.x1 - bb.x0) * (bb.y1 - bb.y0), st = Math.max(1, Math.sqrt(area / 45000));
-  const nx = Math.ceil((bb.x1 - bb.x0) / st) + 1, ny = Math.ceil((bb.y1 - bb.y0) / st) + 1;
+  // ---- campo de movimiento m(x, y): corte (< 0) / relleno (> 0) de cada tracker, interpolado entre franjas vecinas ----
+  const Q = []; R.L.forEach((r) => r.M.forEach((m) => { [-P.franja / 2, 0, P.franja / 2].forEach((dx) => Q.push([r.xA + dx, m.y, m.mov])); }));
+  const campo = msSuperficie(Q, 9), mAt = (x, y) => { const v = campo ? campo.z(x, y) : null; return v == null ? 0 : v; };
+  const kM = M3.kmov, Yd = (zn, m) => (fin ? Y(zn + m) : Y(zn + m) - m * kM); // natural: la loma (corte) y la hondonada (relleno) se ven exageradas ×kM sobre el terreno final
+  // ---- terreno: malla regular con su cota natural y el movimiento en cada vértice ----
+  const sup = terr.sup, area = (bb.x1 - bb.x0) * (bb.y1 - bb.y0), st = Math.max(0.75, Math.sqrt(area / 110000));
+  const nx = Math.ceil((bb.x1 - bb.x0) / st) + 1, ny = Math.ceil((bb.y1 - bb.y0) / st) + 1, NV = nx * ny;
+  const vZ = new Float32Array(NV), vM = new Float32Array(NV), ok = new Uint8Array(NV), idx = [];
   if (sup) {
-    const pos = new Float32Array(nx * ny * 3), col = new Float32Array(nx * ny * 3), ok = new Uint8Array(nx * ny), ca = new T.Color('#b9cf9a'), cb = new T.Color('#d8c49a'), c = new T.Color();
+    const pos = new Float32Array(NV * 3), col = new Float32Array(NV * 3), ca = new T.Color('#b9cf9a'), cb = new T.Color('#d8c49a'), c = new T.Color();
     for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const x = bb.x0 + i * st, y = bb.y1 - j * st, z = sup(x, y), n = j * nx + i;
-      if (z == null) continue; ok[n] = 1; pos[3 * n] = X(x); pos[3 * n + 1] = Y(z); pos[3 * n + 2] = Z(y);
-      c.copy(ca).lerp(cb, Math.max(0, Math.min(1, (z - z0) / Math.max(0.5, z1 - z0)))); col[3 * n] = c.r; col[3 * n + 1] = c.g; col[3 * n + 2] = c.b; }
-    const idx = [];
+      if (z == null) continue; const m = mAt(x, y); ok[n] = 1; vZ[n] = z; vM[n] = m; pos[3 * n] = X(x); pos[3 * n + 1] = Yd(z, m); pos[3 * n + 2] = Z(y); }
     for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b2 = a + 1, d = a + nx, e = d + 1;
       if (ok[a] && ok[d] && ok[b2]) idx.push(a, d, b2); if (ok[b2] && ok[d] && ok[e]) idx.push(b2, d, e); }
     const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(pos, 3)); g.setAttribute('color', new T.BufferAttribute(col, 3)); g.setIndex(idx); g.computeVertexNormals();
-    const m = new T.Mesh(g, new T.MeshLambertMaterial({ vertexColors: true, side: T.DoubleSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 })); sc.add(m); M3.obj.terreno = m;
+    // colores: tierra por altura; con "Corte / relleno", rojo donde se corta y azul donde se rellena
+    M3.pintar = () => { for (let n = 0; n < NV; n++) { if (!ok[n]) continue; c.copy(ca).lerp(cb, Math.max(0, Math.min(1, (vZ[n] - z0) / Math.max(0.5, z1 - z0))));
+      if (M3.ver.mov && Math.abs(vM[n]) >= 0.01) c.lerp(ms3Col(T, vM[n]), Math.min(1, 0.35 + Math.abs(vM[n]) / 0.25));
+      col[3 * n] = c.r; col[3 * n + 1] = c.g; col[3 * n + 2] = c.b; } g.attributes.color.needsUpdate = true; };
+    M3.pintar();
+    const m = new T.Mesh(g, new T.MeshLambertMaterial({ vertexColors: true, side: T.DoubleSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }));
+    m.userData = { t: 'terreno', idx, vZ, vM, nx, st, bb }; sc.add(m); M3.obj.terreno = m; M3.pick.push(m);
   }
-  const lift = 0.04 + 0.015 * k;
-  // ---- curvas de nivel (terreno natural) ----
-  if (terr.tri && terr.tri.length) {
-    const fina = [], mae = [], eq = P.equi || 0.5;
-    const zs = terr.tri.flatMap((t) => [t.a[2], t.b[2], t.c[2]]), zmin = Math.min(...zs), zmax = Math.max(...zs);
-    for (let z = Math.ceil(zmin / eq) * eq; z <= zmax; z += eq) {
-      const out = Math.abs(z / (eq * 5) - Math.round(z / (eq * 5))) < 1e-6 ? mae : fina;
-      terr.tri.forEach((t) => { const Pp = [t.a, t.b, t.c], q = [];
-        for (let i = 0; i < 3; i++) { const p1 = Pp[i], p2 = Pp[(i + 1) % 3]; if ((p1[2] - z) * (p2[2] - z) < 0) { const f = (z - p1[2]) / (p2[2] - p1[2]); q.push([p1[0] + f * (p2[0] - p1[0]), p1[1] + f * (p2[1] - p1[1])]); } }
-        if (q.length === 2 && q.every(([x, y]) => x > bb.x0 && x < bb.x1 && y > bb.y0 && y < bb.y1)) out.push(X(q[0][0]), Y(z) + lift, Z(q[0][1]), X(q[1][0]), Y(z) + lift, Z(q[1][1])); });
-    }
-    const lin = (arr, color, op) => { const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(arr, 3)); return new T.LineSegments(g, new T.LineBasicMaterial({ color, transparent: true, opacity: op })); };
-    const grp = new T.Group(); grp.add(lin(fina, 0x7a6a50, 0.3)); grp.add(lin(mae, 0x5a4a32, 0.6)); sc.add(grp); M3.obj.curvas = grp;
-  }
-  // ---- curvas de corte / relleno (isopacas cada 5 cm) en degradé: rojo = corte, azul = relleno ----
-  if (typeof Delaunator !== 'undefined') {
-    const Q = []; R.L.forEach((r) => r.M.forEach((m, i) => { if (i % 2 === 0 || i === r.M.length - 1) Q.push([r.xA, m.y, m.mov, fin ? m.zf : m.z]); }));
-    if (Q.length > 3) {
-      const d = Delaunator.from(Q, (p) => p[0], (p) => p[1]), Tt = d.triangles, pos = [], col = [], c = new T.Color(), paso = 0.05;
-      const vmin = Math.min(...Q.map((p) => p[2])), vmax = Math.max(...Q.map((p) => p[2]));
-      const niveles = []; for (let v = Math.ceil(vmin / paso) * paso; v <= vmax + 1e-9; v += paso) niveles.push(Math.round(v * 100) / 100);
-      for (let i = 0; i < Tt.length; i += 3) {
-        const A = Q[Tt[i]], B = Q[Tt[i + 1]], C = Q[Tt[i + 2]];
-        if (Math.max(Math.hypot(A[0] - B[0], A[1] - B[1]), Math.hypot(B[0] - C[0], B[1] - C[1]), Math.hypot(C[0] - A[0], C[1] - A[1])) > 9) continue; // no unir por encima de huecos
-        const lo = Math.min(A[2], B[2], C[2]), hi = Math.max(A[2], B[2], C[2]); if (hi - lo < 1e-6) continue;
-        niveles.forEach((v) => { if (v <= lo || v >= hi) return; const P3 = [A, B, C], q = [];
-          for (let e = 0; e < 3; e++) { const p1 = P3[e], p2 = P3[(e + 1) % 3]; if ((p1[2] - v) * (p2[2] - v) < 0) { const f = (v - p1[2]) / (p2[2] - p1[2]); q.push([p1[0] + f * (p2[0] - p1[0]), p1[1] + f * (p2[1] - p1[1]), p1[3] + f * (p2[3] - p1[3])]); } }
-          if (q.length !== 2) return;
-          if (Math.abs(v) < 1e-9) c.set('#334155'); else { const a = Math.min(1, Math.abs(v) / 0.4); c.setHSL((v < 0 ? 4 : 212) / 360, 0.75 + 0.2 * a, 0.62 - 0.32 * a); }
-          q.forEach(([x, y, z]) => { pos.push(X(x), Y(z) + lift * 2.4, Z(y)); col.push(c.r, c.g, c.b); }); });
-      }
-      const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new T.Float32BufferAttribute(col, 3));
-      const ls = new T.LineSegments(g, new T.LineBasicMaterial({ vertexColors: true })); sc.add(ls); M3.obj.iso = ls; M3.isoRango = [vmin, vmax];
-    }
-  }
-  // ---- franjas de corte / relleno por tracker ----
-  { const pos = [], col = [], triT = [], triS = [], ix = [];
-    R.L.forEach((r, ti) => { const xl = X(r.xA - P.franja / 2), xr = X(r.xA + P.franja / 2), base = pos.length / 3;
-      r.M.forEach((m) => { const zz = fin ? m.zf : m.z, yy = Y(zz) + lift * 1.6, c = ms3Col(T, m.mov); pos.push(xl, yy, Z(m.y), xr, yy, Z(m.y)); col.push(c.r, c.g, c.b, c.r, c.g, c.b); });
-      for (let i = 0; i < r.M.length - 1; i++) { const a = base + 2 * i; triT.push(ti, ti); triS.push(i, i); ix.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); } });
-    const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new T.Float32BufferAttribute(col, 3)); g.setIndex(ix); g.computeVertexNormals();
-    const m = new T.Mesh(g, new T.MeshLambertMaterial({ vertexColors: true, side: T.DoubleSide })); m.userData = { t: 'franja', triT, triS }; sc.add(m); M3.obj.mov = m; M3.pick.push(m); }
+  const lift = 0.04 + 0.01 * k, posA = M3.obj.terreno ? M3.obj.terreno.geometry.attributes.position.array : null;
+  // isolíneas sobre la malla: valor f por vértice, niveles dados; color por nivel
+  const iso = (f, niveles, colorDe, dy) => { const pos = [], col = []; if (!posA) return null; const c = new T.Color();
+    for (let t = 0; t < idx.length; t += 3) { const v = [idx[t], idx[t + 1], idx[t + 2]], fv = v.map((n) => f[n]), lo = Math.min(...fv), hi = Math.max(...fv); if (hi - lo < 1e-7) continue;
+      for (const L0 of niveles) { if (L0 <= lo || L0 >= hi) continue; const q = [];
+        for (let e = 0; e < 3; e++) { const a = v[e], b2 = v[(e + 1) % 3], fa = f[a], fb = f[b2]; if ((fa - L0) * (fb - L0) < 0) { const s0 = (L0 - fa) / (fb - fa);
+          q.push([posA[3 * a] + s0 * (posA[3 * b2] - posA[3 * a]), posA[3 * a + 1] + s0 * (posA[3 * b2 + 1] - posA[3 * a + 1]) + dy, posA[3 * a + 2] + s0 * (posA[3 * b2 + 2] - posA[3 * a + 2])]); } }
+        if (q.length === 2) { colorDe(L0, c); q.forEach((p) => { pos.push(p[0], p[1], p[2]); col.push(c.r, c.g, c.b); }); } } }
+    const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new T.Float32BufferAttribute(col, 3));
+    return new T.LineSegments(g, new T.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95 })); };
+  // ---- curvas de nivel del terreno que se muestra (natural o final) ----
+  if (posA) { const eq = P.equi || 0.5, zv = new Float32Array(NV); for (let n = 0; n < NV; n++) zv[n] = fin ? vZ[n] + vM[n] : vZ[n];
+    let a0 = Infinity, a1 = -Infinity; for (let n = 0; n < NV; n++) if (ok[n]) { a0 = Math.min(a0, zv[n]); a1 = Math.max(a1, zv[n]); }
+    const nv = []; for (let z = Math.ceil(a0 / eq) * eq; z <= a1; z += eq) nv.push(Math.round(z * 1000) / 1000);
+    const ls = iso(zv, nv, (z, c) => c.set(Math.abs(z / (eq * 5) - Math.round(z / (eq * 5))) < 1e-6 ? '#5a4a32' : '#8f8166'), lift); if (ls) { ls.material.opacity = 0.55; sc.add(ls); M3.obj.curvas = ls; } }
+  // ---- curvas de corte / relleno (igual espesor cada 5 cm) en degradé ----
+  if (posA) { const nv = []; let mn = 0, mx = 0; for (let n = 0; n < NV; n++) if (ok[n]) { mn = Math.min(mn, vM[n]); mx = Math.max(mx, vM[n]); }
+    for (let v = Math.ceil(mn / 0.05) * 0.05; v <= mx + 1e-9; v += 0.05) if (Math.abs(v) > 1e-6) nv.push(Math.round(v * 100) / 100);
+    const ls = iso(vM, nv.concat([-0.005, 0.005]), (v, c) => { if (Math.abs(v) < 0.01) { c.set('#475569'); return; } const a = Math.min(1, Math.abs(v) / 0.4); c.setHSL((v < 0 ? 4 : 212) / 360, 0.8, 0.55 - 0.3 * a); }, lift * 1.5);
+    if (ls) { sc.add(ls); M3.obj.iso = ls; } }
   // ---- hincas y trackers ----
   const umb = P.umbral / 1000, top = (h) => Y(h.zf) + (h.cab - h.zf), pilas = [];
   R.L.forEach((r, ti) => r.H.forEach((h) => pilas.push({ r, ti, h })));
   { const geo = new T.CylinderGeometry(0.09, 0.09, 1, 8); geo.translate(0, 0.5, 0);
     const im = new T.InstancedMesh(geo, new T.MeshLambertMaterial({ color: 0xffffff }), pilas.length), mt = new T.Matrix4(), c = new T.Color();
-    pilas.forEach(({ h }, i) => { const yb = Y(fin ? h.zf : h.z), yt = top(h), L = Math.max(0.05, yt - yb);
+    pilas.forEach(({ h }, i) => { const yb = Yd(h.z, h.mov), yt = top(h), L = Math.max(0.05, yt - yb);
       mt.makeScale(1, L, 1); mt.setPosition(X(h.x), yb, Z(h.y)); im.setMatrixAt(i, mt);
       im.setColorAt(i, c.set(h.motor ? '#1e293b' : Math.abs(h.mov) > umb + 1e-6 ? '#d97706' : '#7b8794')); });
     im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
@@ -193,8 +182,8 @@ function ms3Escena(R) {
   if (!M3.dist) { M3.dist = diag * 0.7; M3.tgt = [0, yc, 0]; }
   ms3Vis();
   const res = document.getElementById('m3Res');
-  if (res) res.innerHTML = `Sector ${R.sec} · ${esc(terr.nombre)} · ${fmt(R.L.length)} trackers · ${fmt(pilas.length)} hincas · desnivel ${fmt(z1 - z0, 2)} m (cotas ${fmt(z0, 2)} a ${fmt(z1, 2)} m) · relieve exagerado ×${k}; las hincas y los trackers van a su altura real sobre el terreno.
-    ${fin ? 'Terreno final: las franjas están a la cota después del movimiento y cada hinca nace del terreno ya nivelado.' : 'Terreno natural: las franjas muestran sobre el terreno de hoy cuánto cortar (rojo) o rellenar (azul); las hincas nacen del terreno natural.'} Curvas de corte / relleno: igual espesor cada 5 cm, en degradé (rojo más intenso = más corte, azul más intenso = más relleno, gris = sin movimiento), interpoladas entre las franjas de los trackers. Hincas en naranja: más de ${fmt(P.umbral)} mm de movimiento (validar postes); en negro, la del motor.`;
+  if (res) res.innerHTML = `Sector ${R.sec} · ${esc(terr.nombre)} · ${fmt(R.L.length)} trackers · ${fmt(pilas.length)} hincas · desnivel ${fmt(z1 - z0, 2)} m (cotas ${fmt(z0, 2)} a ${fmt(z1, 2)} m) · relieve general exagerado ×${k}; las hincas y los trackers van a su altura real sobre el terreno.
+    ${fin ? 'Terreno final: el terreno ya nivelado; las hincas nacen de la cota final.' : `Terreno natural: lo que hay que cortar se ve como loma (rojo) y lo que hay que rellenar como hondonada (azul), con el espesor agrandado ×${M3.kmov} para que se note; las hincas nacen del terreno natural.`} Curvas de corte / relleno: igual espesor cada 5 cm, en degradé (rojo más intenso = más corte, azul más intenso = más relleno, gris = sin movimiento), interpoladas entre las franjas de los trackers. Hincas en naranja: más de ${fmt(P.umbral)} mm de movimiento (validar postes); en negro, la del motor.`;
 }
 // mesa de módulos: ancho del módulo (E-O), largo del tracker, girada alrededor del tubo
 function ms3Paneles(sin) {
@@ -206,7 +195,7 @@ function ms3Paneles(sin) {
   pm.instanceMatrix.needsUpdate = true; if (!sin) ms3Dibujar();
 }
 function ms3Vis() {
-  const o = M3.obj, V = M3.ver; if (o.mov) o.mov.visible = V.mov; if (o.iso) o.iso.visible = V.iso; if (o.curvas) o.curvas.visible = V.curvas; if (o.hinc) o.hinc.visible = V.hinc; if (o.trk) o.trk.visible = V.trk; if (o.eq) o.eq.visible = V.eq;
+  const o = M3.obj, V = M3.ver; if (M3.pintar) M3.pintar(); if (o.iso) o.iso.visible = V.iso; if (o.curvas) o.curvas.visible = V.curvas; if (o.hinc) o.hinc.visible = V.hinc; if (o.trk) o.trk.visible = V.trk; if (o.eq) o.eq.visible = V.eq;
   ms3Dibujar();
 }
 // circuitos BT de un inversor (estado global del cálculo de cables)
@@ -221,7 +210,9 @@ function ms3Eventos(el) {
   const tip = (e, h) => {
     const tp = M3.tip; if (!h) { tp.hidden = true; cv.style.cursor = pts.size ? 'grabbing' : 'grab'; return; }
     const R = M3.Rc, u = h.object.userData; let s = '';
-    if (u.t === 'sts') s = `<b>${esc(u.st.id)}</b> · estación de transformación ${fmt(u.st.mva, 1)} MVA<br>cota del terreno ${fmt(u.z, 2)} m`;
+    if (u.t === 'terreno') { const n = u.idx[h.faceIndex * 3], m = u.vM[n], z = u.vZ[n];
+      s = `${Math.abs(m) < 0.005 ? 'Sin movimiento' : m < 0 ? `<b>Corte ${sg(m)} m</b> · loma a bajar` : `<b>Relleno ${sg(m)} m</b> · hondonada a llenar`}<br>terreno natural ${fmt(z, 2)} m → final ${fmt(z + m, 2)} m`; }
+    else if (u.t === 'sts') s = `<b>${esc(u.st.id)}</b> · estación de transformación ${fmt(u.st.mva, 1)} MVA<br>cota del terreno ${fmt(u.z, 2)} m`;
     else if (u.t === 'inv') { const cs = ms3CircInv(u.iv.id);
       s = `<b>${esc(u.iv.id)}</b> · inversor de string<br>cota del terreno ${fmt(u.z, 2)} m${cs.length ? `<br>circuito BT ${cs.map((c) => esc(c.designacion)).join(', ')} → ${esc(cs[0].hasta)}${cs[0].completo ? ' · tendido' : ''}` : ''}`; }
     else if (u.t === 'hinca') { const { r, h: p } = u.pilas[h.instanceId];
