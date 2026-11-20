@@ -3,6 +3,23 @@
 const ETAPAS = window.CIVIL.ETAPAS;
 const ETN = Object.fromEntries(ETAPAS);
 const FCOL = { done: '#2f9e5b', curso: '#f5a524', pend: '#dfe5ec' };
+// fraguado: 28 días desde la carga de tabiques; arranca y termina solo, y suma al avance por los días que pasaron
+const FRAG_DIAS = 28;
+const fDias = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 864e5);
+const fMas = (f, n) => { const d = new Date(f + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+function fragInfo(f, hoy = today()) {
+  const v = f.frag || {}, ini = v.ini || (f.hT && f.hT.ok && f.hT.fin) || ''; if (!ini) return null;
+  const fin = v.ok && v.fin ? v.fin : fMas(ini, FRAG_DIAS), dia = Math.max(0, Math.min(FRAG_DIAS, fDias(ini, hoy)));
+  return { ini, fin, dia, ok: !!v.ok || dia >= FRAG_DIAS, p: v.ok ? 1 : dia / FRAG_DIAS, falta: Math.max(0, fDias(hoy, fin)) };
+}
+function fundFragAuto() {
+  if (window.VISOR || window.READONLY) return 0; let n = 0;
+  STSL.forEach((s) => { const f = (S.fundaciones || {})[s]; if (!f) return; const v = f.frag || {};
+    if (!v.ini && !v.ok && f.hT && f.hT.ok && f.hT.fin) { f.frag = Object.assign({}, v, { ini: f.hT.fin, auto: true }); n++; }
+    const g = f.frag || {}; if (g.ini && !g.ok && fDias(g.ini, today()) >= FRAG_DIAS) { f.frag = Object.assign({}, g, { ok: true, fin: fMas(g.ini, FRAG_DIAS), auto: true }); n++; } });
+  return n;
+}
+const fundTot = () => STSL.reduce((a, s) => a + fundInfo(s).p, 0) / (STSL.length || 1);
 function fundInfo(sts) {
   const f = (S.fundaciones || {})[sts] || {};
   const done = ETAPAS.filter(([k]) => f[k] && f[k].ok).length;
@@ -10,7 +27,8 @@ function fundInfo(sts) {
   const sig = ETAPAS.find(([k]) => !(f[k] && f[k].ok));
   const inis = ETAPAS.map(([k]) => f[k] && f[k].ini).filter(Boolean).sort();
   const fins = ETAPAS.map(([k]) => f[k] && f[k].ok && f[k].fin).filter(Boolean).sort();
-  return { f, done, n: ETAPAS.length, p: done / ETAPAS.length, curso, sig, ini: inis[0] || '', fin: done === ETAPAS.length ? fins[fins.length - 1] || '' : '' };
+  const fr = fragInfo(f), extra = fr && !(f.frag && f.frag.ok) ? fr.p : 0;
+  return { f, done, n: ETAPAS.length, p: (done + extra) / ETAPAS.length, fr, curso, sig, ini: inis[0] || '', fin: done === ETAPAS.length ? fins[fins.length - 1] || '' : '' };
 }
 // Silueta de estación de transformación tipo contenedor (STS) sobre su fundación, que se llena con el avance
 let svgN = 0;
@@ -30,13 +48,15 @@ function stsSVG(p, opts = {}) {
 }
 function vFund(el) {
   actions([['Exportar Excel', 'btn', () => exportFund()], ['Exportar PDF', 'btn pri', () => printFund()]]);
+  if (fundFragAuto()) { commit('Fraguado de bases STS actualizado solo (28 días)'); return; }
   const inf = STSL.map((s) => [s, fundInfo(s)]);
-  const tot = inf.reduce((a, [, i]) => a + i.done, 0) / (STSL.length * ETAPAS.length);
+  const tot = fundTot();
   let h = `<div class="grid g4 stagger fcards">${inf.map(([s, i]) => `<div class="card fcard"><div class="fch"><b>${s}</b><span class="pill ${i.done === i.n ? 'p-done' : i.done || i.curso.length ? 'p-warn' : 'p-prov'}">${i.done === i.n ? 'terminada' : i.done || i.curso.length ? 'en ejecución' : 'sin iniciar'}</span></div>
       ${stsSVG(i.p)}
       <div class="fcm"><span><b>${i.done}</b>/${i.n} etapas</span><span class="muted">${i.ini ? 'inicio ' + fechaCorta(i.ini) : 'sin iniciar'}</span></div>
-      <div class="muted fcs">${i.done === i.n ? `Base terminada${i.fin ? ' el ' + fechaCorta(i.fin) : ''}` : i.curso.length ? 'En curso: ' + i.curso.map(([k]) => esc(ETN[k])).join(', ') : 'Próxima: ' + esc(i.sig[1])}</div></div>`).join('')}</div>
-    <p class="hint" style="margin:6px 0 16px">Avance total de fundaciones: <b>${fmt(tot * 100, 1)} %</b>. Cada etapa terminada suma 1/${ETAPAS.length} de la base. La silueta es una estación de transformación tipo contenedor (Jupiter 6000K) sobre su platea.</p>`;
+      <div class="muted fcs">${i.done === i.n ? `Base terminada${i.fin ? ' el ' + fechaCorta(i.fin) : ''}` : i.curso.length ? 'En curso: ' + i.curso.map(([k]) => esc(ETN[k])).join(', ') : 'Próxima: ' + esc(i.sig[1])}</div>
+      ${i.fr && !(i.f.frag && i.f.frag.ok) ? `<div class="fcfrag"><div><span>Fraguado día <b>${i.fr.dia}</b>/${FRAG_DIAS}</span><span>termina ${fechaCorta(i.fr.fin)}</span></div><div class="sbt"><div style="width:${(i.fr.p * 100).toFixed(1)}%"></div></div></div>` : ''}</div>`).join('')}</div>
+    <p class="hint" style="margin:6px 0 16px">Avance total de fundaciones: <b>${fmt(tot * 100, 1)} %</b>. Cada etapa terminada suma 1/${ETAPAS.length} de la base; el fraguado (${FRAG_DIAS} días desde la carga de tabiques) suma de a poco por cada día que pasa y se da por terminado solo. La silueta es una estación de transformación tipo contenedor (Jupiter 6000K) sobre su platea.</p>`;
   // matriz
   h += `<div class="card tblcard"><div class="tblwrap"><table class="tbl ftbl"><thead><tr><th>#</th><th>Etapa</th>${STSL.map((s) => `<th class="fc">${s}</th>`).join('')}</tr></thead><tbody>`;
   ETAPAS.forEach(([k, n], idx) => {
@@ -45,6 +65,8 @@ function vFund(el) {
       const est = v.ok ? 'ok' : v.ini ? 'cur' : '';
       const tit = `${v.ini ? 'Inicio ' + fechaCorta(v.ini) : ''}${v.ok && v.fin ? ' · fin ' + fechaCorta(v.fin) : ''}${v.obs ? ' · ' + esc(v.obs) : ''}`;
       const ro = window.READONLY;
+      const fr = k === 'frag' ? fragInfo(((S.fundaciones || {})[s]) || {}) : null;
+      if (fr && !v.ok) return `<td class="fc"><div class="fcell cur"><button class="fdate" data-fd="${s}|${k}" title="Fraguado desde ${fechaCorta(fr.ini)} · termina solo el ${fechaCorta(fr.fin)}"><i class="fic cur">▶</i>día ${fr.dia}/${FRAG_DIAS}<small>→ ${fechaCorta(fr.fin).slice(0, 5)}</small></button></div></td>`;
       const cuerpo = v.ok ? `<button class="fdate" data-fd="${s}|${k}" title="${tit}"><i class="fic ok">✓</i>${fechaCorta(v.ini || v.fin).slice(0, 5)}<small>→ ${fechaCorta(v.fin).slice(0, 5)}</small></button>`
         : v.ini ? `<button class="fdate" data-fd="${s}|${k}" title="${tit}"><i class="fic cur">▶</i>${fechaCorta(v.ini).slice(0, 5)}</button>${ro ? '' : `<button class="ffin" data-ff="${s}|${k}" title="Marcar la actividad como finalizada">Finalizar</button>`}`
         : ro ? '<span class="muted">–</span>' : `<button class="fini" data-fi="${s}|${k}" title="Cargar la fecha de inicio">▶ Iniciar</button>`;
@@ -126,7 +148,7 @@ function modulosHTML() {
   const cs = R.circuitos.filter((c) => c.cat !== 'PAT' && c.cat !== 'LA').map((c) => [c.cat, puntasDe(c)]);
   const pc = ['BT', 'MT'].map((c) => { const g = cs.filter((x) => x[0] === c).map((x) => x[1]); return [c, g.reduce((a, x) => a + x.col, 0), g.reduce((a, x) => a + x.tot, 0)]; });
   const pA = pc.reduce((a, x) => a + x[1], 0), pB = pc.reduce((a, x) => a + x[2], 0);
-  const fi = STSL.map((s) => [s, fundInfo(s)]); const fA = fi.reduce((a, [, i]) => a + i.done, 0) / (STSL.length * ETAPAS.length);
+  const fi = STSL.map((s) => [s, fundInfo(s)]); const fA = fundTot();
   const fila = (lbl, a, b, col) => `<div class="mrow"><span>${lbl}</span><div class="sbt"><div style="width:${b ? ((a / b) * 100).toFixed(1) : 0}%;background:${col}"></div></div><b>${fmt(b ? (a / b) * 100 : 0)}%</b></div>`;
   return `<h2 class="sech">Resumen de obra</h2><div class="grid stagger mods" style="margin-bottom:22px">
     <div class="card mcard" data-go="cables" title="Ver detalle del tendido"><div class="mh"><div>${Charts.ring(tB ? tA / tB : 0, SERIE.BT, 'tendido')}</div><div><h3>Tendido y aprovechamiento de cables</h3><div class="muted">${fmt(tA)} / ${fmt(tB)} m${tPar ? `<br><span style="color:#00797f">${fmt(tPar)} m en tendido parcial</span>` : ''}</div></div></div>${tc.map(([c, a, b]) => fila(`${ctag(c)}${c}`, a, b, SERIE[c])).join('')}<div class="muted" style="margin-top:6px">Zanja BT ${fmt(R.zanjas.BT.realizada)} / ${fmt(R.zanjas.BT.total)} m · MT ${fmt(R.zanjas.MT.realizada)} / ${fmt(R.zanjas.MT.total)} m</div></div>

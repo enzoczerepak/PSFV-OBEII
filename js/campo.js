@@ -21,7 +21,7 @@ function pendientesHoy() {
 function avanceGeneral() {
   const F = [];
   try { const t = R.resumen.reduce((a, r) => a + r.tendido + (r.parcial || 0), 0), q = R.resumen.reduce((a, r) => a + r.requerido, 0); if (q) F.push(['Cables', t / q, '#2fc4b2', 'cables']); } catch (_) {}
-  try { const fi = STSL.map((s) => fundInfo(s)); F.push(['Fundaciones STS', fi.reduce((a, i) => a + i.done, 0) / (STSL.length * ETAPAS.length), '#f2b33d', 'fundaciones']); } catch (_) {}
+  try { F.push(['Fundaciones STS', fundTot(), '#f2b33d', 'fundaciones']); } catch (_) {}
   try { F.push(['Edificio O&M', salaInfo().p, '#b294ff', 'sala']); } catch (_) {}
   try { const T = foTotales(); if (T.n) F.push(['Fibra óptica', T.tubo ? T.col / T.tubo : 0, '#5ab8ff', 'fo']); } catch (_) {}
   try { if (lmtPq().length) F.push(['Línea MT', lmtInfo().p, '#8b9dff', 'lmt']); } catch (_) {}
@@ -141,7 +141,7 @@ function vCTend(el) {
 // ---------- frentes terminados: se archivan al final del menú ----------
 function frentesP() {
   const p = {};
-  try { const fi = STSL.map((s) => fundInfo(s)); p.fundaciones = fi.reduce((a, i) => a + i.done, 0) / (STSL.length * ETAPAS.length); } catch (_) {}
+  try { p.fundaciones = fundTot(); } catch (_) {}
   try { p.sala = salaInfo().p; } catch (_) {}
   try { const T = foTotales(); if (T.n) p.fo = T.tubo ? T.col / T.tubo : 0; } catch (_) {}
   try { if (lmtPq().length) p.lmt = lmtInfo().p; } catch (_) {}

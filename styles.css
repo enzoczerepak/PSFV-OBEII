@@ -1536,3 +1536,4 @@ tr.clk { cursor: pointer; } tr.clk:hover td { background: #fff7ed; }
 .cini{cursor:pointer;transition:box-shadow .15s}.cini:hover{box-shadow:0 4px 16px rgba(20,40,70,.12)}.cini .pha{font-style:normal;color:var(--muted,#6b7684);font-size:18px}
 .cini-g{display:flex;flex-direction:column;align-items:center;gap:8px}.cini-pie{width:112px;height:112px}.cini-v{font-size:13px;font-weight:700}.cini-v.neg{fill:#d64545}.cini-v.pos{fill:#2f9e5b}.cini-u{font-size:8px;fill:#6b7684}
 .cini-i{font-size:12.5px;line-height:1.6;text-align:left}.cini-i i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px}.cini-i b{margin-left:4px}
+.fcfrag{margin-top:6px;font-size:12px}.fcfrag>div:first-child{display:flex;justify-content:space-between;gap:6px;margin-bottom:3px}.fcfrag .sbt>div{background:#8a9bb0}

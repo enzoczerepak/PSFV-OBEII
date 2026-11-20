@@ -24,7 +24,7 @@ function heroHTML() {
   const filas = Array.from({ length: 14 }, (_, i) => i);
   const saludo = h < 5 ? 'Buenas noches' : h < 13 ? 'Buen día' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
   const ts = R.resumen.reduce((a, r) => a + r.tendido + (r.parcial || 0), 0), tr = R.resumen.reduce((a, r) => a + r.requerido, 0);
-  const fi = STSL.map((x) => fundInfo(x)), fA = fi.length ? fi.reduce((a, i) => a + i.done, 0) / (fi.length * ETAPAS.length) : 0;
+  const fi = STSL.map((x) => fundInfo(x)), fA = fi.length ? fundTot() : 0;
   const HI = window.PLANO && S.hincado ? hincInfo() : null;
   const mini = (t, v, c, siempre) => !siempre && !(v > 0 && v < 0.9999) ? '' : `<div class="hstat"><b style="color:${c}">${fmt(v * 100)}%</b><span>${t}</span></div>`;
   // nubes: cantidad y tono según el clima
@@ -52,6 +52,7 @@ function heroHTML() {
     ${typeof climaWidgetHTML === 'function' ? climaWidgetHTML() : ''}</div>`;
 }
 function vResumen(el) {
+  try { if (typeof fundFragAuto === 'function' && fundFragAuto()) { commit('Fraguado de bases STS actualizado solo (28 días)'); return; } } catch (_) {}
   actions([['Exportar Excel', 'btn', exportExcel]]);
   let abierto = !!window.VISOR; try { const g = localStorage.getItem('iniDet'); if (g != null) abierto = g === '1'; } catch (_) {}
   el.innerHTML = ghAvisoHTML() + (typeof evCursoHTML === 'function' ? evCursoHTML(true) : '') + heroHTML() + paraHoyHTML()
