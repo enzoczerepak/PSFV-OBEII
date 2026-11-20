@@ -249,7 +249,7 @@ function vMovSuelo(el) {
       <div class="card kpi"><div class="kl">${R.aporte > 0 ? 'Aporte de material' : 'Sobrante de corte'}</div><div class="kv">${f3(R.aporte > 0 ? R.aporte : R.sobra)}</div><div class="muted">${R.aporte > 0 ? 'el corte no alcanza para rellenar' : 'todo el relleno sale del corte'}</div></div>
       <div class="card kpi"><div class="kl">Hincas con movimiento</div><div class="kv">${fmt(R.nMov)}<small> / ${fmt(R.nH)}</small></div><div class="muted">${fmt(R.nTrk)} de ${fmt(R.L.length)} trackers · <span style="color:${R.nVal ? '#b45309' : 'inherit'};font-weight:600">${fmt(R.nVal)} con más de ${P.umbral} mm (validación Trina)</span></div></div></div>
     ${R.eoFuera || R.nsFuera || R.sinDato ? `<div class="card hint mswarn">${R.nsFuera ? `<b>${R.nsFuera}</b> trackers tienen terreno con pendiente N-S mayor que ${fmt(pend, 1)} % (se corrige con el movimiento). ` : ''}${R.eoFuera ? `<b>${R.eoFuera}</b> trackers tienen terreno con pendiente E-O mayor que ${fmt(P.pendEO, 1)} %: Trina pide consultar a su ingeniería (no se corrige con este cálculo). ` : ''}${R.sinDato ? `<b>${R.sinDato}</b> hincas no tienen punto en la topografía elegida: se interpolaron con las hincas medidas del mismo tracker.` : ''}</div>` : ''}
-    <div class="seg rmtabs" id="msT"><button data-v="plano">🗺️ Plano</button><button data-v="trk">📋 Trackers</button><button data-v="esc">📈 Escenarios</button><button data-v="rug">📏 Rugosidad</button><button data-v="ver">✅ Verificación</button><button data-v="topo">📍 Topografías</button><button data-v="par">⚙️ Parámetros</button></div>
+    <div class="seg rmtabs" id="msT"><button data-v="plano">🗺️ Plano</button><button data-v="trk">📋 Trackers</button><button data-v="esc">📈 Escenarios</button><button data-v="rug">📏 Rugosidad</button><button data-v="m3d">🧊 Vista 3D</button><button data-v="ver">✅ Verificación</button><button data-v="topo">📍 Topografías</button><button data-v="par">⚙️ Parámetros</button></div>
     <div id="msB" style="margin-top:12px"></div>`;
   $('#msSec', el).onchange = (e) => { MSUI.sec = e.target.value; MSUI.sel = null; MSUI.vb = null; render(false); };
   $('#msFu', el).onchange = (e) => { const m = msP(); m.fuente[MSUI.sec] = e.target.value; msGuardarP(m, `Movimiento de suelos: terreno del sector ${MSUI.sec} = ${e.target.selectedOptions[0].textContent}`); };
@@ -259,7 +259,7 @@ function vMovSuelo(el) {
   const pg = $('#msPg', el); if (pg) pg.onclick = () => { const m = msP(); m.pendNS = pend; MSUI.pend = null; msGuardarP(m, `Movimiento de suelos: pendiente N-S máxima = ${pend} %`); };
   const pr = $('#msPr', el); if (pr) pr.onclick = () => { MSUI.pend = null; render(false); };
   segBind('#msT', MSUI.tab, (v) => { MSUI.tab = v; render(false); });
-  ({ plano: msPlano, trk: msTabla, esc: msEscen, rug: msRugTab, ver: msVerTab, topo: msTopos, par: msPar })[MSUI.tab]($('#msB', el), R);
+  ({ m3d: (b, R) => (typeof ms3Tab === 'function' ? ms3Tab(b, R) : (b.innerHTML = '<div class="card empty">Vista 3D no disponible.</div>')), plano: msPlano, trk: msTabla, esc: msEscen, rug: msRugTab, ver: msVerTab, topo: msTopos, par: msPar })[MSUI.tab]($('#msB', el), R);
 }
 
 // plano: curvas de nivel, franjas de corte/relleno y zonas fuera de pendiente
