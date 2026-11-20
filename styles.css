@@ -1521,3 +1521,4 @@ tr.clk { cursor: pointer; } tr.clk:hover td { background: #fff7ed; }
 /* entregas: paquetes × unidades por paquete y códigos repetidos */
 .trkent .tl-pqc { white-space: nowrap; } .trkent .tl-pqc input { width: 54px; } .trkent .tl-pqc span { margin: 0 3px; color: var(--mute, #888); }
 .trkent tr.tlrep td:first-child { box-shadow: inset 3px 0 0 #4e79a7; }
+.trkent .tl-asoc { display: block; margin-top: 4px; max-width: 340px; font-size: 12px; }
