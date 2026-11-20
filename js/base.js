@@ -305,6 +305,7 @@ setTimeout(() => {
 let navKey = 'resumen';
 const HINC_V = ['hincado', 'hplano', 'htrk', 'hdist', 'hram', 'hmov', 'hrec', 'hcat'];
 function go(v) {
+  if (v === 'hcat') { if (typeof DISTUI !== 'undefined') DISTUI.tab = 'tipo'; v = 'hdist'; } // el catálogo ahora está en Plano de distribución › Tipos de tracker
   if (window.VISOR && typeof SOLO_PC !== 'undefined' && SOLO_PC.includes(v)) v = 'resumen';
   // al entrar al menú Hincado desde otra sección, cartel de precarga
   if (HINC_V.includes(v) && !HINC_V.includes(navKey)) setTimeout(hincAvisoEntrada, 450);

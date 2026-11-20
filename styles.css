@@ -1527,3 +1527,4 @@ tr.clk { cursor: pointer; } tr.clk:hover td { background: #fff7ed; }
 .tetot small { display: block; font-size: 11px; color: var(--muted, #667); } .tetot b { font-size: 17px; font-variant-numeric: tabular-nums; }
 .tetot .tdok b { color: #2f9e5b; } .tetot .tdneg { border-color: #e9b4b4; background: #fff6f6; } .tetot .tdneg b { color: #c0392b; }
 .tbl tr.ttot td { background: var(--bg2, #f3f5f8); border-top: 2px solid var(--line, #d9dee5); }
+.tbl tr.stk0 td { color: var(--muted, #8a94a3); } .tbl tr.stk0 td b { font-weight: 500; }

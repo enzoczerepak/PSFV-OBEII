@@ -132,13 +132,15 @@ function stockInfo() {
     return { k: it.k, desc: it.desc, cat: it.cat, tot: it.tot || 0, neto, rec: o.rec, dan: o.dan, pend: o.pend, cons, base, stock, falta: cons == null ? false : stock < 0 };
   });
 }
-const STK = { c: 'all', q: '', f: 'all' };
+const STK = { c: 'all', q: '', f: 'rec' };
 function vStock(el) {
   actions([['Exportar Excel', 'btn', stockExcel]]);
   const L = stockInfo(); if (!L.length) { el.innerHTML = '<div class="card empty"><b>Sin BOM cargado</b><p class="muted">Cargá el Bill of Materials en Recepción de materiales.</p></div>'; return; }
   const cats = [...new Set(L.map((x) => x.cat))];
   let list = L; if (STK.c !== 'all') list = list.filter((x) => x.cat === STK.c);
-  if (STK.f === 'neg') list = list.filter((x) => x.falta); if (STK.f === 'pend') list = list.filter((x) => x.pend > 0);
+  if (STK.f === 'neg') list = list.filter((x) => x.falta); if (STK.f === 'pend') list = list.filter((x) => x.pend > 0); const hayRec = L.some((x) => x.rec > 0 || x.dan > 0); if (STK.f === 'rec' && hayRec) list = list.filter((x) => x.rec > 0 || x.dan > 0);
+  // primero lo que hay en obra (recibido), de mayor a menor; después lo que todavía no llegó
+  list = list.slice().sort((a, b) => (b.rec > 0) - (a.rec > 0) || String(a.cat).localeCompare(String(b.cat)) || b.rec - a.rec || String(a.k).localeCompare(String(b.k)));
   if (STK.q) { const q = STK.q.toLowerCase(); list = list.filter((x) => (x.k + ' ' + x.desc).toLowerCase().includes(q)); }
   const neg = L.filter((x) => x.falta).length, sinRec = L.filter((x) => !x.rec).length;
   el.innerHTML = `<div class="grid g4 stagger" style="margin-bottom:14px">
@@ -147,11 +149,12 @@ function vStock(el) {
       <div class="card kpi"><div class="kl">Piezas consumidas (estimado)</div><div class="kv">${fmt(L.reduce((a, x) => a + (x.cons || 0), 0))}</div><div class="muted">por hincado y montaje registrados</div></div>
       <div class="card kpi"><div class="kl">Códigos en negativo</div><div class="kv" style="color:${neg ? '#d9573f' : 'inherit'}">${fmt(neg)}</div><div class="muted">se usó más de lo recibido conforme: revisar recepción</div></div></div>
     <div class="tools"><select id="kC" class="sel"><option value="all">Todas las categorías</option>${cats.map((c) => `<option value="${esc(c)}" ${STK.c === c ? 'selected' : ''}>${esc(trkCat(c)[0])}</option>`).join('')}</select>
-      <div class="seg" id="kF"><button data-v="all">Todos</button><button data-v="pend">Falta recibir</button><button data-v="neg">En negativo</button></div>
+      <div class="seg" id="kF"><button data-v="rec">Recibidos</button><button data-v="all">Todos</button><button data-v="pend">Falta recibir</button><button data-v="neg">En negativo</button></div><span class="muted">${list.length} códigos</span>
       <span class="sp"></span><input type="search" id="kQ" placeholder="Código o descripción" value="${esc(STK.q)}" style="width:200px"></div>
-    <div class="tblwrap" style="max-height:calc(100vh - 300px)"><table class="tbl"><thead><tr><th>Código</th><th>Descripción</th><th>Categoría</th><th class="n">BOM</th><th class="n">Recibido OK</th><th class="n">Dañado</th><th class="n">Consumido</th><th class="n">Stock en obra</th><th class="n">Falta recibir</th><th>Se descuenta por</th></tr></thead><tbody>
-    ${list.map((x) => `<tr><td><b>${esc(x.k)}</b></td><td>${esc(x.desc)}</td><td><i class="cdot" style="background:${trkCat(x.cat)[1]}"></i>${esc(trkCat(x.cat)[0])}</td><td class="n">${fmt(x.tot)}</td><td class="n">${fmt(x.rec)}</td><td class="n">${x.dan ? `<span class="tneg">${fmt(x.dan)}</span>` : ''}</td>
-      <td class="n">${x.cons == null ? '<span class="muted">–</span>' : fmt(x.cons)}</td><td class="n">${x.stock == null ? fmt(x.rec) : `<b class="${x.stock < 0 ? 'tneg' : ''}">${fmt(x.stock)}</b>`}</td><td class="n">${x.pend ? fmt(x.pend) : '<span class="tpos">✓</span>'}</td><td class="muted">${esc(x.base || 'no se descuenta')}</td></tr>`).join('')}
+    <div class="tblwrap" style="max-height:calc(100vh - 300px)"><table class="tbl"><thead><tr><th>Código</th><th>Descripción</th><th>Categoría</th><th class="n">Stock en obra</th><th class="n">Recibido OK</th><th class="n">Consumido</th><th class="n">Dañado</th><th class="n">BOM</th><th class="n">Falta recibir</th><th>Se descuenta por</th></tr></thead><tbody>
+    ${list.map((x) => `<tr class="${x.rec > 0 ? '' : 'stk0'}"><td><b>${esc(x.k)}</b></td><td>${esc(x.desc)}</td><td><i class="cdot" style="background:${trkCat(x.cat)[1]}"></i>${esc(trkCat(x.cat)[0])}</td>
+      <td class="n">${x.stock == null ? `<b>${fmt(x.rec)}</b>` : `<b class="${x.stock < 0 ? 'tneg' : ''}">${fmt(x.stock)}</b>`}</td><td class="n">${x.rec ? fmt(x.rec) : '<span class="muted">0</span>'}</td><td class="n">${x.cons == null ? '<span class="muted">–</span>' : fmt(x.cons)}</td><td class="n">${x.dan ? `<span class="tneg">${fmt(x.dan)}</span>` : ''}</td>
+      <td class="n">${fmt(x.tot)}</td><td class="n">${x.pend ? `<span class="tneg">−${fmt(x.pend)}</span>` : '<span class="tpos">✓</span>'}</td><td class="muted">${esc(x.base || 'no se descuenta')}</td></tr>`).join('')}
     </tbody></table></div>
     <p class="hint">Stock en obra = recibido conforme − consumido. El consumo es una estimación: las hincas salen del hincado registrado (por código si la distribución está completa) y el resto de la etapa de montaje que las usa, en proporción a los trackers cargados. Los repuestos y extras del BOM quedan como stock.</p>`;
   $('#kC', el).onchange = (e) => { STK.c = e.target.value; render(false); };

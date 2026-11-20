@@ -130,10 +130,11 @@ function vHDist(el) {
   if (!window.REPLANTEO) { el.innerHTML = '<div class="card empty"><b>Falta el replanteo de hincas</b></div>'; return; }
   const C = ramCalc(), HA = (S.hincado || {}).avance || {}, tubo = DISTUI.tab === 'tubo', secs = [...new Set(C.L.map((r) => r.t.s))].sort();
   if (DISTUI.tab === 'acc') return vHAcc(el, C, secs);
+  if (DISTUI.tab === 'tipo') return vHTipos(el, C, secs);
   actions(tubo ? [['PDF · plano de tubos de torque para imprimir', 'btn', () => ramImprimir('tubo')], ['Exportar Excel', 'btn', tuboExcel]]
     : [['PDF · plano de distribución para imprimir', 'btn', () => ramImprimir('dist')], ['Exportar DXF (AutoCAD)', 'btn', () => ramExportDxf('dist')], ['Exportar Excel', 'btn', distExcel]]);
   const nH = C.L.reduce((a, r) => a + r.n, 0), nCod = C.L.filter((r) => r.conCod).length, cods = new Set(); C.L.forEach((r) => r.H.forEach((h) => h.cod && cods.add(h.cod)));
-  const hech = C.L.filter((r) => HA[r.t.id]).reduce((a, r) => a + r.n, 0), tabs = `<div class="tools" style="margin-bottom:12px"><div class="seg" id="dT"><button data-v="hinc">Hincas</button><button data-v="tubo">Tubos de torque</button><button data-v="acc">Accesorios</button></div></div>`;
+  const hech = C.L.filter((r) => HA[r.t.id]).reduce((a, r) => a + r.n, 0), tabs = `<div class="tools" style="margin-bottom:12px"><div class="seg" id="dT"><button data-v="hinc">Hincas</button><button data-v="tubo">Tubos de torque</button><button data-v="acc">Accesorios</button><button data-v="tipo">Tipos de tracker</button></div></div>`;
   let kpi;
   if (tubo) {
     const m = ramConteo(C, 'tubo'), sum = (x) => Object.values(x).reduce((a, b) => a + b, 0), nT = [...m.values()].reduce((a, x) => a + sum(x), 0);
@@ -472,6 +473,75 @@ function trkVistas(tipo) {
     <div class="tvrow">${vista('Corte E-O por hinca con amortiguador · módulo a 0° y a 60°', `0 ${tY - 1300} 3400 ${gY - tY + 1500}`, co, 230)}<div class="tvley">${ACC_TAG.map(([, t, n]) => `<span data-tag="${t}"><i class="tvsw tv-${t}"></i>${n}</span>`).join('')}<span data-tag="post"><i class="tvsw tv-post"></i>Hinca</span><span data-tag="beam"><i class="tvsw tv-beam"></i>Tubo de torque</span><p class="hint">Pasá el mouse sobre un accesorio del listado o de esta lista para ver dónde va. Esquema según Trina MEC-DW-26050-3401-0A y el manual de montaje; no es un plano de fabricación.</p></div></div></div>`;
 }
 const trkvHL = (root, tag) => { const v = $('.trkv', root); if (!v) return; v.classList.toggle('tvon', !!tag); $$('[data-p]', v).forEach((g) => g.classList.toggle('tvhl', !!tag && g.dataset.p === tag)); $$('.tvley [data-tag]', v).forEach((x) => x.classList.toggle('on', x.dataset.tag === tag)); };
+// ---------- apartado Tipos de tracker: cantidad por configuración (1P52 / 1P26 · exterior, borde, interior · suelo) y sector ----------
+const TIPO_COL = { '1P52|Outer': '#e15759', '1P52|Border': '#f28e2b', '1P52|Inner': '#4e79a7', '1P26|Outer': '#b07aa1', '1P26|Border': '#59a14f' };
+const TIPO_ORD = ['1P52|Outer|N', '1P52|Outer|B', '1P52|Border|N', '1P52|Border|B', '1P52|Inner|N', '1P52|Inner|B', '1P26|Outer|N', '1P26|Outer|B', '1P26|Border|N', '1P26|Border|B'];
+const tipoTxt = (k) => { const [t, z, sl] = k.split('|'); return `${t} ${HZ[z] || z} (${z})${sl ? ` · ${HSL[sl]}` : ''}`; };
+function tipoConteo(C) { const m = new Map(); C.L.forEach((r) => { const k = cfgDe(r.t), x = m.get(k) || {}; x[r.t.s] = (x[r.t.s] || 0) + 1; m.set(k, x); }); return m; }
+function tipoSVG(C, sel, txt = 30) {
+  const P = window.PLANO, cen = {}, xs = P.trk.map((t) => ramRect(t));
+  const R = P.trk.map((t, i) => { const q = xs[i], c = cen[t.s] = cen[t.s] || { x: 0, y: 0, n: 0 }; c.x += q.x + q.w / 2; c.y += q.y + q.h / 2; c.n++; const k = `${t.t}|${t.z || 'Outer'}`, bl = (t.sl || 'N') === 'B';
+    return `<rect data-s="${t.s}" x="${q.x}" y="${q.y}" width="${q.w}" height="${q.h}" fill="${TIPO_COL[k] || '#999'}" fill-opacity="${!sel || sel === t.s ? 0.9 : 0.25}" stroke="${bl ? '#111' : 'none'}" stroke-width="${bl ? 0.9 : 0}" stroke-dasharray="${bl ? '2 1.2' : ''}"><title>${t.id} · S${t.s} · ${esc(tipoTxt(cfgDe(t)))}</title></rect>`; }).join('');
+  const L = Object.entries(cen).map(([s, c]) => ramTxt(c.x / c.n, c.y / c.n + txt * 0.35, 'S' + s, txt, 'text-anchor="middle" font-weight="700" fill="#111" class="rmhl" pointer-events="none"')).join('');
+  const bb = [Math.min(...xs.map((q) => q.x)) - 10, Math.min(...xs.map((q) => q.y)) - 10, Math.max(...xs.map((q) => q.x + q.w)) - Math.min(...xs.map((q) => q.x)) + 20, Math.max(...xs.map((q) => q.y + q.h)) - Math.min(...xs.map((q) => q.y)) + 20];
+  return { svg: R + L + `<g class="rmref">${ramRefSVG(2.4, false)}</g>`, bb };
+}
+function tipoTabla(C, secs, cls) {
+  const m = tipoConteo(C), ks = TIPO_ORD.filter((k) => m.has(k)).concat([...m.keys()].filter((k) => !TIPO_ORD.includes(k))), sum = (x) => secs.reduce((a, s) => a + (x[s] || 0), 0);
+  const sec = (s) => C.L.filter((r) => r.t.s === s), pan = (L) => L.reduce((a, r) => a + (r.t.t === '1P26' ? 26 : 52), 0), hin = (L) => L.reduce((a, r) => a + r.n, 0);
+  const fila = (k) => { const x = m.get(k), [t, z] = k.split('|'); return `<tr><td><i class="rmsw" style="background:${TIPO_COL[t + '|' + z] || '#999'}"></i><b>${esc(t)}</b></td><td>${esc(HZ[z] || z)} <span class="muted">(${esc(z)})</span></td><td>${esc(HSL[k.split('|')[2]] || '')}</td><td class="n">${t === '1P26' ? 26 : 52}</td>${secs.map((s) => `<td class="n">${x[s] ? fmt(x[s]) : '–'}</td>`).join('')}<td class="n"><b>${fmt(sum(x))}</b></td></tr>`; };
+  const sub = (t) => { const L = C.L.filter((r) => r.t.t === t); return L.length ? `<tr class="rmrest"><td colspan="4">Subtotal ${t}</td>${secs.map((s) => `<td class="n">${fmt(L.filter((r) => r.t.s === s).length)}</td>`).join('')}<td class="n"><b>${fmt(L.filter((r) => secs.includes(r.t.s)).length)}</b></td></tr>` : ''; };
+  return `<table class="${cls} rmrestb"><thead><tr><th>Tracker</th><th>Posición</th><th>Suelo</th><th class="n">Paneles por tracker</th>${secs.map((s) => `<th class="n">Sector ${s}</th>`).join('')}<th class="n">Total</th></tr></thead><tbody>
+    ${ks.filter((k) => k.startsWith('1P52')).map(fila).join('')}${sub('1P52')}${ks.filter((k) => k.startsWith('1P26')).map(fila).join('')}${sub('1P26')}
+    <tr class="rmrest"><td colspan="4"><b>Total trackers</b></td>${secs.map((s) => `<td class="n"><b>${fmt(sec(s).length)}</b></td>`).join('')}<td class="n"><b>${fmt(secs.reduce((a, s) => a + sec(s).length, 0))}</b></td></tr>
+    <tr class="rmrest"><td colspan="4">Paneles solares</td>${secs.map((s) => `<td class="n">${fmt(pan(sec(s)))}</td>`).join('')}<td class="n">${fmt(secs.reduce((a, s) => a + pan(sec(s)), 0))}</td></tr>
+    <tr class="rmrest"><td colspan="4">Hincas</td>${secs.map((s) => `<td class="n">${fmt(hin(sec(s)))}</td>`).join('')}<td class="n">${fmt(secs.reduce((a, s) => a + hin(sec(s)), 0))}</td></tr></tbody></table>
+    <p class="rmrnota">Exterior (Outer), Borde (Border) e Interior (Inner): posición del tracker en el bloque según la discretización de Trina; los exteriores llevan motor de 7" y el tubo central de 3,0 mm. Suelo blando: trackers con hincas para suelo blando (borde punteado en el plano).</p>`;
+}
+const tipoLeyenda = () => Object.entries(TIPO_COL).map(([k, c]) => `<span><i style="background:${c}"></i>${esc(tipoTxt(k))}</span>`).join('') + '<span><i style="background:#fff;border:1.5px dashed #111"></i>suelo blando</span>';
+function vHTipos(el, C, secs) {
+  const sel = DISTUI.tipoSec && secs.includes(DISTUI.tipoSec) ? DISTUI.tipoSec : null, M = tipoSVG(C, sel), ss = sel ? [sel] : secs, m = tipoConteo(C);
+  actions([['PDF · tipos de tracker por sector', 'btn', () => tipoPdf(C, secs)], ['Exportar Excel', 'btn', () => tipoExcel(C, secs)]]);
+  const L = C.L.filter((r) => ss.includes(r.t.s)), n = (f) => L.filter(f).length;
+  el.innerHTML = `<div class="tools" style="margin-bottom:12px"><div class="seg" id="dT"><button data-v="hinc">Hincas</button><button data-v="tubo">Tubos de torque</button><button data-v="acc">Accesorios</button><button data-v="tipo">Tipos de tracker</button></div></div>
+    <div class="grid g4 stagger" style="margin-bottom:12px">
+      <div class="card kpi"><div class="kl">Trackers${sel ? ` · sector ${sel}` : ''}</div><div class="kv">${fmt(L.length)}</div><div class="muted">${fmt(n((r) => r.t.t === '1P52'))} 1P52 · ${fmt(n((r) => r.t.t === '1P26'))} 1P26</div></div>
+      <div class="card kpi"><div class="kl">Exterior · Borde · Interior</div><div class="kv" style="font-size:18px">${fmt(n((r) => (r.t.z || 'Outer') === 'Outer'))} · ${fmt(n((r) => r.t.z === 'Border'))} · ${fmt(n((r) => r.t.z === 'Inner'))}</div><div class="muted">Outer · Border · Inner</div></div>
+      <div class="card kpi"><div class="kl">Suelo blando</div><div class="kv">${fmt(n((r) => r.t.sl === 'B'))}</div><div class="muted">${fmt(n((r) => r.t.sl !== 'B'))} en suelo normal</div></div>
+      <div class="card kpi"><div class="kl">Paneles solares</div><div class="kv">${fmt(L.reduce((a, r) => a + (r.t.t === '1P26' ? 26 : 52), 0))}</div><div class="muted">52 por 1P52 · 26 por 1P26</div></div></div>
+    <div class="rmgrid"><div class="card rmplano"><div class="tools" style="margin:0 0 8px"><div class="seg" id="dS"><button data-v="">Todo el parque</button>${secs.map((s) => `<button data-v="${s}">S${s}</button>`).join('')}</div></div>
+      <div class="rmwrap"><svg viewBox="${M.bb.join(' ')}" class="rmsvg rmsecs" preserveAspectRatio="xMidYMid meet" font-family="Arial">${M.svg}</svg></div>
+      <div class="rmley">${tipoLeyenda()}</div></div>
+    <div class="card rmdet"><h3>${sel ? `Sector ${sel}` : 'Todo el parque'} · trackers por tipo</h3><div class="tblwrap"><table class="tbl rmrestb"><thead><tr><th>Tipo</th><th class="n">Suelo normal</th><th class="n">Suelo blando</th><th class="n">Total</th></tr></thead><tbody>
+      ${['1P52|Outer', '1P52|Border', '1P52|Inner', '1P26|Outer', '1P26|Border'].map((k) => { const c = (sl) => L.filter((r) => `${r.t.t}|${r.t.z || 'Outer'}` === k && (r.t.sl || 'N') === sl).length, t = c('N') + c('B'); return t ? `<tr><td><i class="rmsw" style="background:${TIPO_COL[k]}"></i><b>${k.split('|')[0]}</b> ${esc(HZ[k.split('|')[1]])} <span class="muted">(${k.split('|')[1]})</span></td><td class="n">${c('N') ? fmt(c('N')) : '–'}</td><td class="n">${c('B') ? fmt(c('B')) : '–'}</td><td class="n"><b>${fmt(t)}</b></td></tr>` : ''; }).join('')}
+      <tr class="rmrest"><td><b>Total</b></td><td class="n">${fmt(n((r) => r.t.sl !== 'B'))}</td><td class="n">${fmt(n((r) => r.t.sl === 'B'))}</td><td class="n"><b>${fmt(L.length)}</b></td></tr></tbody></table></div>
+      <p class="hint">Tocá un sector en el plano o arriba. ${fmt(L.reduce((a, r) => a + r.n, 0))} hincas y ${fmt(L.reduce((a, r) => a + (r.t.t === '1P26' ? 26 : 52), 0))} paneles en ${sel ? 'el sector' : 'el parque'}.</p></div></div>
+    <div class="card" style="margin-top:16px"><h3>Trackers por tipo y sector</h3><div class="tblwrap">${tipoTabla(C, secs, 'tbl')}</div></div>
+    <h2 class="sech" style="margin-top:22px">Catálogo y distribución de hincas por configuración (Trina)</h2><div id="hcatB"></div>`;
+  segBind('#dT', 'tipo', (v) => { DISTUI.tab = v; render(false); });
+  segBind('#dS', sel || '', (v) => { DISTUI.tipoSec = v || null; render(false); });
+  $$('.rmsecs rect[data-s]', el).forEach((r) => { r.style.cursor = 'pointer'; r.onclick = () => { DISTUI.tipoSec = DISTUI.tipoSec === r.dataset.s ? null : r.dataset.s; render(false); }; });
+  if (typeof vHCat === 'function') { const a0 = window.actions; window.actions = () => {}; try { vHCat($('#hcatB', el)); } finally { window.actions = a0; } }
+}
+async function tipoExcel(C, secs) {
+  const m = tipoConteo(C), wb = XLSX.utils.book_new(), ks = TIPO_ORD.filter((k) => m.has(k));
+  const a = [['Tracker', 'Posición', 'Posición (Trina)', 'Suelo', 'Paneles por tracker'].concat(secs.map((s) => 'Sector ' + s), ['Total'])];
+  ks.forEach((k) => { const [t, z, sl] = k.split('|'), x = m.get(k); a.push([t, HZ[z] || z, z, HSL[sl], t === '1P26' ? 26 : 52].concat(secs.map((s) => x[s] || 0), [secs.reduce((q, s) => q + (x[s] || 0), 0)])); });
+  const sec = (s) => C.L.filter((r) => r.t.s === s);
+  a.push([], ['Total trackers', '', '', '', ''].concat(secs.map((s) => sec(s).length), [C.L.length]), ['Paneles solares', '', '', '', ''].concat(secs.map((s) => sec(s).reduce((q, r) => q + (r.t.t === '1P26' ? 26 : 52), 0)), [C.L.reduce((q, r) => q + (r.t.t === '1P26' ? 26 : 52), 0)]), ['Hincas', '', '', '', ''].concat(secs.map((s) => sec(s).reduce((q, r) => q + r.n, 0)), [C.L.reduce((q, r) => q + r.n, 0)]));
+  const b = [['Tracker', 'Frame', 'Sector', 'Tipo', 'Posición', 'Posición (Trina)', 'Suelo', 'Hincas', 'Paneles']];
+  C.L.forEach((r) => b.push([r.t.id, (repDe(r.t.id) || {}).fr || '', r.t.s, r.t.t, HZ[r.t.z || 'Outer'], r.t.z || 'Outer', HSL[r.t.sl || 'N'], r.n, r.t.t === '1P26' ? 26 : 52]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a), 'Tipos por sector'); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(b), 'Por tracker');
+  const p = await window.api.saveBinary(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), `Tipos de tracker por sector ${today()}.xlsx`, 'xlsx', 'Excel');
+  if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
+}
+function tipoPdf(C, secs) {
+  const A = ramArea('A3', false), M = tipoSVG(C, null, 34);
+  const p1 = `<section class="rmpg rmres-pg" data-o="L" style="width:${A.pw}mm;height:${A.ph}mm"><div class="rmpgh"><div><b>Tipos de tracker por sector</b><br>${esc(S.nombre || '')}</div><div style="text-align:right">Layout · BOM Trina · ${new Date().toLocaleDateString('es-AR')}</div></div>
+    <svg viewBox="${M.bb.join(' ')}" style="display:block;width:${A.pw - 16}mm;height:135mm" preserveAspectRatio="xMidYMid meet" font-family="Arial">${M.svg}</svg>
+    <div class="rmrcod" style="margin:2mm 0">${tipoLeyenda()}</div>${tipoTabla(C, secs, 'rmres')}</section>`;
+  ramPrintPaginas(p1, `Tipos de tracker por sector ${today()}.pdf`, 'A3', ['L']);
+}
 // ---------- apartado Accesorios: plano de sectores y resumen del sector elegido ----------
 const SEC_COL = ['#4e79a7', '#f28e2b', '#59a14f', '#e15759', '#b07aa1', '#edc948', '#76b7b2', '#9c755f'];
 function ramSecSVG(C, secs, sel, txt = 30) {
@@ -494,7 +564,7 @@ function ramAccRes(C, sec) {
 function vHAcc(el, C, secs) {
   const sel = DISTUI.accSec && secs.includes(DISTUI.accSec) ? DISTUI.accSec : null, M = ramSecSVG(C, secs, sel);
   actions([['PDF · accesorios por sector', 'btn', () => ramAccPdf(C, secs)], ['Exportar Excel', 'btn', () => accExcel(C, secs)]]);
-  el.innerHTML = `<div class="tools" style="margin-bottom:12px"><div class="seg" id="dT"><button data-v="hinc">Hincas</button><button data-v="tubo">Tubos de torque</button><button data-v="acc">Accesorios</button></div></div>
+  el.innerHTML = `<div class="tools" style="margin-bottom:12px"><div class="seg" id="dT"><button data-v="hinc">Hincas</button><button data-v="tubo">Tubos de torque</button><button data-v="acc">Accesorios</button><button data-v="tipo">Tipos de tracker</button></div></div>
     <div class="rmgrid"><div class="card rmplano"><div class="tools" style="margin:0 0 8px"><div class="seg" id="dS"><button data-v="">Todo el parque</button>${secs.map((s) => `<button data-v="${s}">S${s}</button>`).join('')}</div></div>
       <div class="rmwrap"><svg viewBox="${M.bb.join(' ')}" class="rmsvg rmsecs" preserveAspectRatio="xMidYMid meet" font-family="Arial">${M.svg}</svg></div>
       <p class="hint" style="margin:6px 0 0">Tocá un sector en el plano (o arriba) para ver sus accesorios.</p></div>
