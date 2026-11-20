@@ -201,7 +201,7 @@ function aplicarCrono(d, opts) {
   const nuevasIds = new Set(nuevas.map((t) => t.uid));
   const quitadas = (S.cronoTareas || []).filter((t) => !nuevasIds.has(t.uid)).length, agregadas = nuevas.filter((t) => !prev.has(t.uid)).length;
   S.cronoTareas = nuevas;
-  S.cronoMeta = { nombre: d.titulo || (S.cronoMeta || {}).nombre || '', fuente: opts.fuente || '', importado: today(), por: opts.por || '' };
+  S.cronoMeta = { nombre: d.titulo || (S.cronoMeta || {}).nombre || '', fuente: opts.fuente || '', importado: today(), por: opts.por || '', real: (S.cronoMeta || {}).real || {} };
   commit(`Cronograma actualizado${opts.por ? ' por ' + opts.por : ''}: ${nuevas.length} tareas · ${cambF} con fechas nuevas${agregadas ? ` · ${agregadas} nuevas` : ''}${quitadas ? ` · ${quitadas} quitadas` : ''}${cons ? ` · ${cons} cambios locales conservados` : ''}`);
   return { n: nuevas.length, cambF, agregadas, quitadas, cons };
 }
@@ -275,6 +275,38 @@ function printCrono() {
     ${C.T.map((x) => `<tr class="${x.esResumen ? 'grow-h' : ''}"><td>${esc(x.wbs)}</td><td style="padding-left:${(x.nivel - 1) * 10 + 6}px">${x.esResumen ? '<b>' + esc(x.nombre) + '</b>' : esc(x.nombre)}</td><td>${fechaCorta(x.inicio)}</td><td>${x.hito ? '' : fechaCorta(x.fin)}</td><td>${x.bFin ? fechaCorta(x.bFin) : ''}</td><td class="num">${fmt(x.pct)} %</td><td class="num">${fmt(x.esp)} %</td><td>${x.estado}</td></tr>`).join('')}</tbody></table></div>`;
   printHTML(prHead('Cronograma de obra · ' + esc((S.cronoMeta || {}).nombre || '')) + v.innerHTML + t, `Cronograma ${today()}.pdf`, true);
   render(false);
+}
+// avance real registrado por día (se guarda al cargar cambios) para dibujar la curva real
+function cronoRealReg() {
+  if (window.VISOR || window.READONLY || !(S.cronoTareas || []).length) return;
+  const p = Math.round(cronoCalc().P.pct * 10) / 10, m = S.cronoMeta = S.cronoMeta || {}, r = m.real = m.real || {}, k = Object.keys(r).sort(), ult = k.length ? r[k[k.length - 1]] : null;
+  if (r[today()] !== p && (ult !== p || k[k.length - 1] === today())) r[today()] = p;
+}
+function cronoRealPts(C) {
+  const r = (S.cronoMeta || {}).real || {}, ks = Object.keys(r).filter((d) => d < C.hoy).sort();
+  const pts = ks.map((d) => ({ x: dt(d), y: r[d] / 100, tip: `Real al ${fechaCorta(d)}: ${fmt(r[d], 1)} %` }));
+  if (C.P.inicio && (!ks.length || ks[0] > C.P.inicio)) pts.unshift({ x: dt(C.P.inicio), y: 0, tip: `Inicio ${fechaCorta(C.P.inicio)}` });
+  pts.push({ x: dt(C.hoy), y: C.P.pct / 100, tip: `Real al ${fechaCorta(C.hoy)}: ${fmt(C.P.pct, 1)} %` });
+  return pts;
+}
+// bloque del Inicio: curva esperado vs real y lo más relevante del cronograma
+function cronoInicioHTML() {
+  if (!(S.cronoTareas || []).length) return '';
+  const C = cronoCalc(), P = C.P, desv = P.pct - P.esp, cur = curvaS(C, false), base = curvaS(C, true), real = cronoRealPts(C);
+  const atr = C.hojas.filter((t) => t.estado === 'atrasada' || t.estado === 'demorada').sort((a, b) => (a.esp - a.pct) < (b.esp - b.pct) ? 1 : -1);
+  const enC = C.hojas.filter((t) => !t.hito && t.inicio <= C.hoy && t.fin >= C.hoy && t.pct < 100);
+  const prox = C.hojas.filter((t) => t.estado === 'próxima').sort((a, b) => (a.inicio < b.inicio ? -1 : 1));
+  const dFin = P.bFin && P.fin ? dd(P.bFin, P.fin) : 0, rest = P.fin ? dd(C.hoy, P.fin) : 0;
+  const lista = (L, f) => L.slice(0, 4).map((t) => `<div class="cini-t"><span>${esc(t.nombre)}</span><em>${f(t)}</em></div>`).join('') + (L.length > 4 ? `<div class="muted" style="font-size:12px">y ${L.length - 4} más</div>` : '');
+  return `<div class="card cini" data-go="crono" title="Ver cronograma"><div class="phh"><h3>Cronograma de obra · esperado vs real</h3><button class="btn sm" data-go="crono">Ver cronograma</button></div>
+    <div class="cini-g"><div>${Charts.line([{ name: 'Línea base', color: '#b4bfcd', pts: base }, { name: 'Esperado', color: '#7a8aa3', pts: cur }, { name: 'Real', color: '#00939a', pts: real }], { hoy: dt(C.hoy), full: true, sinEtiquetas: true })}
+      ${Charts.legend([['#b4bfcd', 'Línea base'], ['#7a8aa3', 'Esperado (fechas actuales)'], ['#00939a', 'Real']])}</div>
+    <div class="cini-i"><div class="kpis k2">${kpi('Real hoy', P.pct, '%', 1)}${kpi('Esperado hoy', P.esp, '%', 1)}</div>
+      <div class="cini-d ${desv < -2 ? 'neg' : 'pos'}">${desv >= 0 ? 'Adelantado' : 'Atrasado'} <b>${desv >= 0 ? '+' : ''}${fmt(desv, 1)} pp</b> respecto de lo esperado</div>
+      <div class="cini-f">Fin previsto <b>${fechaCorta(P.fin)}</b>${P.bFin ? ` · línea base ${fechaCorta(P.bFin)} <span class="${dFin > 0 ? 'tneg' : 'tpos'}">(${dFin > 0 ? '+' : ''}${dFin} días)</span>` : ''} · faltan ${fmt(rest)} días</div>
+      <div class="cini-c"><span><b>${enC.length}</b> en curso</span><span style="color:#d64545"><b>${atr.length}</b> atrasadas o demoradas</span><span><b>${prox.length}</b> arrancan en 14 días</span></div>
+      ${atr.length ? `<div class="cini-h">Más atrasadas</div>${lista(atr, (t) => `${fmt(t.pct)} % de ${fmt(t.esp)} %`)}` : ''}
+      ${prox.length ? `<div class="cini-h">Próximas a iniciar</div>${lista(prox, (t) => fechaCorta(t.inicio))}` : ''}</div></div></div>`;
 }
 function cronoModHTML() {
   if (!(S.cronoTareas || []).length) return '';

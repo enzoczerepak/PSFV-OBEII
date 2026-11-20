@@ -86,7 +86,9 @@ function sala3dEscena(I) {
     const L = SALA_ZT[z.t], c = colEl(z.n, zN, z.cur), m = mat(c, z.n || z.cur ? {} : { transparent: true, opacity: 0.75 });
     const g = new T.Group(); g.position.set(X(z.x), 0, Z(z.y)); sc.add(g);
     if (z.n >= 3) box(L + 0.1, 0.1, L + 0.1, 0, -1.55, 0, mat(0xb7bec8), g); // hormigón de limpieza
-    const b = box(L, 0.45, L, 0, -1.28, 0, m, g); box(0.3, 0.7, 0.3, 0, -0.7, 0, m, g);
+    // columna: color propio según sus etapas (armado, encofrado, carga)
+    const cE = ['armCol', 'encCol', 'hCol'], cN = cE.filter((k) => salaAv(k, z.id).ok).length, cC = cE.some((k) => { const v = salaAv(k, z.id); return v.ini && !v.ok; }), mc = mat(colEl(cN, 3, cC), cN || cC ? {} : { transparent: true, opacity: 0.75 });
+    const b = box(L, 0.45, L, 0, -1.28, 0, m, g); box(0.3, 0.7, 0.3, 0, -0.7, 0, mc, g);
     b.userData = { t: 'zap', id: z.id }; g.children.forEach((o) => { o.userData = { t: 'zap', id: z.id }; S3.pick.push(o); });
   });
   I.vig.forEach((v) => {
@@ -99,7 +101,7 @@ function sala3dEscena(I) {
   });
   // estructura superior: sólida cuando su etapa terminó, si no contorno
   const pCol = etp('hCS').p >= 1, pMur = etp('piso').p >= 1, pTec = etp('techo').p >= 1, pEst = etp('estT').p >= 1, pAb = etp('aber').p >= 1;
-  I.zap.forEach((z) => caja(0.2, H, 0.2, X(z.x), H / 2, Z(z.y), pCol, mat(0xc4cad2)));
+  I.zap.forEach((z) => { const ok = salaAv('hCol', z.id).ok, cu = ['armCol', 'encCol', 'hCol'].some((k) => salaAv(k, z.id).ini); caja(0.2, H, 0.2, X(z.x), H / 2, Z(z.y), pCol || ok || cu, mat(pCol ? 0xc4cad2 : ok ? 0x2f9e5b : 0xf5a524)); });
   if (pCol) [[0, 0, W, 0], [0, D, W, D], [0, 0, 0, D], [W, 0, W, D]].forEach(([x1, y1, x2, y2]) => { const hor = y1 === y2; box(hor ? W + 0.2 : 0.2, 0.25, hor ? 0.2 : D + 0.2, X((x1 + x2) / 2), H - 0.12, Z((y1 + y2) / 2), mat(0xc4cad2)); });
   // muros exteriores (sólidos con la mampostería terminada)
   const t = 0.2, mM = mat(0xf1eee8);

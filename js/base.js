@@ -144,6 +144,7 @@ function commit(msg) {
   Engine.sincronizarPAT(S);
   R = Engine.calcular(S);
   S.compromiso = R.compromiso;
+  try { if (typeof cronoRealReg === 'function') cronoRealReg(); } catch (_) {}
   const nCambios = Sync.sellar(S, NET.modo);
   if (NET.modo === 'cliente' && nCambios) programarSync(400);
   if (nCambios) programarWeb();

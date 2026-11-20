@@ -36,7 +36,7 @@ function salaInfo() {
   const zap = SALA_ZAP.map((z) => { let n = 0; zEts.forEach((e, i) => { if (salaAv(e.k, z.id).ok && n === i) n = i + 1; }); const cur = zEts.find((e) => { const v = salaAv(e.k, z.id); return v.ini && !v.ok; }); return Object.assign({}, z, { n, cur }); });
   const vEts = SALA_ET.filter((e) => e.a === 'viga');
   const vig = SALA_VIG.map((g) => { let n = 0; vEts.forEach((e, i) => { if (salaAv(e.k, g.id).ok && n === i) n = i + 1; }); const cur = vEts.find((e) => { const v = salaAv(e.k, g.id); return v.ini && !v.ok; }); return Object.assign({}, g, { n, cur }); });
-  return { ets, p, curso, sig, done, ini: inis[0] || '', zap, vig, nZH: zap.filter((z) => z.n === zEts.length).length };
+  return { ets, p, curso, sig, done, ini: inis[0] || '', zap, vig, nZH: zap.filter((z) => z.n >= zEts.findIndex((e) => e.k === 'hZ') + 1).length, nCH: SALA_ZAP.filter((z) => salaAv('hCol', z.id).ok).length };
 }
 // ---- planta esquemática: zapatas coloreadas por avance y vigas de fundación ----
 function salaPlantaSVG(I, opts = {}) {
@@ -73,7 +73,7 @@ function vSala(el) {
   const estP = (x) => (x.p >= 1 ? '<span class="pill p-done">terminada</span>' : x.ok || x.cur || x.p > 0 ? '<span class="pill p-warn">en curso</span>' : '<span class="pill p-prov">pendiente</span>');
   let h = `<div class="grid salatop" style="margin-bottom:14px">
     <div class="card tile"><div>${Charts.ring(I.p, '#7a5af8', 'edificio')}</div><div><h3 style="margin-bottom:6px">Edificio de O&amp;M</h3>
-      <div class="kpis k1" style="gap:6px">${kpi('Etapas terminadas', I.done, `/ ${SALA_ET.length}`, 0)}${kpi('Zapatas hormigonadas', I.nZH, `/ ${SALA_ZAP.length}`, 0)}</div>
+      <div class="kpis k1" style="gap:6px">${kpi('Etapas terminadas', I.done, `/ ${SALA_ET.length}`, 0)}${kpi('Zapatas hormigonadas', I.nZH, `/ ${SALA_ZAP.length}`, 0)}${kpi('Columnas hormigonadas', I.nCH, `/ ${SALA_ZAP.length}`, 0)}</div>
       <div class="muted" style="margin-top:8px;font-size:12.5px">${I.curso.length ? `<b>En curso:</b> ${I.curso.map((x) => esc(x.e.n)).join(', ')}` : I.sig ? `<b>Próxima:</b> ${esc(I.sig.e.n)}` : '<b>Edificio terminado</b>'}${I.ini ? `<br>Inicio de obra ${fechaCorta(I.ini)}` : ''}</div></div></div>
     <div class="card"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="margin:0">Fundaciones</h3><span class="muted" style="font-size:12px">12 zapatas · 8 vigas · plano OBEII-CI-PL-371 r2</span><span style="flex:1"></span>
       <div class="seg s3seg"><button data-sm="3d" class="${salaModo() === '3d' ? 'on' : ''}">3D</button><button data-sm="pl" class="${salaModo() === 'pl' ? 'on' : ''}">Planta</button></div></div>
@@ -90,7 +90,7 @@ function vSala(el) {
       <td>${estP(x)}</td><td>${x.ini ? fechaCorta(x.ini) : '–'}</td><td>${x.fin ? fechaCorta(x.fin) : '–'}</td>
       ${ro ? '' : `<td style="white-space:nowrap">${x.e.a === 'gral' ? `<button class="btn sm ghost" data-sg="${x.e.k}">Cargar avance</button>` : `<button class="btn sm ghost" data-st="${x.e.k}">Marcar todas…</button>`}</td>`}</tr>`;
   });
-  h += `</tbody></table></div><p class="hint">Cada etapa pesa lo mismo en el avance del edificio (${SALA_ET.length} etapas). Las de bases avanzan por zapata y las del encadenado inferior por viga; el resto se carga con un % de avance hasta darla por terminada.</p></div>`;
+  h += `</tbody></table></div><p class="hint">Cada etapa pesa lo mismo en el avance del edificio (${SALA_ET.length} etapas). Las de bases y columnas avanzan por zapata (cada columna arranca de su zapata) y las del encadenado inferior por viga; el resto se carga con un % de avance hasta darla por terminada.</p></div>`;
   // matrices por zapata y por viga
   const tipoDe = (els) => (els === SALA_ZAP ? 'zap' : 'viga');
   const selBar = (tipo, els) => { if (ro) return ''; const sel = salaSel[tipo], n = sel.size;
@@ -100,7 +100,7 @@ function vSala(el) {
     ${ets.map((e) => `<tr><td><b>${esc(e.n)}</b></td>${els.map((x) => { const v = salaAv(e.k, x.id), est = v.ok ? 'ok' : v.ini ? 'cur' : '';
       const tit2 = `${x.id} · ${e.n}${v.ini ? ' · inicio ' + fechaCorta(v.ini) : ''}${v.ok && v.fin ? ' · fin ' + fechaCorta(v.fin) : ''}${v.obs ? ' · ' + v.obs : ''}`;
       return `<td class="fc"><button class="smx ${est}" ${ro ? 'disabled' : ''} data-sc="${e.k}|${x.id}" title="${esc(tit2)}${ro ? '' : est === 'ok' ? ' · tocá para corregir' : est === 'cur' ? ' · tocá para finalizar hoy' : ' · tocá para iniciar hoy'}">${v.ok ? `✓<small>${fechaCorta(v.fin || v.ini).slice(0, 5)}</small>` : v.ini ? `▶<small>${fechaCorta(v.ini).slice(0, 5)}</small>` : '·'}</button></td>`; }).join('')}</tr>`).join('')}</tbody></table></div></div>`;
-  h += matriz(zEts, SALA_ZAP, 'Bases por zapata', (z) => `${z.id}<small>${z.t}</small>`);
+  h += matriz(zEts, SALA_ZAP, 'Bases y columnas por zapata', (z) => `${z.id}<small>${z.t}</small>`);
   h += matriz(vEts, SALA_VIG, 'Encadenado inferior por viga de fundación', (g) => `${g.id}<small>${g.cs[0]}–${g.cs[g.cs.length - 1]}</small>`);
   if (!ro) h += `<p class="hint">En las tablas: un toque en <b>·</b> inicia la etapa con fecha de hoy, un toque en <b>▶</b> la finaliza hoy y un toque en <b>✓</b> abre la carga para corregir fechas, agregar una observación o quitar el registro. <b>Marcar todas…</b> carga la misma fecha a todas las zapatas o vigas juntas. Para trabajar varias a la vez, elegilas arriba de cada tabla (o tocando su encabezado) y usá <b>Cargar avance</b>: cambiás varias etapas de todas las elegidas en un solo paso.</p>`;
   el.innerHTML = h; Charts.bindTips(el);
@@ -234,11 +234,11 @@ function printSala() {
 function salaModHTML() {
   const I = salaInfo(), grupos = [...new Set(SALA_ET.map((e) => e.g))];
   const fila = (g) => { const xs = I.ets.filter((x) => x.e.g === g), p = xs.reduce((a, x) => a + x.p, 0) / xs.length; return `<div class="mrow"><span>${esc(g)}</span><div class="sbt"><div style="width:${(p * 100).toFixed(1)}%;background:#7a5af8"></div></div><b>${fmt(p * 100)}%</b></div>`; };
-  return `<div class="card mcard" data-go="sala" title="Ver detalle del edificio"><div class="mh"><div>${Charts.ring(I.p, '#7a5af8', 'edificio')}</div><div><h3>Edificio de O&amp;M</h3><div class="muted">${I.done}/${SALA_ET.length} etapas · ${I.nZH}/${SALA_ZAP.length} zapatas${I.curso.length ? `<br>en curso: ${esc(I.curso[0].e.n)}${I.curso.length > 1 ? ' y ' + (I.curso.length - 1) + ' más' : ''}` : ''}</div></div></div>${grupos.slice(0, 5).map(fila).join('')}</div>`;
+  return `<div class="card mcard" data-go="sala" title="Ver detalle del edificio"><div class="mh"><div>${Charts.ring(I.p, '#7a5af8', 'edificio')}</div><div><h3>Edificio de O&amp;M</h3><div class="muted">${I.done}/${SALA_ET.length} etapas · ${I.nZH}/${SALA_ZAP.length} zapatas · ${I.nCH}/${SALA_ZAP.length} columnas${I.curso.length ? `<br>en curso: ${esc(I.curso[0].e.n)}${I.curso.length > 1 ? ' y ' + (I.curso.length - 1) + ' más' : ''}` : ''}</div></div></div>${grupos.slice(0, 5).map(fila).join('')}</div>`;
 }
 function salaAvanceHTML() {
   const I = salaInfo();
   return `<h2 class="sech">Edificio de operación y mantenimiento</h2><div class="grid g2 stagger" style="margin-bottom:16px"><div class="card"><h3>Planta de fundaciones</h3><div class="salaplanta">${salaPlantaSVG(I, { ro: true })}</div>
-    <div class="kpis k3" style="margin-top:8px">${kpi('Avance del edificio', I.p * 100, '%', 1)}${kpi('Etapas terminadas', I.done, `/ ${SALA_ET.length}`, 0)}${kpi('Zapatas hormigonadas', I.nZH, `/ ${SALA_ZAP.length}`, 0)}</div></div>
+    <div class="kpis k2" style="margin-top:8px">${kpi('Avance del edificio', I.p * 100, '%', 1)}${kpi('Etapas terminadas', I.done, `/ ${SALA_ET.length}`, 0)}${kpi('Zapatas hormigonadas', I.nZH, `/ ${SALA_ZAP.length}`, 0)}${kpi('Columnas hormigonadas', I.nCH, `/ ${SALA_ZAP.length}`, 0)}</div></div>
     <div class="card"><h3>Avance por etapa</h3>${Charts.hbars(I.ets.map((x) => ({ label: x.e.n.length > 40 ? x.e.n.slice(0, 39) + '…' : x.e.n, right: x.e.a === 'gral' ? `${fmt(x.p * 100)} %` : `${x.ok}/${x.n}`, parts: x.e.a === 'gral' ? [{ v: x.p, color: x.p >= 1 ? FCOL.done : FCOL.curso, name: 'Avance' }, { v: 1 - x.p, color: FCOL.pend, name: 'Pendiente' }] : [{ v: x.ok, color: FCOL.done, name: 'Terminado' }, { v: x.cur, color: FCOL.curso, name: 'En curso' }, { v: x.n - x.ok - x.cur, color: FCOL.pend, name: 'Pendiente' }] })), { labelW: 260, rightW: 60 })}${Charts.legend([[FCOL.done, 'Terminado'], [FCOL.curso, 'En curso'], [FCOL.pend, 'Pendiente']])}</div></div>`;
 }

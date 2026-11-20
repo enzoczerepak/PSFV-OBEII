@@ -48,13 +48,13 @@ function heroHTML() {
       ${filas.map((i) => { const x = 40 + i * 68; return `<g transform="translate(${x} 166)"><path d="M0 0v18" class="hposte"/><g class="htrk" style="transform:rotate(${ang.toFixed(1)}deg)"><rect x="-27" y="-4" width="54" height="7" rx="1.2" fill="url(#hpan)"/><path d="M-13.5 -4v7M0 -4v7M13.5 -4v7" class="hceld"/></g></g>`; }).join('')}
       <path d="M0 184h${W}" class="hsuelo"/></svg>
     <div class="hizq"><div class="htxt"><div class="hsal">${saludo}</div><h2>${esc(S.nombre || ED.app)}</h2><div class="hfecha">${ahora.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · ${trk}</div></div>
-    <div class="hstats">${mini('tendido', tr ? ts / tr : 0, '#7fe0c4')}${(() => { const T = foTotales(); return T.tubo ? mini('fibra óptica', T.col / T.tubo, '#9fd3ff') : ''; })()}${mini('fundaciones', fA, '#ffd166')}${(() => { const I = salaInfo(); return I.done || I.curso.length ? mini('edificio O&M', I.p, '#d4c8ff') : ''; })()}${HI ? mini('hincado', HI.trk.length ? HI.nH / HI.trk.length : 0, '#c9b6ff') : ''}${(S.cronoTareas || []).length ? mini('cronograma', cronoCalc().P.pct / 100, '#9fd3ff', true) : ''}</div></div>
+    <div class="hstats">${mini('tendido', tr ? ts / tr : 0, '#7fe0c4')}${(() => { const T = foTotales(); return T.tubo ? mini('fibra óptica', T.col / T.tubo, '#9fd3ff') : ''; })()}${mini('fundaciones', fA, '#ffd166')}${(() => { const I = salaInfo(); return I.done || I.curso.length ? mini('edificio O&M', I.p, '#d4c8ff') : ''; })()}${HI ? mini('hincado', HI.trk.length ? HI.nH / HI.trk.length : 0, '#c9b6ff') : ''}</div></div>
     ${typeof climaWidgetHTML === 'function' ? climaWidgetHTML() : ''}</div>`;
 }
 function vResumen(el) {
   actions([['Exportar Excel', 'btn', exportExcel]]);
   let abierto = !!window.VISOR; try { const g = localStorage.getItem('iniDet'); if (g != null) abierto = g === '1'; } catch (_) {}
-  el.innerHTML = ghAvisoHTML() + (typeof evCursoHTML === 'function' ? evCursoHTML(true) : '') + heroHTML() + paraHoyHTML()
+  el.innerHTML = ghAvisoHTML() + (typeof evCursoHTML === 'function' ? evCursoHTML(true) : '') + heroHTML() + paraHoyHTML() + (typeof cronoInicioHTML === 'function' ? cronoInicioHTML() : '')
     + `<details class="inidet"${abierto ? ' open' : ''}><summary>Detalle por frente de obra</summary>${modulosHTML()}</details>`;
   if (typeof bindEvCurso === 'function') bindEvCurso(el);
   bindParaHoy(el);
