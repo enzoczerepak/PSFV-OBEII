@@ -14,6 +14,7 @@ function pdiaDatos(f) {
       D.cab = CATK.filter((c) => X.m[c] > 0).map((c) => ({ c, n: CATN[c], m: X.m[c] }));
       D.circ = [...X.circ.values()].map((o) => ({ id: o.c.id, nom: o.c.nombre || o.c.id, cat: o.c.cat, m: o.m }));
       D.zanjas = X.zanjas.map((z) => ({ id: z.id, nom: z.nombre || z.id, m: z.len || z.largo || 0 }));
+      D.arq = (X.arq || []).map((x) => ({ nom: x.z.titulo, n: x.n, acc: x.acc }));
       D.puntas = X.nPuntas; D.bobinas = [...X.bobinas];
       D.fund = X.fund.filter((x) => x.t === 'fin' || !X.fund.some((y) => y.t === 'fin' && y.st === x.st && y.n === x.n));
     }
@@ -55,7 +56,7 @@ function pdiaDatos(f) {
     H.forEach((h) => { const o = g.get(h.s) || { s: h.s, n: 0, u: new Set() }; o.n++; if (h.u) o.u.add(h.u); g.set(h.s, o); });
     D.hist = [...g.values()].map((o) => ({ s: o.s, n: o.n, u: [...o.u] })); D.nHist = H.length;
   } catch (_) { D.hist = []; D.nHist = 0; }
-  D.vacio = !((D.cab || []).length || (D.zanjas || []).length || (D.fund || []).length || D.sala.length || D.fibra.length || (D.hinc && D.hinc.trk) || (D.mont && D.mont.n) || D.rec.length || D.maq.length || D.puntas);
+  D.vacio = !((D.cab || []).length || (D.zanjas || []).length || (D.arq || []).length || (D.fund || []).length || D.sala.length || D.fibra.length || (D.hinc && D.hinc.trk) || (D.mont && D.mont.n) || D.rec.length || D.maq.length || D.puntas);
   return D;
 }
 
@@ -66,6 +67,7 @@ function pdiaTexto(D) {
   if (D.clima) L.push(`☁️ Clima: ${D.clima.txt}`);
   if ((D.cab || []).length) { L.push('', '*Tendido de cables*'); D.cab.forEach((c) => L.push(`• ${c.n}: ${fmt(c.m)} m`)); if (D.puntas) L.push(`• Puntas: ${D.puntas}`); }
   if ((D.zanjas || []).length) L.push('', `*Zanjas cerradas:* ${D.zanjas.map((z) => z.nom).join(', ')}`);
+  if ((D.arq || []).length) { L.push('', '*Arquetas MT*'); D.arq.forEach((x) => L.push(`• ${x.nom}: +${x.n} (${x.acc} en la zanja)`)); }
   if ((D.fund || []).length) { L.push('', '*Fundaciones STS*'); D.fund.forEach((x) => L.push(`• ${x.st} · ${x.n}: ${x.t === 'fin' ? 'terminada' : 'iniciada'}`)); }
   if (D.sala.length) { L.push('', '*Sala O&M*'); D.sala.forEach((x) => L.push(`• ${x.n} (${x.els.join(', ')}): ${x.t === 'fin' ? 'terminada' : 'iniciada'}`)); }
   if (D.fibra.length) L.push('', `*Fibra óptica:* ${D.fibra.length} tramo(s)`);
@@ -85,6 +87,7 @@ function pdiaHTML(D, pr) {
   if ((D.cab || []).length) out.push(blk('Tendido de cables', ul(D.cab.map((c) => `${esc(c.n)}: <b>${fmt(c.m)} m</b>`).concat(D.puntas ? [`Puntas: <b>${D.puntas}</b>`] : []))
     + (D.circ.length ? `<p class="hint">Circuitos: ${D.circ.map((c) => esc(c.nom)).join(', ')}</p>` : '')));
   if ((D.zanjas || []).length) out.push(blk('Zanjas cerradas', ul(D.zanjas.map((z) => esc(z.nom)))));
+  if ((D.arq || []).length) out.push(blk('Arquetas MT', ul(D.arq.map((x) => `${esc(x.nom)}: <b>+${x.n}</b> <span class="muted">(${x.acc} en la zanja)</span>`))));
   if ((D.fund || []).length) out.push(blk('Fundaciones STS', ul(D.fund.map((x) => `${esc(x.st)} · ${esc(x.n)}: <b>${x.t === 'fin' ? 'terminada' : 'iniciada'}</b>`))));
   if (D.sala.length) out.push(blk('Sala O&M', ul(D.sala.map((x) => `${esc(x.n)} <span class="hint">(${x.els.map((x) => esc(x)).join(', ')})</span>: <b>${x.t === 'fin' ? 'terminada' : 'iniciada'}</b>`))));
   if (D.fibra.length) out.push(blk('Fibra óptica', `<p>${D.fibra.length} tramo(s) tendidos</p>`));

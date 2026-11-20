@@ -23,7 +23,7 @@ function puntasDe(rc) {
 function datosPorFecha() {
   const cMap = new Map(R.circuitos.map((c) => [c.id, c]));
   const dias = new Map(); let sinFecha = 0;
-  const dia = (d) => { if (!dias.has(d)) dias.set(d, { fecha: d, m: Object.fromEntries(CATK.map((c) => [c, 0])), sec: new Map(), circ: new Map(), puntas: [], zanjas: [], zav: [], par: [], fund: [], nCond: 0, bobinas: new Set() }); return dias.get(d); };
+  const dia = (d) => { if (!dias.has(d)) dias.set(d, { fecha: d, m: Object.fromEntries(CATK.map((c) => [c, 0])), sec: new Map(), circ: new Map(), puntas: [], zanjas: [], zav: [], arq: [], par: [], fund: [], nCond: 0, bobinas: new Set() }); return dias.get(d); };
   R.piezas.filter((p) => p.estado === 'ejecutado').forEach((p) => {
     if (!p.fecha) { sinFecha += p.len; return; }
     const D = dia(p.fecha), c = cMap.get(p.cid); if (!c) return;
@@ -44,6 +44,7 @@ function datosPorFecha() {
       ds.forEach((D) => { if (r <= 0) return; const o = D.circ.get(c.id), q = Math.min(r, D.m[c.cat], o.m); D.m[c.cat] -= q; o.m -= q; o.desc = (o.desc || 0) + q; const kk = `${c.cat}|${c.seccion}`; D.sec.set(kk, Math.max(0, (D.sec.get(kk) || 0) - q)); r -= q; }); }
   });
   S.zanjas.forEach((sz) => { if (typeof zanLog !== 'function') return; const rz = R.zlist.find((x) => x.id === sz.id); if (!rz) return; let acc = 0;
+    { let ac = 0; arqLog(sz).slice().sort((a, b) => String(a.f).localeCompare(String(b.f))).forEach((x) => { ac += x.n; if (x.f) dia(x.f).arq.push({ z: rz, n: x.n, acc: ac, u: x.u }); }); }
     zanLog(sz, rz.largo).slice().sort((a, b) => String(a.f).localeCompare(String(b.f))).forEach((x) => { acc += x.m; if (x.f) dia(x.f).zav.push({ z: rz, m: x.m, acc, u: x.u }); }); });
   R.circuitos.filter((c) => c.cat !== 'PAT').forEach((c) => {
     const sc = S.circuitos.find((x) => x.id === c.id); const p = (sc && sc.puntas) || {};
@@ -110,6 +111,7 @@ function diaHTML(D, pdf) {
   }
   if (D.par.length) h += `<h4 class="dh">Tendido parcial (avance de zanja)</h4><table class="tbl dtbl"><thead><tr><th>Tipo</th><th>Circuito</th><th>Recorrido</th><th class="num">Este día</th><th class="num">Cable ≈</th><th class="num">Acumulado</th><th>Cargó</th></tr></thead><tbody>
     ${D.par.map((x) => `<tr><td><span class="cchip c-${x.c.cat}" style="margin:0;top:0">${x.c.cat}</span></td><td><b class="mono">${esc(x.c.designacion)}</b>${x.c.completo ? ' <small class="muted">(después completado)</small>' : ''}</td><td>${esc(x.c.desde)} → ${esc(x.c.hasta)}</td><td class="num">${fmt(x.m, 1)} m${x.aj ? ' <small class="muted">carga anterior</small>' : ''}</td><td class="num">${fmt(x.cab, 1)} m</td><td class="num">${fmt(x.acc, 1)} / ${fmt(x.lr, 1)} m</td><td>${esc(x.u || '')}</td></tr>`).join('')}</tbody></table>`;
+  if ((D.arq || []).length) h += `<h4 class="dh">Arquetas MT</h4><div class="chips">${D.arq.map((x) => `<span class="chip">${esc(x.z.titulo)} · +${fmt(x.n)} arqueta${x.n === 1 ? '' : 's'} <small>(${fmt(x.acc)} en la zanja)</small></span>`).join('')}</div>`;
   if (D.zav.length) h += `<h4 class="dh">Zanjeo</h4><div class="chips">${D.zav.map((x) => `<span class="chip">${esc(x.z.titulo)} · +${fmt(x.m, 1)} m <small>(${fmt(x.acc, 1)} de ${fmt(x.z.largo, 1)} m)</small></span>`).join('')}</div>`;
   if (D.puntas.length) h += `<h4 class="dh">Puntas colocadas</h4><div class="chips">${D.puntas.map((x) => `<span class="chip">${esc(x.c.designacion)} · ${esc(ladoNom(x.c, x.k))} · ${x.n}</span>`).join('')}</div>`;
   if (D.zanjas.length) h += `<h4 class="dh">Zanjas cerradas</h4><div class="chips">${D.zanjas.map((z) => `<span class="chip lista">${esc(z.titulo)} · ${fmt(z.largo, 1)} m</span>`).join('')}</div>`;

@@ -243,6 +243,9 @@
     const zv = [['Fecha', 'Zanja', 'Abierto este día (m)', 'Acumulado (m)', 'Largo (m)', 'Cargó']];
     ds.forEach((D) => (D.zav || []).forEach((x) => zv.push([D.fecha, x.z.titulo, r1(x.m), r1(x.acc), r1(x.z.largo), x.u || ''])));
     if (zv.length > 1) XLSX.utils.book_append_sheet(wb, sheet(zv, [12, 34, 14, 12, 10, 14]), 'Zanjeo por día');
+    const aq = [['Fecha', 'Zanja MT', 'Arquetas colocadas este día', 'Acumulado en la zanja', 'Cargó']];
+    ds.forEach((D) => (D.arq || []).forEach((x) => aq.push([D.fecha, x.z.titulo, x.n, x.acc, x.u || ''])));
+    if (aq.length > 1) XLSX.utils.book_append_sheet(wb, sheet(aq, [12, 34, 16, 14, 14]), 'Arquetas MT por día');
     return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   }
   function exportPuntas(state, R, H) {
