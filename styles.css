@@ -1518,3 +1518,6 @@ tr.clk { cursor: pointer; } tr.clk:hover td { background: #fff7ed; }
 .avle small { color: var(--muted, #667); } .avle .avdel { border: 0; background: none; cursor: pointer; color: #999; font-size: 14px; line-height: 1; padding: 0 3px; }
 .avle.quitar { text-decoration: line-through; opacity: .5; border-color: #d64545; } .avle.quitar .avdel { color: #d64545; }
 .avc { grid-template-columns: minmax(180px, 1fr) 190px auto; } .avc .avin { flex-wrap: wrap; gap: 2px 6px; } .avc .avin label { flex-basis: 100%; }
+/* entregas: paquetes × unidades por paquete y códigos repetidos */
+.trkent .tl-pqc { white-space: nowrap; } .trkent .tl-pqc input { width: 54px; } .trkent .tl-pqc span { margin: 0 3px; color: var(--mute, #888); }
+.trkent tr.tlrep td:first-child { box-shadow: inset 3px 0 0 #4e79a7; }
