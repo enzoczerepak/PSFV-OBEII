@@ -46,7 +46,8 @@ function paraHoyHTML() {
   if ((D.fund || []).length) hecho.push(`${D.fund.length} etapas de fundaciones`);
   if (D.sala.length) hecho.push(`${D.sala.length} tareas en la sala`);
   if (D.rec.length) hecho.push(`${D.rec.length} entrega${D.rec.length > 1 ? 's' : ''} recibida${D.rec.length > 1 ? 's' : ''}`);
-  return `<div class="phoy">
+  const crono = typeof cronoInicioHTML === 'function' ? cronoInicioHTML() : '';
+  return `<div class="phoy${crono ? ' c3' : ''}">
     <div class="card phc"><div class="phh"><h3>${window.VISOR ? 'Situación de hoy' : 'Para hoy'}</h3>${window.VISOR ? '' : '<button class="btn acc" data-go="campo">⚡ Carga rápida de campo</button>'}</div>
       ${P.length ? `<div class="phl">${P.map((p, i) => `<button class="phi" style="--c:${p.col}" ${p.go ? `data-go="${p.go}"` : `data-ph="${i}"`}><span class="phe">${p.ico}</span><span>${esc(p.txt)}</span><i class="pha">›</i></button>`).join('')}</div>`
         : '<p class="muted" style="margin:6px 0">Todo al día: no hay pendientes.</p>'}
@@ -54,7 +55,7 @@ function paraHoyHTML() {
     <div class="card phc"><div class="phh"><h3>Frentes en ejecución</h3><button class="btn sm" data-go="avance">Detalle</button></div>
       ${F.length ? F.map(([n, p, c, g]) => `<div class="mrow phr" data-go="${g}"><span>${n}</span><div class="sbt"><div style="width:${(Math.min(1, p) * 100).toFixed(1)}%;background:${c}"></div></div><b>${fmt(p * 100)}%</b></div>`).join('') : '<p class="muted" style="margin:6px 0">Ningún frente con avance cargado todavía.</p>'}
       ${chips('sin') ? `<div class="phfr"><span class="muted">Sin iniciar:</span>${chips('sin')}</div>` : ''}${chips('term') ? `<div class="phfr"><span class="muted">Terminados:</span>${chips('term')}</div>` : ''}</div>
-  </div>`;
+    ${crono}</div>`;
 }
 function bindParaHoy(el) {
   const P = pendientesHoy();

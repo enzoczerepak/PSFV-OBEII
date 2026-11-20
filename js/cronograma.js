@@ -289,24 +289,15 @@ function cronoRealPts(C) {
   pts.push({ x: dt(C.hoy), y: C.P.pct / 100, tip: `Real al ${fechaCorta(C.hoy)}: ${fmt(C.P.pct, 1)} %` });
   return pts;
 }
-// bloque del Inicio: curva esperado vs real y lo más relevante del cronograma
+// bloque del Inicio: torta doble esperado (afuera) vs real (adentro); un clic lleva al cronograma
 function cronoInicioHTML() {
   if (!(S.cronoTareas || []).length) return '';
-  const C = cronoCalc(), P = C.P, desv = P.pct - P.esp, cur = curvaS(C, false), base = curvaS(C, true), real = cronoRealPts(C);
-  const atr = C.hojas.filter((t) => t.estado === 'atrasada' || t.estado === 'demorada').sort((a, b) => (a.esp - a.pct) < (b.esp - b.pct) ? 1 : -1);
-  const enC = C.hojas.filter((t) => !t.hito && t.inicio <= C.hoy && t.fin >= C.hoy && t.pct < 100);
-  const prox = C.hojas.filter((t) => t.estado === 'próxima').sort((a, b) => (a.inicio < b.inicio ? -1 : 1));
-  const dFin = P.bFin && P.fin ? dd(P.bFin, P.fin) : 0, rest = P.fin ? dd(C.hoy, P.fin) : 0;
-  const lista = (L, f) => L.slice(0, 4).map((t) => `<div class="cini-t"><span>${esc(t.nombre)}</span><em>${f(t)}</em></div>`).join('') + (L.length > 4 ? `<div class="muted" style="font-size:12px">y ${L.length - 4} más</div>` : '');
-  return `<div class="card cini" data-go="crono" title="Ver cronograma"><div class="phh"><h3>Cronograma de obra · esperado vs real</h3><button class="btn sm" data-go="crono">Ver cronograma</button></div>
-    <div class="cini-g"><div>${Charts.line([{ name: 'Línea base', color: '#b4bfcd', pts: base }, { name: 'Esperado', color: '#7a8aa3', pts: cur }, { name: 'Real', color: '#00939a', pts: real }], { hoy: dt(C.hoy), full: true, sinEtiquetas: true })}
-      ${Charts.legend([['#b4bfcd', 'Línea base'], ['#7a8aa3', 'Esperado (fechas actuales)'], ['#00939a', 'Real']])}</div>
-    <div class="cini-i"><div class="kpis k2">${kpi('Real hoy', P.pct, '%', 1)}${kpi('Esperado hoy', P.esp, '%', 1)}</div>
-      <div class="cini-d ${desv < -2 ? 'neg' : 'pos'}">${desv >= 0 ? 'Adelantado' : 'Atrasado'} <b>${desv >= 0 ? '+' : ''}${fmt(desv, 1)} pp</b> respecto de lo esperado</div>
-      <div class="cini-f">Fin previsto <b>${fechaCorta(P.fin)}</b>${P.bFin ? ` · línea base ${fechaCorta(P.bFin)} <span class="${dFin > 0 ? 'tneg' : 'tpos'}">(${dFin > 0 ? '+' : ''}${dFin} días)</span>` : ''} · faltan ${fmt(rest)} días</div>
-      <div class="cini-c"><span><b>${enC.length}</b> en curso</span><span style="color:#d64545"><b>${atr.length}</b> atrasadas o demoradas</span><span><b>${prox.length}</b> arrancan en 14 días</span></div>
-      ${atr.length ? `<div class="cini-h">Más atrasadas</div>${lista(atr, (t) => `${fmt(t.pct)} % de ${fmt(t.esp)} %`)}` : ''}
-      ${prox.length ? `<div class="cini-h">Próximas a iniciar</div>${lista(prox, (t) => fechaCorta(t.inicio))}` : ''}</div></div></div>`;
+  const C = cronoCalc(), P = C.P, desv = P.pct - P.esp, atr = C.hojas.filter((t) => t.estado === 'atrasada' || t.estado === 'demorada').length;
+  const arco = (r, w, p, col) => { const L = 2 * Math.PI * r; return `<circle r="${r}" fill="none" stroke="#e6ebf1" stroke-width="${w}"/><circle r="${r}" fill="none" stroke="${col}" stroke-width="${w}" stroke-dasharray="${(L * Math.min(1, p / 100)).toFixed(1)} ${L.toFixed(1)}" transform="rotate(-90)"/>`; };
+  return `<div class="card phc cini" data-go="crono" title="Ver el cronograma de obra"><div class="phh"><h3>Cronograma</h3><i class="pha">›</i></div>
+    <div class="cini-g"><svg viewBox="-50 -50 100 100" class="cini-pie">${arco(40, 11, P.esp, '#7a8aa3')}${arco(26, 11, P.pct, '#00939a')}<text y="4" text-anchor="middle" class="cini-v ${desv < -2 ? 'neg' : 'pos'}">${desv >= 0 ? '+' : ''}${fmt(desv, 1)}</text><text y="14" text-anchor="middle" class="cini-u">pp</text></svg>
+      <div class="cini-i"><div><i style="background:#00939a"></i>Real <b>${fmt(P.pct, 1)} %</b></div><div><i style="background:#7a8aa3"></i>Esperado <b>${fmt(P.esp, 1)} %</b></div>
+        <div class="muted">fin ${fechaCorta(P.fin)}${atr ? ` · <span style="color:#d64545">${atr} atrasadas</span>` : ''}</div></div></div></div>`;
 }
 function cronoModHTML() {
   if (!(S.cronoTareas || []).length) return '';
