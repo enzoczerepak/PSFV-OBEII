@@ -1548,3 +1548,5 @@ tr.clk { cursor: pointer; } tr.clk:hover td { background: #fff7ed; }
 .s3d.m3d .s3tip{max-width:240px}
 
 .ppgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:16px;align-items:start}@media (max-width:1000px){.ppgrid{grid-template-columns:1fr}}.pplegend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;margin-top:4px}.pplegend i{display:inline-block;width:14px;height:4px;border-radius:2px;margin-right:5px;vertical-align:middle}.ppsec:hover polyline{stroke-width:4.5}
+
+.rmsvg.z1 .rmtov { opacity: .35; }

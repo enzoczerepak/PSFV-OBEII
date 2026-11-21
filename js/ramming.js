@@ -181,6 +181,9 @@ const tubosDe = (t) => TUBO_CFG[`${t.t}|${t.z || 'Outer'}`] || [];
 // marca de pintura de cada tipo de tubo (en los extremos), cargada en obra: no figura en los planos de Trina
 const TCOL = Object.assign({ Amarillo: '#f2c200', Naranja: '#f28e2b', Marrón: '#8c564b', Celeste: '#5ab8ff' }, HCOL);
 const tuboMarca = (c) => (((S.hincado || {}).tuboCol || {})[c] || []).filter((x) => x && x !== 'Sin marca');
+// color con que se dibuja cada tubo: la marca de pintura cargada (si tiene dos, mitad y mitad) o el color de referencia del código
+const tuboCols = (c) => { const L = tuboMarca(c).map((x) => TCOL[x]).filter(Boolean); return L.length ? L : [TUBO_COL[c] || '#999']; };
+const tuboCss = (c) => { const L = tuboCols(c); return L.length > 1 ? `linear-gradient(90deg, ${L.map((x, i) => `${x} ${(i * 100) / L.length}%, ${x} ${((i + 1) * 100) / L.length}%`).join(', ')})` : L[0]; };
 const tuboMarcaH = (c) => { const L = tuboMarca(c); return L.length ? L.map((x) => `<i class="rmsw" style="background:${TCOL[x] || '#fff'}"></i>${esc(x)}`).join(' ') : '<span class="muted">sin dato</span>'; };
 async function tuboMarcaEdit() {
   if (window.READONLY) return;
@@ -194,7 +197,7 @@ async function tuboMarcaEdit() {
 const TUBO_LARGO = { 'PG132-1A': 11500, 'PG132-2A': 9097, 'PG133-1A': 10000, 'PG132-3A': 10000, 'PG132-4A': 11500, 'PG132-5A': 9097, 'PG132-6A': 9000, 'PG132-7A': 6428 };
 function tuboInfo(c) {
   const B = (S.trackers && S.trackers.bom) || window.BOM_TRINA, it = B && (B.items || []).find((i) => (i.dib || []).some((d) => String(d).toUpperCase() === '26050-' + c));
-  return { c, k: it ? it.k : '', size: it ? it.size : '', largo: (it && it.largo) || TUBO_LARGO[c] || 0, neto: it ? it.neto : null, tot: it ? it.tot : null, col: TUBO_COL[c] || '#999' };
+  return { c, k: it ? it.k : '', size: it ? it.size : '', largo: (it && it.largo) || TUBO_LARGO[c] || 0, neto: it ? it.neto : null, tot: it ? it.tot : null, col: tuboCss(c), cols: tuboCols(c) };
 }
 // conteo por código y sector: hincas (código Trina) o tubos de torque
 function ramConteo(C, modo) {
@@ -208,7 +211,8 @@ function ramTuboSVG(t, L, txt) {
   const tot = tub.reduce((a, c) => a + TUBO_LARGO[c] / 1000, 0); let y = mot.y - tot / 2, g = ramTxt(xs, Math.min(y, L[0].y) - txt * 0.45, t.id.replace('TRK-', 'TR '), txt * 1.05, 'text-anchor="middle" font-weight="700" class="rmtid2"');
   tub.forEach((c) => { const l = TUBO_LARGO[c] / 1000, ym = y + l / 2;
     const mk = tuboMarca(c), band = (y0) => mk.map((x, q) => `<rect x="${(xs - 0.55 + q * 1.1 / mk.length).toFixed(2)}" y="${y0.toFixed(2)}" width="${(1.1 / mk.length).toFixed(2)}" height="0.7" fill="${TCOL[x] || '#fff'}" stroke="#222" stroke-width="0.04"/>`).join('');
-    g += `<rect x="${(xs - 0.55).toFixed(2)}" y="${y.toFixed(2)}" width="1.1" height="${l.toFixed(2)}" fill="${TUBO_COL[c]}" stroke="#222" stroke-width="0.06"/>` + (mk.length ? band(y + 0.05) + band(y + l - 0.75) : '')
+    const cs = tuboCols(c); void band;
+    g += cs.map((col, q) => `<rect x="${(xs - 0.55 + q * 1.1 / cs.length).toFixed(2)}" y="${y.toFixed(2)}" width="${(1.1 / cs.length).toFixed(2)}" height="${l.toFixed(2)}" fill="${col}"/>`).join('') + `<rect x="${(xs - 0.55).toFixed(2)}" y="${y.toFixed(2)}" width="1.1" height="${l.toFixed(2)}" fill="none" stroke="#222" stroke-width="0.06"/>`
       + ramTxt(xs + 0.8, ym + txt * 0.3, esc(c.replace('PG13', '13')), txt * 0.8, 'text-anchor="start" class="rmhl"');
     y += l; });
   L.forEach(({ h, x, y: yy }) => { g += `<rect x="${(x - 0.35).toFixed(2)}" y="${(yy - 0.35).toFixed(2)}" width="0.7" height="0.7" fill="${h.motor ? '#000' : '#fff'}" stroke="#555" stroke-width="0.06"/>`; });
@@ -242,7 +246,7 @@ function ramResTabla(C, modo, secs, cls) {
     <tr class="rmrest"><td colspan="${tubo ? 5 : 8}"><b>Total ${tubo ? 'tubos' : 'hincas'}</b></td>${tot.map((n) => `<td class="n"><b>${fmt(n)}</b></td>`).join('')}<td class="n"><b>${fmt(tot.reduce((a, b) => a + b, 0))}</b></td></tr>
     <tr class="rmrest"><td colspan="${tubo ? 5 : 8}">Trackers</td>${secs.map((s) => `<td class="n">${fmt(nT(s))}</td>`).join('')}<td class="n">${fmt(secs.reduce((a, s) => a + nT(s), 0))}</td></tr></tbody></table>`;
   const cfg = tubo ? `<h4>Tubos por configuración de tracker (de norte a sur)</h4><table class="${cls} rmrestb rmcfg"><thead><tr><th>Configuración</th><th>Tubos</th>${secs.map((s) => `<th class="n">Trackers S${s}</th>`).join('')}</tr></thead><tbody>
-      ${Object.entries(TUBO_CFG).map(([k, L]) => `<tr><td>${esc(cfgTxt(k + '|N').replace(/ · suelo normal/, ''))}</td><td>${L.map((c) => `<i style="background:${TUBO_COL[c]}"></i>${esc(c)}`).join(' ')}</td>${secs.map((s) => { const n = C.L.filter((r) => r.t.s === s && `${r.t.t}|${r.t.z || 'Outer'}` === k).length; return `<td class="n">${n ? fmt(n) : '–'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>
+      ${Object.entries(TUBO_CFG).map(([k, L]) => `<tr><td>${esc(cfgTxt(k + '|N').replace(/ · suelo normal/, ''))}</td><td>${L.map((c) => `<i style="background:${tuboCss(c)}"></i>${esc(c)}`).join(' ')}</td>${secs.map((s) => { const n = C.L.filter((r) => r.t.s === s && `${r.t.t}|${r.t.z || 'Outer'}` === k).length; return `<td class="n">${n ? fmt(n) : '–'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>
       <p class="rmrnota">Vigas □130 de acero galvanizado; el espesor cambia con la posición: 3,0 mm la PG133-1A del centro de los 1P52 exteriores; 2,2 mm la PG132-4A, 5A y 7A; 2,5 mm el resto. Las cantidades salen de la configuración de cada tracker en el layout. Color en el plano: solo para distinguir los tubos en el dibujo; marca de pintura: la que traen los tubos en los extremos, cargada en obra.</p>`
     : `<p class="rmrnota"><b>Nomograma de colores Trina:</b> cada hinca lleva dos marcas de pintura. Cabeza (triángulo de arriba en el plano): rojo = general en suelo normal, azul = general en suelo blando, sin color = hinca motor. Punta (triángulo de abajo): color del largo y perfil según la tabla. Código Trina arriba de cada hinca; M = hinca motor.</p>`;
   return tabla + cfg;
@@ -370,6 +374,14 @@ function ramHincasSVG(C, HA, modo) {
     if (modo === 'tubo') return `<g data-t="${t.id}"><title>${t.id}</title>${ramTuboSVG(t, L, 0.85)}</g>`;
     return `<g data-t="${t.id}"><title>${t.id}</title>${ramTrkTxt(t, L, o, 0.85)}` + L.map(({ h, k, x, y }) => ramPilaSVG(h, k, x, y, Object.assign({}, o, { lat: ramLat(t, L, k) }), !!HA[t.id], 0.85)).join('') + '</g>'; }).join('');
 }
+// vista general del plano de tubos: cada tracker pintado con sus tubos (color de la marca cargada o el de referencia), de norte a sur
+function ramTubosOverview(C) {
+  return window.PLANO.trk.map((t) => { const r = C.map.get(t.id); if (!r || !r.n) return ''; const L = ramPilesLocal(t, r), q = ramRect(t);
+    const xs = L[0].x, w = Math.max(1.6, q.w), mot = L.find((p) => p.h.motor) || L[Math.floor(L.length / 2)], tub = tubosDe(t);
+    let y = mot.y - tub.reduce((a, c) => a + TUBO_LARGO[c] / 1000, 0) / 2, g = '';
+    tub.forEach((c) => { const l = TUBO_LARGO[c] / 1000, cs = tuboCols(c); g += cs.map((col, k) => `<rect x="${(xs - w / 2 + k * w / cs.length).toFixed(2)}" y="${y.toFixed(2)}" width="${(w / cs.length).toFixed(2)}" height="${l.toFixed(2)}" fill="${col}"/>`).join(''); y += l; });
+    return `<g data-t="${t.id}"><title>${t.id} · ${tub.map((c) => c.replace('PG13', '13')).join(' · ')}</title>${g}</g>`; }).join('');
+}
 // referencias (leyenda) de cada plano
 function ramRefs(C, modo, dosCol) {
   const ref = '<span><i style="background:#fff;border:2px solid #000"></i>M = hinca motor</span><span><i style="background:#fff;border:1.5px solid #c25e00"></i>Inversor</span><span><i style="background:#fff;border:1.5px solid #1f2a37"></i>STS</span><span>✕ tracker hincado</span>';
@@ -393,7 +405,7 @@ function ramPlano(b, C, PG, modo = 'ram') {
   const fillT = (r) => (dist ? (HA[r.t.id] ? '#d9d2ec' : r.conCod ? '#e3e8ee' : '#c9d0da') : ramColor(r, PG, HA));
   b.innerHTML = `<div class="rmgrid"><div class="card rmplano">${dist ? '' : `<div class="tools" style="margin:0 0 8px"><div class="seg" id="rmC"><button data-v="estado">Estado</button><button data-v="pend">Pendiente</button><button data-v="ond">Ondulación</button><button data-v="prog">Programa</button><button data-v="hinc">Avance</button></div></div>`}
       <div class="rmwrap"><svg viewBox="${ramVB().join(' ')}" class="rmsvg ${ramZcls()}" preserveAspectRatio="xMidYMid meet" font-family="Arial">${P.trk.map((t) => { const r = C.map.get(t.id), q = ramRect(t); return `<rect data-t="${t.id}" x="${q.x}" y="${q.y}" width="${q.w}" height="${q.h}" fill="${fillT(r)}" class="${UI.sel === t.id ? 'on' : ''}"><title>${t.id}${dist ? ` · ${cfgTxt(cfgDe(t))}` : ` · ${(RAM_EST[r.est] || RAM_EST.sin)[0]}${r.n ? ` · pendiente ${fmt(r.pend, 1)} % · ondulación ${fmt(r.ond, 2)} m` : ''}`}</title></rect>`; }).join('')}
-        <g class="rmz1">${ramHincasSVG(C, HA, modo)}</g><g class="rmref">${ramRefSVG(1.2, false)}</g></svg>
+        ${modo === 'tubo' ? `<g class="rmtov">${ramTubosOverview(C)}</g>` : ''}<g class="rmz1">${ramHincasSVG(C, HA, modo)}</g><g class="rmref">${ramRefSVG(1.2, false)}</g></svg>
         <div class="rmzb"><button class="btn sm" data-z="in" title="Acercar">＋</button><button class="btn sm" data-z="out" title="Alejar">－</button><button class="btn sm" data-z="fit" title="Ver todo el parque">⤢</button>${UI.sel ? '<button class="btn sm" data-z="sel" title="Ir al tracker elegido">◎</button>' : ''}</div></div>
       <div class="legend rmleg">${leg}</div><p class="hint" style="margin:6px 0 0">Rueda del mouse o ＋/－ para hacer zoom, arrastrá para moverte. Al acercarte aparecen los trackers y cada hinca; más cerca, los rótulos.</p></div>
     <div class="card rmdet">${modo === 'tubo' ? (sel ? ramDetTubo(sel) : '<div class="empty" style="padding:30px 10px"><b>Elegí un tracker en el plano</b><p class="muted">Vas a ver su configuración y los tubos de torque de norte a sur, con sección y largo.</p></div>') : modo === 'dist' ? (sel ? ramDetDist(sel) : '<div class="empty" style="padding:30px 10px"><b>Elegí un tracker en el plano</b><p class="muted">Vas a ver su configuración y el código y los colores de cada hinca, de norte a sur.</p></div>')
