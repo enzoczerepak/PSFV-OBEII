@@ -28,7 +28,7 @@ function vPlano(el) {
   if (cap('trk')) {
     const HA = (S.hincado || {}).avance || {}, MIX = typeof monIdx === 'function' ? monIdx() : new Map();
     const tcol = (t) => (pl.color === 'tipo' ? (t.t === '1P52' ? '#00939a' : '#f5a524') : pl.color === 'disc' ? colTrk(t) : pl.color === 'hinc' ? (HA[t.id] ? '#7c5cbf' : '#c9d0da') : (pl.color === 'arm' || pl.color === 'pan') ? ['#c9d0da', '#f5c24b', MON_T[pl.color][1]][monEstado(MIX.get(pl.color + '|' + t.id), pl.color)] : SECT_COL[t.s]);
-    P.trk.forEach((t) => { g += `<rect x="${(t.x - t.w / 2).toFixed(1)}" y="${(t.y - t.h / 2).toFixed(1)}" width="${t.w}" height="${t.h}" rx="0.6" fill="${tcol(t)}" class="pl-trk${pl.sel === 't|' + t.id ? ' pl-on' : ''}" data-pk="t|${t.id}"><title>${t.id} · ${t.t} · Sector ${t.s}${t.z ? ' · ' + cfgTxt(cfgDe(t)) : ''}</title></rect>`; });
+    P.trk.forEach((t) => { g += `<rect x="${(t.x - t.w / 2).toFixed(1)}" y="${(t.y - t.h / 2).toFixed(1)}" width="${t.w}" height="${t.h}" rx="0.6" fill="${tcol(t)}"${pl.color === 'disc' ? ' style="fill-opacity:1"' : ''} class="pl-trk${pl.sel === 't|' + t.id ? ' pl-on' : ''}" data-pk="t|${t.id}"><title>${t.id} · ${t.t} · Sector ${t.s}${t.z ? ' · ' + cfgTxt(cfgDe(t)) : ''}</title></rect>`; });
   }
   if (cap('bt')) P.bt.forEach((z) => {
     const c = circ.get(z.inv), e = zest(c);
