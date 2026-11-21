@@ -30,6 +30,12 @@ const MS_DEF = {
   anchoMod: 2382,  // ancho del módulo en sentido E-O (mm): el borde queda a ancho/2 · cos(giro) del eje
   fuente: {},      // terreno por sector: 'tin' (layout) o id de una topografía cargada
   rugMax: 300,     // rugosidad máxima admisible por tracker (mm), método de topografía (planilla RugosidadArea)
+  modo: 'trina',   // 'trina': solo se mueve donde la hinca no llega a su regulación (franja) · 'completa': nivelación completa del área como Civil 3D
+  compensar: true, // nivelación completa: subir o bajar todo el diseño del sector hasta que el corte alcance para el relleno (con esponjamiento)
+  areaNiv: 'topo', // nivelación completa: 'topo' = toda el área relevada (contorno de la topografía, como Civil 3D) · 'filas' = solo el ancho entre filas
+  dzNiv: 0,        // nivelación completa sin compensar: subir (+) o bajar (−) todo el diseño (cm), p. ej. para igualar una superficie de Civil 3D
+  maxLado: 30,     // topografía: lado máximo de los triángulos de la superficie (m); más grande = cubre más área entre puntos lejanos
+  anchoNiv: 0,     // nivelación completa: ancho nivelado por fila (m); 0 = la distancia entre filas del sector
   final: {},       // superficie final de diseño a verificar por sector (PVCase / Civil 3D), id de una topografía de tipo 'final'
 };
 const MSUI = { tab: 'plano', sec: null, sel: null, vb: null, pend: null, ver: { curvas: true, lim: true, vol: true, ptos: false } };
@@ -121,7 +127,7 @@ function msTracker(t, H, P, terr, pend) {
     const n = Math.max(2, Math.round((dMax + 2 * P.ext) / P.paso));
     for (let i = 0; i <= n; i++) { const d = -P.ext + (dMax + 2 * P.ext) * i / n, y = H[0].y - d;
       let h = null, bd = 1e9; H.forEach((q) => { const e = Math.abs(q.d - d); if (e < bd) { bd = e; h = q; } });
-      const pila = bd < P.paso / 2 + 1e-6 ? h : null, zs = terr.sup ? terr.sup(pila ? pila.x : xA, y) : null;
+      const pila = bd < P.paso / 2 + 1e-6 ? h : null, fuera = d < 0 || d > dMax, zs = terr.sup && !fuera ? terr.sup(pila ? pila.x : xA, y) : null; // en las puntas (más allá de la primera/última hinca) la superficie puede unir puntos lejanos: se prolonga el perfil de las hincas
       M.push({ d, y, z: pila ? pila.z : zs != null ? zs : zLin(d), lo: pila ? pila.lo : loG, hi: pila ? pila.hi : hiG, w: (dMax + 2 * P.ext) / n * (i === 0 || i === n ? 0.5 : 1), pila });
     }
   } else H.forEach((h, k) => { const a = k ? (h.d - H[k - 1].d) / 2 : P.ext, b = k < H.length - 1 ? (H[k + 1].d - h.d) / 2 : P.ext; M.push({ d: h.d, y: h.y, z: h.z, lo: h.lo, hi: h.hi, w: a + b, pila: h }); });
@@ -135,6 +141,15 @@ function msTracker(t, H, P, terr, pend) {
   const md = H.reduce((a, h) => a + h.d, 0) / H.length, mz = H.reduce((a, h) => a + h.z, 0) / H.length;
   const bT = H.reduce((a, h) => a + (h.d - md) * (h.z - mz), 0) / (H.reduce((a, h) => a + (h.d - md) ** 2, 0) || 1);
   const bC = Math.max(-lim, Math.min(lim, bT));
+  // nivelación completa: el terreno queda exactamente sobre la recta de mínimos cuadrados (pendiente limitada); el volumen y la compensación se calculan en msNivelar
+  if (P.modo === 'completa') {
+    const b = bC, a = mz - b * md;
+    M.forEach((m) => { m.zf = a + b * m.d; m.mov = m.zf - m.z; m.desp = P.despNom / 1000 - lat * m.sEO; });
+    H.forEach((h) => { const G = a + b * h.d; h.cab = G + h.nom; h.zf = G; h.mov = G - h.z; h.rev0 = h.cab - h.z; h.rev = h.nom; });
+    let eo = null; H.forEach((h) => { const s0 = eoAt(h.x, h.y); if (s0 != null) eo = Math.max(eo || 0, s0 * 100); });
+    const grad = Math.abs(Math.atan(b) * 180 / Math.PI), amort = grad <= 1.5 ? 51 : grad <= 4.5 ? 83.5 : grad <= 7.5 ? 116 : grad <= 9 ? 148 : null;
+    return { t, H, M, a, b, pend: b * 100, pendT: bT * 100, eo, despMin: Math.min(...M.map((m) => m.desp)), nDespC: 0, corte: 0, relleno: 0, cMax: 0, rMax: 0, nMov: 0, nVal: 0, xA, amort, grad, sinDato: H.filter((h) => h.fz === 'layout' || h.fz === 'interpolado').length };
+  }
   // costo: volumen de corte + relleno × 3 si se prioriza el corte (o ÷3 si se prioriza el relleno)
   const n = M.length, kf = P.prior === 'corte' ? 3 : P.prior === 'relleno' ? 1 / 3 : 1, umb = P.umbral / 1000;
   const cc = new Float64Array(2 * n), ww = new Float64Array(2 * n), tp = new Uint8Array(2 * n), ip = M.map((m, i) => (m.pila ? i : -1)).filter((i) => i >= 0);
@@ -170,6 +185,49 @@ function msTracker(t, H, P, terr, pend) {
   return { t, H, M, a, b, pend: b * 100, pendT: bT * 100, eo, despMin, nDespC, corte, relleno, cMax, rMax, nMov: H.filter((h) => Math.abs(h.mov) > 1e-4).length, nVal, xA, amort, grad, sinDato: H.filter((h) => h.fz === 'layout' || h.fz === 'interpolado').length };
 }
 
+// ---------- nivelación completa (criterio Civil 3D) ----------
+// Cada fila queda sobre su recta de diseño (mínimos cuadrados del terreno, pendiente N-S limitada) y entre dos filas vecinas el diseño
+// es un plano que une sus rectas (pendiente E-O = diferencia entre filas / distancia). Se nivela todo el ancho entre filas, no solo la
+// franja del tracker, y el volumen se mide contra el terreno real en 4 bandas por fila. Si se compensa, todo el diseño del sector sube o
+// baja lo mismo hasta que el corte alcanza para el relleno compactado (esponjamiento incluido).
+function msNivelar(L, P, terr) {
+  const xs = L.map((r) => r.xA).sort((a, b) => a - b), gaps = []; for (let i = 1; i < xs.length; i++) { const g = xs[i] - xs[i - 1]; if (g > 2 && g < 15) gaps.push(g); }
+  gaps.sort((a, b) => a - b); const W = P.anchoNiv > 0 ? P.anchoNiv : gaps.length ? gaps[Math.floor(gaps.length / 2)] : P.franja;
+  const yR = (r) => [r.H[r.H.length - 1].y - P.ext, r.H[0].y + P.ext], Gd = (r, y) => r.a + r.b * (r.H[0].y - y);
+  const vec = (r, lado) => { let best = null, bd = 1e9; const [y0, y1] = yR(r); L.forEach((q) => { const dx = (q.xA - r.xA) * lado; if (q === r || dx < 0.5 * W || dx > 1.6 * W) return; const [q0, q1] = yR(q); if (q1 < y0 || q0 > y1) return; if (dx < bd) { bd = dx; best = q; } }); return best; };
+  const OF = [-0.375, -0.125, 0.125, 0.375].map((k) => k * W), E = [];
+  L.forEach((r) => { const ve = vec(r, 1), vo = vec(r, -1);
+    r.M.forEach((m) => { const G = Gd(r, m.y); m.of = OF.map((o) => { const q = o > 0 ? ve : vo; let zd = G;
+        if (q) { const [q0, q1] = yR(q); if (m.y >= q0 && m.y <= q1) zd = G + (Math.abs(o) / Math.abs(q.xA - r.xA)) * (Gd(q, m.y) - G); }
+        const fuera = m.d < 0 || m.d > r.H[r.H.length - 1].d, zt0 = terr.sup && !fuera ? terr.sup(r.xA + o, m.y) : null, lim = 0.3 * Math.abs(o), zt = zt0 == null ? m.z : m.z + Math.max(-lim, Math.min(lim, zt0 - m.z)), e = zd - zt; E.push([e, m.w * W / 4]); return [o, e]; }); }); });
+  // toda el área relevada: grilla de 1 m dentro de la superficie del terreno; el diseño entre y fuera de las filas se interpola de las dos
+  // rectas de fila más cercanas (inverso de la distancia al tramo de cada fila, prolongando su pendiente más allá de las puntas)
+  let grid = null;
+  if (P.areaNiv === 'topo' && terr.sup && terr.tri && terr.tri.length && terr.fuente !== 'tin') {
+    E.length = 0; grid = [];
+    const seg = L.map((r) => { const [y0, y1] = yR(r); return { r, y0, y1 }; });
+    const dis = (s0, x, y) => { const dy = y < s0.y0 ? s0.y0 - y : y > s0.y1 ? y - s0.y1 : 0; return Math.hypot(x - s0.r.xA, dy); };
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity; terr.tri.forEach((t) => [t.a, t.b, t.c].forEach((p) => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }));
+    for (let x = Math.floor(x0) + 0.5; x < x1; x += 1) for (let y = Math.floor(y0) + 0.5; y < y1; y += 1) {
+      const zt = terr.sup(x, y); if (zt == null) continue;
+      let a = null, b = null; for (const s0 of seg) { const d = dis(s0, x, y); if (!a || d < a.d) { b = a; a = { s: s0, d }; } else if (!b || d < b.d) b = { s: s0, d }; }
+      const za = Gd(a.s.r, y); let zd = za; if (b && a.d > 1e-6) { const wa = 1 / a.d, wb = 1 / b.d; zd = (za * wa + Gd(b.s.r, y) * wb) / (wa + wb); }
+      E.push([zd - zt, 1]); grid.push([x, y, zd - zt]); }
+  }
+  const fe = 1 + P.esponj / 100, bal = (dz) => { let c = 0, f = 0; for (const [e, w] of E) { const v = e + dz; if (v < 0) c -= v * w; else f += v * w; } return { c, f, k: f * fe - c }; };
+  let dz = (Number(P.dzNiv) || 0) / 100; if (P.compensar) { let lo = -3, hi = 3; for (let i = 0; i < 50; i++) { const mid = (lo + hi) / 2; if (bal(mid).k > 0) hi = mid; else lo = mid; } dz = (lo + hi) / 2; }
+  const umb = P.umbral / 1000, area = grid ? grid.length : L.reduce((a, r) => a + r.M.reduce((q, m) => q + m.w, 0) * W, 0);
+  if (grid) grid.forEach((g) => { g[2] += dz; });
+  L.forEach((r) => { r.a += dz; let c = 0, f = 0, cM = 0, rM = 0;
+    r.M.forEach((m) => { m.zf = Gd(r, m.y); m.mov = m.zf - m.z; m.of = m.of.map(([o, e]) => [o, e + dz]); m.desp = P.despNom / 1000 - (P.anchoMod / 2000 * Math.cos(P.angMax * Math.PI / 180)) * m.sEO;
+      m.of.forEach(([, v]) => { if (v < 0) { c -= v * m.w * W / 4; cM = Math.max(cM, -v); } else { f += v * m.w * W / 4; rM = Math.max(rM, v); } }); });
+    r.H.forEach((h) => { const G = Gd(r, h.y); h.cab = G + h.nom; h.zf = G; h.mov = G - h.z; h.rev0 = h.cab - h.z; h.rev = h.nom; });
+    Object.assign(r, { corte: c, relleno: f, cMax: cM, rMax: rM, nMov: r.H.filter((h) => Math.abs(h.mov) > 1e-4).length, nVal: r.H.filter((h) => Math.abs(h.mov) > umb + 1e-6).length, despMin: Math.min(...r.M.map((m) => m.desp)) }); });
+  // volumen total: con toda el área, el de la grilla (las filas quedan como detalle por tracker)
+  let cT = null, fT = null; if (grid) { cT = 0; fT = 0; grid.forEach((g) => { if (g[2] < 0) cT -= g[2]; else fT += g[2]; }); }
+  return { W, dz, area, grid, cT, fT, topo: !!grid };
+}
+
 // ---------- terreno de un sector ----------
 function msTerreno(sec, fuente) {
   const P0 = (window.PLANO || {}).trk || [], T = P0.filter((t) => t.s === sec), [OX, OY] = msOrigen();
@@ -179,7 +237,7 @@ function msTerreno(sec, fuente) {
   let pts, nombre, set = null;
   if (fuente === 'tin') { pts = piles; nombre = 'Superficie del layout (cota de cada hinca)'; }
   else { set = msSets().find((x) => x.id === fuente); pts = set ? set.pts.filter((p) => p[0] > bb.x0 && p[0] < bb.x1 && p[1] > bb.y0 && p[1] < bb.y1) : piles; nombre = set ? set.nombre : 'Superficie del layout'; }
-  const sup = msSuperficie(pts, fuente === 'tin' ? 25 : 30);
+  const sup = msSuperficie(pts, fuente === 'tin' ? 25 : (msP().maxLado || 30)); // lado máximo de triángulo: Civil 3D por defecto no lo limita
   // índice de puntos para "punto sobre la hinca"
   const G = new Map(); pts.forEach((p) => { const k = Math.round(p[0]) + ',' + Math.round(p[1]); let l = G.get(k); if (!l) G.set(k, (l = [])); l.push(p); });
   const cerca = (x, y) => { let b = null, bd = 0.5; for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const p of G.get((Math.round(x) + i) + ',' + (Math.round(y) + j)) || []) { const d = Math.hypot(p[0] - x, p[1] - y); if (d < bd) { bd = d; b = p; } } return b; };
@@ -190,17 +248,18 @@ function msTerreno(sec, fuente) {
 }
 
 // ---------- cálculo de un sector (con caché) ----------
-function msCalc(sec, pendOver) {
-  const P = msP(), RP = ramP(), fuente = msFuente(sec, P), pend = pendOver != null ? pendOver : P.pendNS;
+function msCalc(sec, pendOver, modoOver) {
+  const P = msP(); if (modoOver) P.modo = modoOver; const RP = ramP(), fuente = msFuente(sec, P), pend = pendOver != null ? pendOver : P.pendNS;
   const set = msSets().find((x) => x.id === fuente), key = [sec, fuente, set ? set.n + '|' + set.cargado : '', pend, JSON.stringify(Object.assign({}, P, { fuente: 0 })), JSON.stringify(RP), JSON.stringify(S.hincado.matriz || {})].join('§');
   MSC = MSC || new Map(); if (MSC.has(key)) return MSC.get(key);
   const terr = msTerreno(sec, fuente); if (!terr) return null;
   const L = []; (window.PLANO.trk || []).filter((t) => t.s === sec).forEach((t) => { const H = msPilas(t, RP); if (H && H.every((h) => h.zt != null || terr.pila(h).z != null)) L.push(msTracker(t, H, P, terr, pend)); });
-  const corte = L.reduce((a, r) => a + r.corte, 0), relleno = L.reduce((a, r) => a + r.relleno, 0), mat = relleno * (1 + P.esponj / 100);
+  let niv = null; if (P.modo === 'completa' && L.length) { niv = msNivelar(L, P, terr); P.franja = niv.W; }
+  const corte = niv && niv.topo ? niv.cT : L.reduce((a, r) => a + r.corte, 0), relleno = niv && niv.topo ? niv.fT : L.reduce((a, r) => a + r.relleno, 0), mat = relleno * (1 + P.esponj / 100);
   const R = { sec, fuente, terr, pend, P, L, map: new Map(L.map((r) => [r.t.id, r])), corte, relleno, mat, aporte: Math.max(0, mat - corte), sobra: Math.max(0, corte - mat),
     nTrk: L.filter((r) => r.corte + r.relleno > 0.01).length, nH: L.reduce((a, r) => a + r.H.length, 0), nMov: L.reduce((a, r) => a + r.nMov, 0), nVal: L.reduce((a, r) => a + r.nVal, 0),
     eoFuera: L.filter((r) => r.eo != null && r.eo > P.pendEO).length, nsFuera: L.filter((r) => Math.abs(r.pendT) > pend).length,
-    cMax: Math.max(0, ...L.map((r) => r.cMax)), rMax: Math.max(0, ...L.map((r) => r.rMax)), sinDato: L.reduce((a, r) => a + r.sinDato, 0) };
+    cMax: Math.max(0, ...L.map((r) => r.cMax)), rMax: Math.max(0, ...L.map((r) => r.rMax)), sinDato: L.reduce((a, r) => a + r.sinDato, 0), niv };
   if (MSC.size > 30) MSC.clear(); MSC.set(key, R); return R;
 }
 
@@ -240,20 +299,25 @@ function vMovSuelo(el) {
       <label>Terreno<select id="msFu" ${ro ? 'disabled' : ''}><option value="tin" ${R.fuente === 'tin' ? 'selected' : ''}>Superficie del layout (cota de cada hinca)</option>${msSetsA().map((x) => `<option value="${x.id}" ${R.fuente === x.id ? 'selected' : ''}>${esc(x.nombre)}${x.fecha ? ' · ' + esc(x.fecha) : ''} · ${fmt(x.n)} ptos${(x.sectores || []).includes(MSUI.sec) ? '' : ' (no cubre el sector)'}</option>`).join('')}</select></label>
       <label class="msslider">Pendiente N-S máxima del tracker <b id="msPv">${fmt(pend, 1)} %</b> <small class="muted">(${fmt(Math.atan(pend / 100) * 180 / Math.PI, 1)}°)</small>
         <input type="range" id="msPend" min="0" max="15" step="0.5" value="${pend}"></label>
-      <div class="msbtns"><label class="rmchk" title="Primero evita superar el espesor de validación de postes"><input type="checkbox" id="msLim" ${P.limUmb ? 'checked' : ''} ${ro ? 'disabled' : ''} style="width:auto"><span>Hasta ${P.umbral} mm</span></label>
+      <div class="msbtns"><div class="seg sm" id="msModo" title="Criterio del movimiento de suelos"><button data-v="trina" class="${P.modo !== 'completa' ? 'on' : ''}" ${ro ? 'disabled' : ''}>Criterio Trina (franja)</button><button data-v="completa" class="${P.modo === 'completa' ? 'on' : ''}" ${ro ? 'disabled' : ''}>Nivelación completa</button></div></div>
+      <div class="msbtns" ${P.modo === 'completa' ? 'style="display:none"' : ''}><label class="rmchk" title="Primero evita superar el espesor de validación de postes"><input type="checkbox" id="msLim" ${P.limUmb ? 'checked' : ''} ${ro ? 'disabled' : ''} style="width:auto"><span>Hasta ${P.umbral} mm</span></label>
         <select id="msPri" ${ro ? 'disabled' : ''}>${[['corte', 'Priorizar corte'], ['igual', 'Menor volumen'], ['relleno', 'Priorizar relleno']].map(([v, t]) => `<option value="${v}" ${P.prior === v ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
       <div class="msbtns">${MSUI.pend != null && MSUI.pend !== P.pendNS ? `<button class="btn" id="msPg" ${ro ? 'disabled' : ''}>Guardar ${fmt(pend, 1)} % como parámetro</button><button class="btn" id="msPr">Volver a ${fmt(P.pendNS, 1)} %</button>` : `<span class="muted">Trina admite hasta 15 % (9°) N-S y E-O</span>`}</div></div>
     <div class="grid g4 stagger" style="margin:12px 0">
-      <div class="card kpi"><div class="kl">Corte</div><div class="kv" style="color:#c0392b">${f3(R.corte)}</div><div class="muted">máx. ${fmt(R.cMax, 2)} m · franja ${fmt(P.franja, 1)} m</div></div>
+      <div class="card kpi"><div class="kl">Corte</div><div class="kv" style="color:#c0392b">${f3(R.corte)}</div><div class="muted">máx. ${fmt(R.cMax, 2)} m · ${R.niv ? `nivelación completa, ${fmt(R.niv.W, 1)} m entre filas` : `franja ${fmt(P.franja, 1)} m`}</div></div>
       <div class="card kpi"><div class="kl">Relleno</div><div class="kv" style="color:#1f5fa8">${f3(R.relleno)}</div><div class="muted">máx. ${fmt(R.rMax, 2)} m · con ${fmt(P.esponj)} % esponj.: ${f3(R.mat)}</div></div>
       <div class="card kpi"><div class="kl">${R.aporte > 0 ? 'Aporte de material' : 'Sobrante de corte'}</div><div class="kv">${f3(R.aporte > 0 ? R.aporte : R.sobra)}</div><div class="muted">${R.aporte > 0 ? 'el corte no alcanza para rellenar' : 'todo el relleno sale del corte'}</div></div>
       <div class="card kpi"><div class="kl">Hincas con movimiento</div><div class="kv">${fmt(R.nMov)}<small> / ${fmt(R.nH)}</small></div><div class="muted">${fmt(R.nTrk)} de ${fmt(R.L.length)} trackers · <span style="color:${R.nVal ? '#b45309' : 'inherit'};font-weight:600">${fmt(R.nVal)} con más de ${P.umbral} mm (validación Trina)</span></div></div></div>
+    ${(() => { const O = msCalc(MSUI.sec, pend, R.niv ? 'trina' : 'completa'); if (!O) return '';
+      return `<div class="card hint mscomp">${R.niv ? `<b>Nivelación completa</b> (como Civil 3D): cada fila queda sobre una recta de diseño y entre filas el terreno se nivela en plano; se mueve ${R.niv.topo ? 'toda el área relevada' : 'todo el ancho entre filas'} (${fmt(R.niv.area)} m²), aunque la hinca absorbiera la diferencia con su regulación.${P.compensar ? ` Diseño ${R.niv.dz >= 0 ? 'subido' : 'bajado'} ${fmt(Math.abs(R.niv.dz) * 100, 1)} cm para compensar corte y relleno.` : ' Sin compensar.'}` : '<b>Criterio Trina</b>: solo se mueve la franja del tracker donde la hinca no llega a su altura libre con la regulación.'}
+        Con el otro criterio (${R.niv ? 'Trina, franja ' + fmt(O.P.franja, 1) + ' m' : 'nivelación completa'}): corte <b style="color:#c0392b">${f3(O.corte)}</b> · relleno <b style="color:#1f5fa8">${f3(O.relleno)}</b> · ${fmt(O.nMov)} hincas con movimiento.</div>`; })()}
     ${R.eoFuera || R.nsFuera || R.sinDato ? `<div class="card hint mswarn">${R.nsFuera ? `<b>${R.nsFuera}</b> trackers tienen terreno con pendiente N-S mayor que ${fmt(pend, 1)} % (se corrige con el movimiento). ` : ''}${R.eoFuera ? `<b>${R.eoFuera}</b> trackers tienen terreno con pendiente E-O mayor que ${fmt(P.pendEO, 1)} %: Trina pide consultar a su ingeniería (no se corrige con este cálculo). ` : ''}${R.sinDato ? `<b>${R.sinDato}</b> hincas no tienen punto en la topografía elegida: se interpolaron con las hincas medidas del mismo tracker.` : ''}</div>` : ''}
     <div class="seg rmtabs" id="msT"><button data-v="plano">🗺️ Plano</button><button data-v="trk">📋 Trackers</button><button data-v="esc">📈 Escenarios</button><button data-v="rug">📏 Rugosidad</button><button data-v="m3d">🧊 Vista 3D</button><button data-v="ver">✅ Verificación</button><button data-v="topo">📍 Topografías</button><button data-v="par">⚙️ Parámetros</button></div>
     <div id="msB" style="margin-top:12px"></div>`;
   $('#msSec', el).onchange = (e) => { MSUI.sec = e.target.value; MSUI.sel = null; MSUI.vb = null; render(false); };
   $('#msFu', el).onchange = (e) => { const m = msP(); m.fuente[MSUI.sec] = e.target.value; msGuardarP(m, `Movimiento de suelos: terreno del sector ${MSUI.sec} = ${e.target.selectedOptions[0].textContent}`); };
   let tm = null; $('#msPend', el).oninput = (e) => { $('#msPv', el).textContent = fmt(Number(e.target.value), 1) + ' %'; clearTimeout(tm); tm = setTimeout(() => { MSUI.pend = Number(e.target.value); render(false); }, 120); };
+  $$('#msModo button', el).forEach((x) => { x.onclick = () => { const m = msP(); if (m.modo === x.dataset.v || (x.dataset.v === 'trina' && m.modo !== 'completa')) return; m.modo = x.dataset.v; msGuardarP(m, `Movimiento de suelos: criterio ${x.dataset.v === 'completa' ? 'nivelación completa (Civil 3D)' : 'Trina (solo franja donde la hinca no llega)'}`); }; });
   $('#msLim', el).onchange = (e) => { const m = msP(); m.limUmb = e.target.checked; msGuardarP(m, `Movimiento de suelos: ${m.limUmb ? 'evitar' : 'permitir'} movimientos de más de ${m.umbral} mm`); };
   $('#msPri', el).onchange = (e) => { const m = msP(); m.prior = e.target.value; msGuardarP(m, `Movimiento de suelos: preferir ${e.target.selectedOptions[0].textContent.toLowerCase()}`); };
   const pg = $('#msPg', el); if (pg) pg.onclick = () => { const m = msP(); m.pendNS = pend; MSUI.pend = null; msGuardarP(m, `Movimiento de suelos: pendiente N-S máxima = ${pend} %`); };
@@ -454,7 +518,13 @@ function msPar(b, R) {
       ${f('angMax', 'Giro máximo del tracker', '°', '1', 'MEC-DW-26050-3401-0A: ±60°.')}
       ${f('anchoMod', 'Ancho del módulo (E-O)', 'mm', '1', 'MEC-DW-26050-3401-0A: 2.382 mm. A 60°, el borde queda a ancho/2 × cos 60° ≈ 0,6 m al costado del eje.')}</div></div>
     <div class="card"><h3>Cálculo</h3><div class="form rmform">
-      ${f('franja', 'Ancho de la franja por tracker', 'm', '0.5', 'Ancho de terreno que se mueve a lo largo de cada tracker.')}
+      <label>Criterio<span class="rmin"><select data-k="modo" ${ro ? 'disabled' : ''}><option value="trina" ${P.modo !== 'completa' ? 'selected' : ''}>Trina: solo la franja donde la hinca no llega</option><option value="completa" ${P.modo === 'completa' ? 'selected' : ''}>Nivelación completa del área (como Civil 3D)</option></select></span><small class="muted">La nivelación completa deja todo el terreno sobre el diseño (rectas por fila y planos entre filas), sin aprovechar la regulación de la hinca.</small></label>
+      ${c('compensar', 'Nivelación completa: compensar corte y relleno', 'subiendo o bajando todo el diseño del sector hasta que el corte alcance para el relleno compactado.')}
+      <label>Nivelación completa: área<span class="rmin"><select data-k="areaNiv" ${ro ? 'disabled' : ''}><option value="topo" ${P.areaNiv !== 'filas' ? 'selected' : ''}>Toda el área relevada (contorno de la topografía, como Civil 3D)</option><option value="filas" ${P.areaNiv === 'filas' ? 'selected' : ''}>Solo el ancho entre filas de trackers</option></select></span><small class="muted">Con el layout como terreno se usa siempre el ancho entre filas.</small></label>
+      ${f('dzNiv', 'Nivelación completa sin compensar: ajuste de cota del diseño', 'cm', '0.5', 'Sube (+) o baja (−) todo el diseño del sector. Con "compensar" activo se calcula solo.')}
+      ${f('maxLado', 'Topografía: lado máximo de triángulo', 'm', '5', 'Superficie del relevamiento: no se unen puntos más lejanos que esto. Para igualar el área de Civil 3D usar el mismo criterio que topografía (sin límite ≈ casco convexo).')}
+      ${f('anchoNiv', 'Nivelación completa: ancho por fila', 'm', '0.5', '0 = la distancia entre filas del sector (todo el terreno).')}
+      ${f('franja', 'Ancho de la franja por tracker (criterio Trina)', 'm', '0.5', 'Ancho de terreno que se mueve a lo largo de cada tracker.')}
       ${f('ext', 'Franja más allá de las puntas', 'm', '0.25', 'Largo extra al norte de la primera hinca y al sur de la última.')}
       ${f('paso', 'Paso del perfil', 'm', '0.25', 'Cada cuánto se controla el terreno a lo largo del tracker.')}
       ${c('todoLargo', 'Controlar todo el largo del tracker', '(si no, solo en las hincas y el terreno entre hincas se toma recto).')}

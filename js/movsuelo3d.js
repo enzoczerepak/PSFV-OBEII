@@ -92,8 +92,9 @@ function ms3Escena(R) {
   const X = (x) => x - cx, Z = (y) => cy - y, Y = (z) => (z - z0) * k;
   const bb = { x0: Math.min(...xs) - 18, x1: Math.max(...xs) + 18, y0: Math.min(...ysA) - 18, y1: Math.max(...ysA) + 18 };
   // ---- campo de movimiento m(x, y): corte (< 0) / relleno (> 0) de cada tracker, interpolado entre franjas vecinas ----
-  const Q = []; R.L.forEach((r) => r.M.forEach((m) => { [-P.franja / 2, 0, P.franja / 2].forEach((dx) => Q.push([r.xA + dx, m.y, m.mov])); }));
-  const campo = msSuperficie(Q, 9), mAt = (x, y) => { const v = campo ? campo.z(x, y) : null; return v == null ? 0 : v; };
+  const Q = []; if (R.niv && R.niv.grid) R.niv.grid.forEach((g, i) => { if (i % 2 === 0) Q.push(g); }); else R.L.forEach((r) => r.M.forEach((m) => { if (m.of) { m.of.forEach(([o, v]) => Q.push([r.xA + o, m.y, v])); Q.push([r.xA, m.y, m.mov]); } // nivelación completa: 4 bandas por fila
+    else [-P.franja / 2, 0, P.franja / 2].forEach((dx) => Q.push([r.xA + dx, m.y, m.mov])); }));
+  const campo = msSuperficie(Q, R.niv && R.niv.grid ? 4 : R.niv ? Math.max(9, R.niv.W * 1.6) : 9), mAt = (x, y) => { const v = campo ? campo.z(x, y) : null; return v == null ? 0 : v; };
   const kM = M3.kmov, Yd = (zn, m) => (fin ? Y(zn + m) : Y(zn + m) - m * kM); // natural: la loma (corte) y la hondonada (relleno) se ven exageradas ×kM sobre el terreno final
   // ---- terreno: malla regular con su cota natural y el movimiento en cada vértice ----
   const sup = terr.sup, area = (bb.x1 - bb.x0) * (bb.y1 - bb.y0), st = Math.max(0.75, Math.sqrt(area / 110000));
@@ -182,7 +183,7 @@ function ms3Escena(R) {
   if (!M3.dist) { M3.dist = diag * 0.7; M3.tgt = [0, yc, 0]; }
   ms3Vis();
   const res = document.getElementById('m3Res');
-  if (res) res.innerHTML = `Sector ${R.sec} · ${esc(terr.nombre)} · ${fmt(R.L.length)} trackers · ${fmt(pilas.length)} hincas · desnivel ${fmt(z1 - z0, 2)} m (cotas ${fmt(z0, 2)} a ${fmt(z1, 2)} m) · relieve general exagerado ×${k}; las hincas y los trackers van a su altura real sobre el terreno.
+  if (res) res.innerHTML = `Sector ${R.sec} · ${R.niv ? `<b>nivelación completa</b> (diseño ${R.niv.dz >= 0 ? '+' : '−'}${fmt(Math.abs(R.niv.dz) * 100, 1)} cm)` : '<b>criterio Trina</b> (franja)'} · ${esc(terr.nombre)} · ${fmt(R.L.length)} trackers · ${fmt(pilas.length)} hincas · desnivel ${fmt(z1 - z0, 2)} m (cotas ${fmt(z0, 2)} a ${fmt(z1, 2)} m) · relieve general exagerado ×${k}; las hincas y los trackers van a su altura real sobre el terreno.
     ${fin ? 'Terreno final: el terreno ya nivelado; las hincas nacen de la cota final.' : `Terreno natural: lo que hay que cortar se ve como loma (rojo) y lo que hay que rellenar como hondonada (azul), con el espesor agrandado ×${M3.kmov} para que se note; las hincas nacen del terreno natural.`} Curvas de corte / relleno: igual espesor cada 5 cm, en degradé (rojo más intenso = más corte, azul más intenso = más relleno, gris = sin movimiento), interpoladas entre las franjas de los trackers. Hincas en naranja: más de ${fmt(P.umbral)} mm de movimiento (validar postes); en negro, la del motor.`;
 }
 // mesa de módulos: ancho del módulo (E-O), largo del tracker, girada alrededor del tubo
