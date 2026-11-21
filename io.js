@@ -245,6 +245,9 @@
     if (zv.length > 1) XLSX.utils.book_append_sheet(wb, sheet(zv, [12, 34, 14, 12, 10, 14]), 'Zanjeo por día');
     const aq = [['Fecha', 'Zanja MT', 'Arquetas colocadas este día', 'Acumulado en la zanja', 'Cargó']];
     ds.forEach((D) => (D.arq || []).forEach((x) => aq.push([D.fecha, x.z.titulo, x.n, x.acc, x.u || ''])));
+    const pt = [['Fecha', 'Tramo de PAT de BT', 'Sector (perímetro)', 'Metros', 'Perímetro completo', 'Bobina', 'Cargó']];
+    ds.forEach((D) => (D.pat || []).forEach((x) => pt.push([D.fecha, x.desc || '', x.sec ? 'Sector ' + x.sec : '', Number(x.metros) || 0, x.completo ? 'sí' : '', x.bobina || '', x.por || ''])));
+    if (pt.length > 1) XLSX.utils.book_append_sheet(wb, sheet(pt, [12, 34, 16, 10, 16, 16, 14]), 'PAT BT por día');
     if (aq.length > 1) XLSX.utils.book_append_sheet(wb, sheet(aq, [12, 34, 16, 14, 14]), 'Arquetas MT por día');
     return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   }

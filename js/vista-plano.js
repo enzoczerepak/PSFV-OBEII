@@ -1,6 +1,6 @@
 /* PSFV-OBE II · Plano de obra interactivo. */
 // ======================= PLANO DE OBRA =======================
-const PL_CAPAS = [['sect', 'Sectores'], ['trk', 'Trackers'], ['bt', 'Zanjas BT'], ['mt', 'Zanjas MT'], ['inv', 'Inversores'], ['sts', 'STS'], ['sala', 'Edificio O&M'], ['ctx', 'Caminos y cerco']];
+const PL_CAPAS = [['sect', 'Sectores'], ['trk', 'Trackers'], ['bt', 'Zanjas BT'], ['mt', 'Zanjas MT'], ['inv', 'Inversores'], ['sts', 'STS'], ['sala', 'Edificio O&M'], ['ctx', 'Caminos y cerco'], ['pat', 'PAT perimetral']];
 const SECT_COL = { 1: '#4e79a7', 2: '#59a14f', 3: '#b07aa1', 4: '#f28e2b', 5: '#00939a', 6: '#e15759' };
 const ZEST = { 'no abierta': '#b9c2cf', abierta: '#f5a524', cerrada: '#2f9e5b' };
 const KWP = (n) => `${fmt(n * 0.625, 1)}–${fmt(n * 0.635, 1)} kWp`;
@@ -46,6 +46,7 @@ function vPlano(el) {
   // edificio de O&M (layout r5): planta con sus salas, pintada con el avance de obra
   if (cap('sala') && P.sala && typeof salaInfo === 'function') { const B = P.sala, SI = salaInfo(), q = (p) => p.map(([a, b]) => `${(B.x + a).toFixed(2)},${(B.y - b).toFixed(2)}`).join(' ');
     g += `<g data-pk="o|sala" class="pl-sala${pl.sel === 'o|sala' ? ' pl-on' : ''}"><rect x="${B.x}" y="${(B.y - B.h).toFixed(2)}" width="${B.w}" height="${B.h}" class="pl-salab"/><rect x="${B.x}" y="${(B.y - B.h).toFixed(2)}" width="${(B.w * SI.p).toFixed(2)}" height="${B.h}" class="pl-salaf"/>${B.rooms.map((r) => `<polygon points="${q(r.p)}" class="pl-salar"/>`).join('')}<text x="${(B.x + B.w / 2).toFixed(2)}" y="${(B.y - B.h - 1.5).toFixed(2)}" class="pl-stst pl-salat">Edificio O&amp;M · ${fmt(SI.p * 100)} %</text><title>Edificio de operación y mantenimiento · ${fmt(SI.p * 100)} % de avance</title></g>`; }
+  if (cap('pat') && typeof PAT_PERIM !== 'undefined') patPerim().forEach((q) => { const c = PPCOL(q); PAT_PERIM[q.sec].geo.forEach((l) => { g += `<polyline points="${l.map((p) => p.join(',')).join(' ')}" fill="none" stroke="${c}" stroke-width="2.6" vector-effect="non-scaling-stroke" ${!q.ok && q.m > 0 ? 'stroke-dasharray="7 4"' : ''} stroke-linejoin="round" class="pl-pat" style="pointer-events:stroke"><title>PAT perimetral sector ${q.sec}: ${fmt(q.m, 1)} de ${fmt(q.req)} m (${q.ok ? 'completo' : fmt(q.p * 100, 1) + ' %'})</title></polyline>`; }); });
   if (cap('sect')) P.sect.forEach((s) => { g += `<text x="${s.lx}" y="${s.ly}" class="pl-sectl" style="fill:${SECT_COL[s.n]}">Sector ${s.n}</text>`; });
   const vb = pl.vb || [0, 0, P.W, P.H];
   // panel lateral
