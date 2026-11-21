@@ -474,14 +474,14 @@ function trkVistas(tipo) {
 }
 const trkvHL = (root, tag) => { const v = $('.trkv', root); if (!v) return; v.classList.toggle('tvon', !!tag); $$('[data-p]', v).forEach((g) => g.classList.toggle('tvhl', !!tag && g.dataset.p === tag)); $$('.tvley [data-tag]', v).forEach((x) => x.classList.toggle('on', x.dataset.tag === tag)); };
 // ---------- apartado Tipos de tracker: cantidad por configuración (1P52 / 1P26 · exterior, borde, interior · suelo) y sector ----------
-const TIPO_COL = { '1P52|Outer': '#e15759', '1P52|Border': '#f28e2b', '1P52|Inner': '#4e79a7', '1P26|Outer': '#b07aa1', '1P26|Border': '#59a14f' };
+const TIPO_COL = { '1P52|Outer': TRINA_COL['Outer|N'], '1P52|Border': TRINA_COL['Border|N'], '1P52|Inner': TRINA_COL['Inner|N'], '1P26|Outer': TRINA_COL['Outer|N'], '1P26|Border': TRINA_COL['Border|N'] };
 const TIPO_ORD = ['1P52|Outer|N', '1P52|Outer|B', '1P52|Border|N', '1P52|Border|B', '1P52|Inner|N', '1P52|Inner|B', '1P26|Outer|N', '1P26|Outer|B', '1P26|Border|N', '1P26|Border|B'];
 const tipoTxt = (k) => { const [t, z, sl] = k.split('|'); return `${t} ${HZ[z] || z} (${z})${sl ? ` · ${HSL[sl]}` : ''}`; };
 function tipoConteo(C) { const m = new Map(); C.L.forEach((r) => { const k = cfgDe(r.t), x = m.get(k) || {}; x[r.t.s] = (x[r.t.s] || 0) + 1; m.set(k, x); }); return m; }
 function tipoSVG(C, sel, txt = 30, solo = false) {
   const P = window.PLANO, cen = {}, T = solo && sel ? P.trk.filter((t) => t.s === sel) : P.trk, xs = T.map((t) => ramRect(t));
   const R = T.map((t, i) => { const q = xs[i], c = cen[t.s] = cen[t.s] || { x: 0, y: 0, n: 0 }; c.x += q.x + q.w / 2; c.y += q.y + q.h / 2; c.n++; const k = `${t.t}|${t.z || 'Outer'}`, bl = (t.sl || 'N') === 'B';
-    return `<rect data-s="${t.s}" x="${q.x}" y="${q.y}" width="${q.w}" height="${q.h}" fill="${TIPO_COL[k] || '#999'}" fill-opacity="${!sel || sel === t.s ? 0.9 : 0.25}" stroke="${bl ? '#111' : 'none'}" stroke-width="${bl ? 0.9 : 0}" stroke-dasharray="${bl ? '2 1.2' : ''}"><title>${t.id} · S${t.s} · ${esc(tipoTxt(cfgDe(t)))}</title></rect>`; }).join('');
+    return `<rect data-s="${t.s}" x="${q.x}" y="${q.y}" width="${q.w}" height="${q.h}" fill="${colTrk(t)}" fill-opacity="${!sel || sel === t.s ? 0.95 : 0.22}" stroke="#333" stroke-width="0.25"><title>${t.id} · S${t.s} · ${esc(tipoTxt(cfgDe(t)))}</title></rect>`; }).join('');
   const L = Object.entries(cen).map(([s, c]) => ramTxt(c.x / c.n, c.y / c.n + txt * 0.35, 'S' + s, txt, 'text-anchor="middle" font-weight="700" fill="#111" class="rmhl" pointer-events="none"')).join('');
   const bb = [Math.min(...xs.map((q) => q.x)) - 10, Math.min(...xs.map((q) => q.y)) - 10, Math.max(...xs.map((q) => q.x + q.w)) - Math.min(...xs.map((q) => q.x)) + 20, Math.max(...xs.map((q) => q.y + q.h)) - Math.min(...xs.map((q) => q.y)) + 20];
   return { svg: R + L + (solo ? '' : `<g class="rmref">${ramRefSVG(2.4, false)}</g>`), bb };
@@ -498,7 +498,7 @@ function tipoTabla(C, secs, cls) {
     <tr class="rmrest"><td colspan="4">Hincas</td>${secs.map((s) => `<td class="n">${fmt(hin(sec(s)))}</td>`).join('')}<td class="n">${fmt(secs.reduce((a, s) => a + hin(sec(s)), 0))}</td></tr></tbody></table>
     <p class="rmrnota">Exterior (Outer), Borde (Border) e Interior (Inner): posición del tracker en el bloque según la discretización de Trina; los exteriores llevan motor de 7" y el tubo central de 3,0 mm. Suelo blando: trackers con hincas para suelo blando (borde punteado en el plano).</p>`;
 }
-const tipoLeyenda = () => Object.entries(TIPO_COL).map(([k, c]) => `<span><i style="background:${c}"></i>${esc(tipoTxt(k))}</span>`).join('') + '<span><i style="background:#fff;border:1.5px dashed #111"></i>suelo blando</span>';
+const tipoLeyenda = () => [['Outer', 'Exterior'], ['Border', 'Borde'], ['Inner', 'Interior']].map(([z, n]) => `<span><i style="background:${TRINA_COL[z + '|N']};border:1px solid #555"></i>${n} (${z})</span><span><i style="background:${TRINA_COL[z + '|B']};border:1px solid #555"></i>${n} · suelo blando</span>`).join('') + '<span class="muted">colores del plano de discretización de Trina</span>';
 function vHTipos(el, C, secs) {
   const sel = DISTUI.tipoSec && secs.includes(DISTUI.tipoSec) ? DISTUI.tipoSec : null, M = tipoSVG(C, sel), ss = sel ? [sel] : secs, m = tipoConteo(C);
   actions([['PDF · todo el parque', 'btn', () => tipoPdf(C, secs)], ['PDF · todo el parque + una hoja por sector', 'btn', () => tipoPdf(C, secs, 'all')],
@@ -515,7 +515,7 @@ function vHTipos(el, C, secs) {
       <div class="rmwrap"><svg viewBox="${M.bb.join(' ')}" class="rmsvg rmsecs" preserveAspectRatio="xMidYMid meet" font-family="Arial">${M.svg}</svg></div>
       <div class="rmley">${tipoLeyenda()}</div></div>
     <div class="card rmdet"><h3>${sel ? `Sector ${sel}` : 'Todo el parque'} · trackers por tipo</h3><div class="tblwrap"><table class="tbl rmrestb"><thead><tr><th>Tipo</th><th class="n">Suelo normal</th><th class="n">Suelo blando</th><th class="n">Total</th></tr></thead><tbody>
-      ${['1P52|Outer', '1P52|Border', '1P52|Inner', '1P26|Outer', '1P26|Border'].map((k) => { const c = (sl) => L.filter((r) => `${r.t.t}|${r.t.z || 'Outer'}` === k && (r.t.sl || 'N') === sl).length, t = c('N') + c('B'); return t ? `<tr><td><i class="rmsw" style="background:${TIPO_COL[k]}"></i><b>${k.split('|')[0]}</b> ${esc(HZ[k.split('|')[1]])} <span class="muted">(${k.split('|')[1]})</span></td><td class="n">${c('N') ? fmt(c('N')) : '–'}</td><td class="n">${c('B') ? fmt(c('B')) : '–'}</td><td class="n"><b>${fmt(t)}</b></td></tr>` : ''; }).join('')}
+      ${['1P52|Outer', '1P52|Border', '1P52|Inner', '1P26|Outer', '1P26|Border'].map((k) => { const c = (sl) => L.filter((r) => `${r.t.t}|${r.t.z || 'Outer'}` === k && (r.t.sl || 'N') === sl).length, t = c('N') + c('B'); return t ? `<tr><td><i class="rmsw" style="background:${TIPO_COL[k]}"></i><b>${k.split('|')[0]}</b> ${esc(HZ[k.split('|')[1]])} <span class="muted">(${k.split('|')[1]})</span></td><td class="n">${c('N') ? `<i class="rmsw" style="background:${TRINA_COL[k.split('|')[1] + '|N']}"></i>${fmt(c('N'))}` : '–'}</td><td class="n">${c('B') ? `<i class="rmsw" style="background:${TRINA_COL[k.split('|')[1] + '|B']}"></i>${fmt(c('B'))}` : '–'}</td><td class="n"><b>${fmt(t)}</b></td></tr>` : ''; }).join('')}
       <tr class="rmrest"><td><b>Total</b></td><td class="n">${fmt(n((r) => r.t.sl !== 'B'))}</td><td class="n">${fmt(n((r) => r.t.sl === 'B'))}</td><td class="n"><b>${fmt(L.length)}</b></td></tr></tbody></table></div>
       <p class="hint">Tocá un sector en el plano o arriba. ${fmt(L.reduce((a, r) => a + r.n, 0))} hincas y ${fmt(L.reduce((a, r) => a + (r.t.t === '1P26' ? 26 : 52), 0))} paneles en ${sel ? 'el sector' : 'el parque'}.</p></div></div>
     <div class="card" style="margin-top:16px"><h3>Trackers por tipo y sector</h3><div class="tblwrap">${tipoTabla(C, secs, 'tbl')}</div></div>
@@ -1038,7 +1038,7 @@ function ramCroquis(p, mw = 46, mh = 15) {
 }
 function ramPdfPlano(o) {
   const C = ramCalc(), HA = (S.hincado || {}).avance || {}, hojas = ramHojas(C, o), tubo = o.modo === 'tubo', dist = o.modo === 'dist' || tubo;
-  const secsR = [...new Set(hojas.map((h) => h.s))], nPre = dist && hojas.length ? 1 + (ramAccTabla(C, secsR, 'rmres', 'n') || 1) : 0;
+  const secsR = [...new Set(hojas.map((h) => h.s))], nPre = dist && hojas.length ? 1 : 0; // los accesorios van solo en su propio PDF (pestaña Accesorios)
   const tit = tubo ? 'Plano de distribución de tubos de torque' : dist ? 'Plano de distribución de hincas' : 'Ramming plan · altura libre', pre = !dist && ramP().precarga;
   const pags = hojas.map((p, i) => {
     const txt = Math.max(0.55, Math.min(1.2, 2.6 * p.esc / 1000)), A = p.A;
@@ -1059,7 +1059,7 @@ function ramPdfPlano(o) {
       ${ramRotulo(p, i + nPre, hojas.length + nPre, { tit, dist, tubo, pre, size: o.size, C })}</section>`;
   });
   // distribución: primera hoja con el nomograma y las cantidades por sector
-  const accP = dist && hojas.length ? ramAccPag(C, o, secsR, ramArea(o.size, false)) : [];
+  const accP = [];
   if (dist && hojas.length) pags.unshift(ramResumen(C, o, secsR, ramArea(o.size, false)), ...accP);
   const orden = (dist && hojas.length ? ['L'].concat(accP.map(() => 'L')) : []).concat(hojas.map((p) => (p.port ? 'P' : 'L')));
   // hojas verticales y apaisadas: se imprimen por separado y se unen en orden (Chromium no mezcla bien orientaciones)
@@ -1079,7 +1079,7 @@ function ramRotulo(p, i, tot, o) {
     ref = (m.size ? `<div class="rmrcod rmrcnt"><span class="rmrch">Código · hoja / sector</span><span class="rmrch">Código · hoja / sector</span>${[...m.entries()].sort().map(([c, x]) => `<span>${ramDosCol(x.k)}<b>${esc(c)}</b> <em>${fmt(x.n)} / ${fmt(sum(ms.get(c)))}</em></span>`).join('')}</div>` : '<p><b>Falta la distribución de Trina</b> (Catálogo y distribución).</p>')
       + `<p class="rmrnota">Colores: triángulo de arriba = cabeza (rojo general suelo normal, azul general suelo blando, sin color motor); de abajo = punta (largo y perfil). Sector ${p.s}: ${fmt([...ms.values()].reduce((q, x) => q + sum(x), 0))} hincas. Nomograma y cantidades por sector en la pág. 1.</p>`;
   } else ref = '<div class="rmrcod"><span><i style="background:#58b368"></i>Dentro de tolerancia</span><span><i style="background:#f0a23b"></i>Salto con la vecina</span><span><i style="background:#d64545"></i>Fuera de tolerancia</span></div><p class="rmrnota">Rótulo de cada hinca: número (norte a sur) · altura libre (m).</p>';
-  if (o.dist) ref += ramAccRot(o.C, p.s);
+
   ref += '<div class="rmrcod"><span><i style="background:#fff;border:0.5mm solid #000"></i>M = hinca motor</span><span><i style="background:#fff;border:0.35mm solid #c25e00"></i>Inversor</span><span><i style="background:#fff;border:0.35mm solid #1f2a37"></i>STS</span><span>✕ tracker hincado</span></div>';
   return `<div class="rmrot${R.comp ? ' rmrc' : ''}" style="${pos};width:${R.W}mm;max-height:${R.H.toFixed(0)}mm;overflow:hidden">
     <div class="rmrt"><b>${o.tit}</b>${o.pre ? '<span class="rmpre">PRECARGA · no apto para hincar</span>' : ''}<div>${esc(S.nombre || '')}</div></div>
