@@ -19,7 +19,7 @@ const MOV_SIN = window.READONLY ? SOLO_PC : [];
 const MENU_ALIAS = { gantt: 'crono', ctend: 'campo' };
 // color de cada frente de obra: ícono, recuadro de la sección y marca del apartado activo
 const MCOL = { cables: '#2fc4b2', fo: '#5ab8ff', lmt: '#8b9dff', fundaciones: '#f2b33d', sala: '#b294ff', trk: '#3fb27f', maqs: '#ff8f57' };
-const GRUPOS = [['BT', 'BT · 0,8 kV', [['plan', 'Plan de corte', 'corte'], ['circ', 'Circuitos', 'circuito']]], ['MT', 'MT · 33 kV', [['plan', 'Plan de corte', 'corte'], ['circ', 'Circuitos', 'circuito']]], ['PAT', 'PAT · Cu desnudo', [['plan', 'Plan de corte', 'corte'], ['circ', 'Tendidos', 'circuito']]]];
+const GRUPOS = [['BT', 'BT · 0,8 kV', [['plan', 'Plan de corte', 'corte'], ['circ', 'Circuitos', 'circuito']]], ['MT', 'MT · 33 kV', [['plan', 'Plan de corte', 'corte'], ['circ', 'Circuitos', 'circuito']]], ['PAT', 'PAT · Cu desnudo', [['plan', 'Plan de corte', 'corte'], ['circ', 'Tendidos', 'circuito'], ['perim', 'Perímetros de sectores', 'punta']]]];
 function menuHTML() {
   const btn = ([v, t, i, tg], tag) => `<button data-view="${v}"${MCOL[v] ? ` style="--mc:${MCOL[v]}"` : ''}>${ICO[i] || ''}<span>${t}</span>${tag ? `<em class="tg">${tag}</em>` : tg ? `<em class="tg pronto">${tg}</em>` : ''}</button>`;
   const grupos = `<div class="tgrp"><div class="tgh">Tendidos BT, MT y PAT</div>${GRUPOS.map(([c, n, its]) => `<div class="grp g-${c}" data-cat="${c}"><button class="gh" type="button"><i></i><span class="ghn">${n}</span>${ICO.chev}</button>${its.map(([k, t, i]) => btn([c + '-' + k, t, i], c)).join('')}</div>`).join('')}</div>`;

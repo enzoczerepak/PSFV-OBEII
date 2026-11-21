@@ -51,9 +51,7 @@ function vPatBT(el) {
     const x = S.patBT.reg.find((y) => y.id === b.dataset.d); if (!x) return;
     if (!(await confirmar('Borrar registro', `Se borra ${x.tipo === 'c' ? `el tramo “${esc(x.desc || '')}” (${fmt(x.metros, 1)} m)` : `la carga de accesorios “${esc(x.desc || '')}”`}.`, 'Borrar', 'btn danger'))) return;
     S.patBT.reg = S.patBT.reg.filter((y) => y.id !== x.id); commit(`PAT BT: borrado ${x.tipo === 'c' ? `tramo ${x.desc || ''} (${fmt(x.metros, 1)} m)` : `accesorios ${x.desc || ''}`}`); }; });
-  $$('[data-ppa]', el).forEach((b) => { b.onclick = (e) => { e.stopPropagation(); patBTTramo(null, b.dataset.ppa, false); }; });
-  $$('[data-ppc]', el).forEach((b) => { b.onclick = (e) => { e.stopPropagation(); patBTTramo(null, b.dataset.ppc, true); }; });
-  $$('[data-pps]', el).forEach((g) => { g.onclick = () => { if (!ro) patBTTramo(null, g.dataset.pps, false); }; });
+  patPerimBind(el);
   const cf = $('#pbCfg', el); if (cf) cf.onclick = (e) => { e.preventDefault(); patBTCfg(); };
 }
 const patBTautor = () => (typeof USR !== 'undefined' && USR ? USR.nombre : '');
@@ -67,7 +65,7 @@ async function patBTTramo(id, secIni, completo) {
       <label class="full">Perímetro de sector<select id="pS"><option value="">No es del perímetro (fila, inversor, chicote…)</option>${PP.map((q) => `<option value="${q.sec}" ${String(sec0) === q.sec ? 'selected' : ''}>Sector ${q.sec} · ${fmt(q.m)} de ${fmt(q.req)} m tendidos</option>`).join('')}</select></label>
       <label class="full rmchk"><input type="checkbox" id="pC" ${(x0 && x0.completo) || completo ? 'checked' : ''}> Con este tramo el perímetro del sector queda completo</label>
       <label class="full">Bobina<select id="pB"><option value="">Sin bobina registrada</option>${bobs.map((b) => `<option value="${esc(b.codigo)}" ${x0 && x0.bobina === b.codigo ? 'selected' : ''}>${esc(b.codigo)} · saldo ${fmt(b.saldoActual, 1)} m</option>`).join('')}</select></label>
-      <label class="full">Tramo (por dónde va)<input type="text" id="pD" value="${esc((x0 && x0.desc) || (sec0 ? `Perímetro sector ${sec0}${completo ? ' (completo)' : ''}` : ''))}" placeholder="Ej.: fila TRK 204–229 · STS 4 → INV 4.12 · chicote INV 3.5"></label></div>`,
+      <label class="full">Tramo (por dónde va)<input type="text" id="pD" value="${esc((x0 && x0.desc) || (sec0 ? `Perímetro sector ${sec0}` : ''))}" placeholder="Ej.: fila TRK 204–229 · STS 4 → INV 4.12 · chicote INV 3.5"></label></div>`,
     buttons: [['Cancelar', 'btn', () => null], [x0 ? 'Guardar' : 'Registrar', 'btn pri', (b) => {
       const m = Number($('#pM', b).value); if (!(m > 0)) { $('#pM', b).classList.add('bad'); return false; }
       const sc = $('#pS', b).value, d = $('#pD', b).value.trim() || (sc ? `Perímetro sector ${sc}` : ''); if (!d) { $('#pD', b).classList.add('bad'); return false; }
@@ -112,6 +110,26 @@ async function patBTExcel() {
   if (p) toast('Excel exportado', { action: ['Abrir', () => window.api.openPath(p)] });
 }
 
+function patPerimBind(el) {
+  const ro = window.READONLY;
+  $$('[data-ppa]', el).forEach((b) => { b.onclick = (e) => { e.stopPropagation(); patBTTramo(null, b.dataset.ppa, false); }; });
+  $$('[data-ppc]', el).forEach((b) => { b.onclick = (e) => { e.stopPropagation(); patBTTramo(null, b.dataset.ppc, true); }; });
+  $$('[data-pps]', el).forEach((g) => { g.onclick = () => { if (!ro) patBTTramo(null, g.dataset.pps, false); }; });
+  $$('[data-ppe]', el).forEach((b) => { b.onclick = () => patBTTramo(b.dataset.ppe); });
+  $$('[data-ppd]', el).forEach((b) => { b.onclick = async () => { const x = S.patBT.reg.find((y) => y.id === b.dataset.ppd); if (!x) return;
+    if (!(await confirmar('Borrar tramo', `Se borra “${esc(x.desc || '')}” (${fmt(x.metros, 1)} m).`, 'Borrar', 'btn danger'))) return;
+    S.patBT.reg = S.patBT.reg.filter((y) => y.id !== x.id); commit(`PAT perimetral: borrado ${x.desc || ''} (${fmt(x.metros, 1)} m)`); }; });
+}
+// apartado propio dentro de PAT · Cu desnudo: panel de perímetros + historial de tramos de perímetro
+function vPatPerim(el) {
+  const ro = window.READONLY; S.patBT = S.patBT || { reg: [] }; S.patBT.reg = S.patBT.reg || [];
+  actions(ro ? [['Exportar Excel', 'btn', patBTExcel]] : [['+ Tramo de perímetro', 'btn pri', () => patBTTramo(null, (patPerim().find((q) => !q.ok) || {}).sec || '', false)], ['Exportar Excel', 'btn', patBTExcel]]);
+  const T = patPerim().flatMap((q) => q.T).sort((a, b) => (b.f || '').localeCompare(a.f || ''));
+  el.innerHTML = patPerimHTML() + `<div class="card"><h3>Tramos de perímetro cargados</h3>${T.length ? `<div class="tblwrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Sector</th><th>Tramo</th><th>Bobina</th><th class="n">Metros</th><th>Cargó</th>${ro ? '' : '<th></th>'}</tr></thead><tbody>
+    ${T.map((x) => `<tr><td>${x.f ? fechaCorta(x.f) : ''}</td><td>Sector ${esc(x.sec)}</td><td style="white-space:normal">${esc(x.desc || '')}${x.completo ? ' <b style="color:#2f9e5b">· completo</b>' : ''}</td><td>${esc(x.bobina || 'sin bobina')}</td><td class="n"><b>${fmt(x.metros, 1)}</b></td><td>${esc(x.por || '')}</td>${ro ? '' : `<td style="white-space:nowrap"><button class="btn sm ghost" data-ppe="${x.id}" title="Corregir">✎</button> <button class="btn sm ghost" data-ppd="${x.id}" title="Borrar">×</button></td>`}</tr>`).join('')}
+    </tbody></table></div>` : '<div class="empty"><b>Todavía no hay tramos de perímetro</b><p class="muted">Usá <b>+ m</b> en la fila del sector, o <b>✓ Completo</b> cuando el anillo está terminado.</p></div>'}</div>`;
+  patPerimBind(el);
+}
 // panel de perímetros: plano de los anillos coloreados por avance + tabla por sector con carga proporcional o completa
 const PPCOL = (q) => (q.ok ? '#2f9e5b' : q.m > 0 ? '#f59e0b' : '#9aa5b1');
 function patPerimSVG(PP, ancho) {

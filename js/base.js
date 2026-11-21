@@ -272,6 +272,7 @@ const VIEWS = {
   'MT-plan': ['Plan de corte', () => 'Cables de media tensión entre STS, sala de celdas y LMT · los cortes listos quedan fijos en su bobina'],
   'MT-circ': ['Circuitos', () => (ED.blank ? 'Circuitos de media tensión: zanja y registro de lo ejecutado' : 'STS 4 → 3 → sala de celdas · STS 1 → 2 → sala de celdas · sala de celdas → LMT · fin LMT → ET')],
   'PAT-plan': ['Plan de corte', () => `Cobre desnudo: ${(S.parque && S.parque.patBT) || 25} mm² en zanjas de BT, ${(S.parque && S.parque.patMT) || 95} mm² en zanjas de MT · los cortes listos quedan fijos en su bobina`],
+  'PAT-perim': ['Perímetros de PAT de los sectores', () => 'Anillo de Cu desnudo 25 mm² alrededor de cada sector, según OBEII-EL-PL-400 r1 · se carga por metros tendidos o como completo'],
   'PAT-circ': ['Tendidos', () => 'Un conductor de Cu desnudo por zanja (compartida o no), con el largo de la zanja'],
   'LA-plan': ['Plan de corte', () => 'Línea aérea de 33 kV parque → ET · conductor desnudo Prysalac (Al/Ac) · los cortes de los tramos listos quedan fijos en su bobina'],
   'LA-circ': ['Tramos', () => 'Tramos de la línea aérea (entre retenciones): sin zanja; se habilitan para cortar cuando los postes están listos'],
@@ -342,6 +343,7 @@ function render(anim) {
   const [cat, kind] = view.split('-');
   if (kind === 'plan') vPlan(el, cat);
   else if (kind === 'circ') vCircuitos(el, cat);
+  else if (kind === 'perim') vPatPerim(el);
   else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hram: vRam, hmov: vMovSuelo, hdist: vHDist, hrec: vHRec, hcat: vHCat, fo: vFibra, lmt: vLMT, sala: vSala, trec: vTrkRec, tent: vTrkEnt, trecl: vTrkRecl, hist: vHist, pdia: vPdia, campo: vCampo, ctend: vCTend, tarm: (e) => vMont(e, 'arm'), tpan: (e) => vMont(e, 'pan'), tstk: vStock, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, patbt: vPatBT, bobinas: vBobinas, ajustes: vAjustes })[view](el);
   if (typeof menuArchivar === 'function') menuArchivar();
   if (anim) { void el.offsetWidth; el.classList.add('enter'); el.scrollTop = 0; countUp(el); }
