@@ -185,12 +185,12 @@ function setInactivo(id, si) {
 const DIAL = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const diaTxt = (f) => `${DIAL[dowDe(f)]} ${fechaCorta(f).slice(0, 5)}`;
 const tieneDato = (m, f) => { const x = datoDia(m.id, f); return !vacio(m.sinHoro ? x.h : x.v); };
-// jornadas sin cargar: de lunes a sábado, de los últimos 21 días hasta ayer, después del primer registro del equipo
+// jornadas sin cargar (domingos incluidos: se puede trabajar; si no, «Domingo no trabajado»), de los últimos 21 días hasta ayer, después del primer registro del equipo
 function diasPendientes(ms) {
   const hoy = today(), out = [];
   const desde = {}; ms.forEach((m) => { const L = lecturas(m.id), hs = maqH().filter((r) => r.maq === m.id).flatMap((r) => Object.keys(r.hs || {})).sort(); desde[m.id] = (m.sinHoro ? hs[0] : L.length ? L[0][0] : null) || null; });
   for (let i = 21; i >= 1; i--) {
-    const f = sumDias(hoy, -i); if (dowDe(f) === 0) continue;
+    const f = sumDias(hoy, -i);
     const faltan = ms.filter((m) => desde[m.id] && f > desde[m.id] && !tieneDato(m, f) && !perCubre(m.id, f) && !inactEn(m, f));
     if (faltan.length) out.push({ f, ms: faltan });
   }
@@ -198,16 +198,22 @@ function diasPendientes(ms) {
 }
 // un período sin registro diario cubre los días que abarca
 function perCubre(maq, f) { return maqH().some((r) => r.maq === maq && Object.entries(r.per || {}).some(([fin, ini]) => f >= ini && f <= fin)); }
+// el equipo estuvo parado ese día: parada en curso que empezó antes o ese día, o una parada cargada con esa fecha
+const paradoEn = (maq, f) => maqE().some((e) => { if (e.maq !== maq || e.tipo !== 'parada') return false; const i = String(e.inicio || e.fecha || '').slice(0, 10), fi = e.enCurso ? today() : String(e.fin || e.fecha || '').slice(0, 10); return i && f >= i && f <= (fi || i); });
+// valor "sin uso": el mismo horómetro del fin de la jornada anterior (0 h); en equipos sin horómetro, 0 h
+const valorSinUso = (m, f) => (m.sinHoro ? 0 : horoAntes(m.id, f, lecturas(m.id).filter((y) => y[0] !== f)));
 function filaCarga(m, f) {
-  const x = datoDia(m.id, f), ya = m.sinHoro ? x.h : x.v, L = lecturas(m.id).filter((y) => y[0] !== f), ant = m.sinHoro ? null : horoAntes(m.id, f, L), prevD = L.filter((y) => y[0] < f).pop();
-  const ref = m.sinHoro ? 'sin horómetro: horas del día' : ant == null ? 'sin horómetro inicial' : `inicio ${fmt(ant, 1)}${prevD ? ` (${fechaCorta(prevD[0]).slice(0, 5)})` : ''}`;
+  const x = datoDia(m.id, f), ya0 = m.sinHoro ? x.h : x.v, L = lecturas(m.id).filter((y) => y[0] !== f), ant = m.sinHoro ? null : horoAntes(m.id, f, L), prevD = L.filter((y) => y[0] < f).pop();
+  const par = vacio(ya0) && paradoEn(m.id, f) && (m.sinHoro || ant != null), ya = par ? valorSinUso(m, f) : ya0;
+  const ref = (par ? '<b style="color:var(--bad)">parada</b> · ' : '') + (m.sinHoro ? 'sin horómetro: horas del día' : ant == null ? 'sin horómetro inicial' : `inicio ${fmt(ant, 1)}${prevD ? ` (${fechaCorta(prevD[0]).slice(0, 5)})` : ''}`);
   return `<div class="mqr${vacio(ya) ? '' : ' ya'}" data-m="${m.id}" data-f="${f}"><b class="mono" title="${esc(m.interno)}">${esc(m.interno)}</b><span class="muted mqd">${esc(m.descripcion || '')}</span>
     <span class="muted mqref">${ref}</span><input type="number" inputmode="decimal" step="${m.sinHoro ? '0.5' : '0.1'}" min="0" class="mqv" placeholder="${m.sinHoro ? 'horas' : 'horómetro'}" value="${vacio(ya) ? '' : Number(ya)}"><span class="mqh"></span>
-    <button class="btn sm ghost mqin" data-inact="${m.id}" title="Equipo en obra sin uso (por ejemplo, una hincadora hasta que empiece el hincado): deja de pedir horas hasta que lo reactives">💤 Inactiva</button></div>`;
+    <span class="mqbt">${m.sinHoro || ant != null ? `<button class="btn sm ghost mqeq" data-igual="${m.id}" title="Sin uso o parada: ${m.sinHoro ? '0 h' : `el mismo horómetro del día anterior (${fmt(ant, 1)})`}">＝ Sin uso</button>` : ''}
+    <button class="btn sm ghost mqin" data-inact="${m.id}" title="Equipo en obra sin uso (por ejemplo, una hincadora hasta que empiece el hincado): deja de pedir horas hasta que lo reactives">💤 Inactiva</button></span></div>`;
 }
 function tarjetaCarga(f, ms, pend, extra) {
   return `<div class="card mqcard${pend ? ' pend' : ''}" data-f="${f}"><div class="mqhd"><h3>${pend ? '⚠ Pendiente · ' : ''}Carga del ${diaTxt(f)}</h3>${pend ? '' : `<input type="date" id="mqF" value="${f}" max="${today()}">`}
-    <span class="sp"></span><button class="btn pri" data-reg="${f}">Registrar</button></div>
+    <span class="sp"></span>${dowDe(f) === 0 ? `<button class="btn" data-dnt="${f}" title="Carga para todos los equipos sin dato el horómetro del fin del sábado (0 h)">Domingo no trabajado</button>` : ''}<button class="btn ghost" data-igt="${f}" title="Completa los equipos sin dato con el mismo horómetro del día anterior (0 h)">＝ Sin uso a los vacíos</button><button class="btn pri" data-reg="${f}">Registrar</button></div>
     <div class="mqrows">${ms.map((m) => filaCarga(m, f)).join('')}</div>${extra || ''}</div>`;
 }
 function cargaRapidaHTML() {
@@ -235,6 +241,17 @@ function bindCargaRapida(el) {
   $$('.mqr', el).forEach((row) => { const i = $('.mqv', row); i.oninput = () => calc(row); calc(row);
     i.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const rs = $$('.mqv', row.closest('.mqcard')), k = rs.indexOf(i); if (k < rs.length - 1) rs[k + 1].focus(); else $('[data-reg]', row.closest('.mqcard')).click(); } }; });
   const fd = $('#mqF', el); if (fd) fd.onchange = () => { if (fd.value) { MQC.f = fd.value; render(false); } };
+  const igual = (row) => { const m = maqDe(row.dataset.m), v = m ? valorSinUso(m, row.dataset.f) : null; if (v == null) return false; $('.mqv', row).value = String(v); calc(row); return true; };
+  $$('[data-igual]', el).forEach((b) => { b.onclick = () => igual(b.closest('.mqr')); });
+  $$('[data-igt]', el).forEach((b) => { b.onclick = () => { let n = 0; $$('.mqr', b.closest('.mqcard')).forEach((r) => { if ($('.mqv', r).value === '' && igual(r)) n++; }); toast(n ? `${n} equipo${n === 1 ? '' : 's'} con el mismo horómetro (0 h). Revisá y tocá Registrar.` : 'No hay equipos vacíos'); }; });
+  $$('[data-dnt]', el).forEach((b) => { b.onclick = () => {
+    const f = b.dataset.dnt, sab = sumDias(f, -1); let n = 0; const sinSab = [];
+    $$('.mqr', b.closest('.mqcard')).forEach((r) => { const m = maqDe(r.dataset.m), v = $('.mqv', r).value; if (!m || v !== '') return;
+      if (!tieneDato(m, sab) && !perCubre(m.id, sab) && !inactEn(m, sab)) { sinSab.push(m.interno); return; } // primero el sábado: si no, el domingo quedaría con un horómetro viejo
+      const x = valorSinUso(m, f); if (x == null) return; guardarLectura(m.id, f, x); n++; });
+    if (sinSab.length) toast(`Falta cargar el sábado ${fechaCorta(sab).slice(0, 5)} de ${sinSab.join(', ')}: cargalo y volvé a tocar «Domingo no trabajado»`, { err: !n });
+    if (!n) { if (!sinSab.length) toast('Todos los equipos ya tienen dato en ese domingo'); return; }
+    commit(`Domingo ${fechaCorta(f)} no trabajado: ${n} equipo${n === 1 ? '' : 's'} con el horómetro del sábado (0 h)`); }; });
   $$('[data-inact]', el).forEach((b) => { b.onclick = () => setInactivo(b.dataset.inact, true); });
   $$('[data-react]', el).forEach((b) => { b.onclick = () => setInactivo(b.dataset.react, false); });
   $$('[data-reg]', el).forEach((b) => { b.onclick = () => {
