@@ -101,7 +101,7 @@ function sala3dEscena(I) {
   });
   // estructura superior: sólida cuando su etapa terminó, si no contorno
   const pCol = etp('hCS').p >= 1, pMur = etp('piso').p >= 1, pTec = etp('techo').p >= 1, pEst = etp('estT').p >= 1, pAb = etp('aber').p >= 1;
-  I.zap.forEach((z) => { const ok = salaAv('hCol', z.id).ok, cu = ['armCol', 'encCol', 'hCol'].some((k) => salaAv(k, z.id).ini); caja(0.2, H, 0.2, X(z.x), H / 2, Z(z.y), pCol || ok || cu, mat(pCol ? 0xc4cad2 : ok ? 0x2f9e5b : 0xf5a524)); });
+  I.zap.forEach((z) => { const ok = salaAv('hColS', z.id).ok, cu = ['armColS', 'encColS', 'hColS'].some((k) => salaAv(k, z.id).ini); caja(0.2, H, 0.2, X(z.x), H / 2, Z(z.y), pCol || ok || cu, mat(pCol ? 0xc4cad2 : ok ? 0x2f9e5b : 0xf5a524)); });
   if (pCol) [[0, 0, W, 0], [0, D, W, D], [0, 0, 0, D], [W, 0, W, D]].forEach(([x1, y1, x2, y2]) => { const hor = y1 === y2; box(hor ? W + 0.2 : 0.2, 0.25, hor ? 0.2 : D + 0.2, X((x1 + x2) / 2), H - 0.12, Z((y1 + y2) / 2), mat(0xc4cad2)); });
   // muros exteriores (sólidos con la mampostería terminada)
   const t = 0.2, mM = mat(0xf1eee8);

@@ -13,13 +13,17 @@
     { k: 'armZ', n: 'Armado de estructura de bases/zapatas', g: 'Bases', a: 'zap' },
     { k: 'encZ', n: 'Encofrado de bases/zapatas', g: 'Bases', a: 'zap' },
     { k: 'hZ', n: 'Carga de hormigón de bases/zapatas', g: 'Bases', a: 'zap' },
-    // columnas: arrancan de cada zapata y sostienen las vigas (encadenados)
-    { k: 'armCol', n: 'Armado de estructura de columnas', g: 'Columnas', a: 'zap' },
-    { k: 'encCol', n: 'Encofrado de columnas', g: 'Columnas', a: 'zap' },
-    { k: 'hCol', n: 'Carga de hormigón de columnas', g: 'Columnas', a: 'zap' },
+    // columnas inferiores: de cada zapata hasta el encadenado inferior (vigas de fundación)
+    { k: 'armCol', n: 'Armado de estructura de columnas inferiores (hasta encadenado inferior)', g: 'Columnas inferiores', a: 'zap' },
+    { k: 'encCol', n: 'Encofrado de columnas inferiores', g: 'Columnas inferiores', a: 'zap' },
+    { k: 'hCol', n: 'Carga de hormigón de columnas inferiores', g: 'Columnas inferiores', a: 'zap' },
     { k: 'armEI', n: 'Armado de estructura de encadenado inferior', g: 'Encadenado inferior', a: 'viga' },
     { k: 'encEI', n: 'Encofrado de encadenado inferior', g: 'Encadenado inferior', a: 'viga' },
     { k: 'hEI', n: 'Carga de hormigón de encadenado inferior', g: 'Encadenado inferior', a: 'viga' },
+    // columnas superiores: del encadenado inferior al superior; atajan la mampostería
+    { k: 'armColS', n: 'Armado de estructura de columnas superiores', g: 'Columnas superiores', a: 'zap' },
+    { k: 'encColS', n: 'Encofrado de columnas superiores', g: 'Columnas superiores', a: 'zap' },
+    { k: 'hColS', n: 'Carga de hormigón de columnas superiores', g: 'Columnas superiores', a: 'zap' },
     { k: 'trin', n: 'Ejecución de trincheras y contrapiso', g: 'Piso y muros', a: 'gral' },
     { k: 'piso', n: 'Ejecución de piso técnico y mampostería', g: 'Piso y muros', a: 'gral' },
     { k: 'revG', n: 'Revoque grueso interno y externo', g: 'Revoques', a: 'gral' },
