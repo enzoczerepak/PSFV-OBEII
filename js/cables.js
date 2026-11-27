@@ -330,12 +330,12 @@ function vBobinas(el) {
   actions([['Importar…', 'btn', () => menuImportar(null, true)], ['Stock consolidado · Excel', 'btn', exportStock], ['Stock consolidado · PDF', 'btn', printStock], ['+ Bobina', 'btn pri', () => editBobina(null)]]);
   const q = (ui.q.bob || '').toLowerCase();
   const list = R.bobinas.filter((b) => (ui.bobCat === 'all' || b.cat === ui.bobCat) && (!q || `${b.codigo} ${b.nro} ${b.remito}`.toLowerCase().includes(q)));
-  let h = `<div class="tools"><div class="seg" id="fBC"><button data-v="all">Todas</button><button data-v="BT">${CATN.BT}</button><button data-v="MT">${CATN.MT}</button><button data-v="PAT">PAT Cu desnudo</button><button data-v="LA">${CATN.LA}</button></div>
+  let h = `<div class="tools"><div class="seg" id="fBC"><button data-v="all">Todas</button><button data-v="BT">${CATN.BT}</button><button data-v="MT">${CATN.MT}</button><button data-v="PAT">PAT Cu desnudo</button><button data-v="LA">${CATN.LA}</button><button data-v="CC">Cable solar CC</button></div>
     <span class="muted">${list.length} bobinas · ${list.filter((b) => b.estadoReal === 'sin abrir').length} sin abrir · ${list.filter((b) => b.estadoReal === 'en uso').length} en uso · ${list.filter((b) => b.estadoReal === 'terminada').length} terminadas</span><span class="sp"></span><input type="search" id="fBQ" placeholder="Buscar código, N°, remito…" value="${esc(ui.q.bob || '')}" style="width:240px"></div>
     <div class="tblwrap"><table class="tbl"><thead><tr><th>Tipo</th><th>Código</th><th>N° fabricante</th><th>Sección</th><th class="n">Entrada</th><th class="n">Ya tendido</th>
     <th class="n">Saldo actual</th><th>Uso real</th><th>Estado real</th><th class="n">Plan pendiente</th><th class="n">Remanente previsto</th><th>Al final</th><th></th></tr></thead><tbody>`;
   list.forEach((b) => {
-    h += `<tr data-id="${b.id}"><td><span class="chip">${b.cat}</span></td><td><b>${esc(b.codigo)}</b></td><td class="mono" title="Remito ${esc(b.remito || '–')} · ingreso ${esc(b.fecha || '–')}">${esc(b.nro)}</td><td>${b.seccion ?? '?'}</td>
+    h += `<tr data-id="${b.id}"><td><span class="chip">${b.cat}</span></td><td>${b.cat === 'CC' && b.color ? `<i class="ccsw" style="background:${b.color === 'Rojo' ? '#d23c3c' : '#222'}" title="${esc(b.color)}"></i>` : ''}<b>${esc(b.codigo)}</b></td><td class="mono" title="Remito ${esc(b.remito || '–')} · ingreso ${esc(b.fecha || '–')}">${esc(b.nro)}</td><td>${b.seccion ?? '?'}${b.cat === 'CC' && b.color ? ' ' + esc(b.color.toLowerCase()) : ''}</td>
       <td class="n">${fmt(b.entrada)}</td><td class="n">${fmt(b.consumoReal, 1)}</td><td class="n"><b>${fmt(b.saldoActual, 1)}</b></td>
       <td><span class="mini ok"><div data-w="${(b.usoReal * 100).toFixed(1)}%" style="width:0"></div></span> <span class="muted">${fmt(b.usoReal * 100, b.usoReal > 0 && b.usoReal < 0.1 ? 1 : 0)}%</span></td><td>${pill(b.estadoReal)}</td>
       <td class="n">${fmt(b.asigListo + b.asigProv, 1)}</td><td class="n">${fmt(b.remanente, 1)}</td><td>${pill(b.estado)}</td>
@@ -346,10 +346,10 @@ function vBobinas(el) {
   searchBind('#fBQ', (v) => { ui.q.bob = v; });
   $$('tbody tr', el).forEach((tr) => { $('button', tr).onclick = () => editBobina(tr.dataset.id); tr.ondblclick = () => editBobina(tr.dataset.id); });
 }
-const SEC_DEF = { BT: '1x240', MT: '1x50/25', PAT: '1x25 Cu desnudo', LA: 'Prysalac 120/20' };
+const SEC_DEF = { BT: '1x240', MT: '1x50/25', PAT: '1x25 Cu desnudo', LA: 'Prysalac 120/20', CC: '1x6' };
 // opciones de sección por tipo para la carga (la línea aérea usa el catálogo Prysalac Al/Ac)
 const SEC_OPC = { BT: Object.keys(Engine.RETENAX.BT.filas).map((s) => `1x${s}`).reverse(), MT: Object.keys(Engine.RETENAX.MT.filas).map((s) => `1x${s}/25`), PAT: ['1x25 Cu desnudo', '1x35 Cu desnudo', '1x50 Cu desnudo', '1x95 Cu desnudo'],
-  LA: Engine.PRYSALAC.map((p) => `Prysalac ${p.sec}`) };
+  LA: Engine.PRYSALAC.map((p) => `Prysalac ${p.sec}`), CC: ['1x4', '1x6'] };
 // texto de la ficha técnica (y masa de la bobina si se conocen los metros)
 const dec = (x) => String(x).replace('.', ',');
 function fichaTxt(fi, metros) {
@@ -363,11 +363,12 @@ async function editBobina(id) {
   const nuevo = !id, defCat = ui.bobCat !== 'all' ? ui.bobCat : 'BT';
   const b = nuevo ? { id: uid('b'), cat: defCat, fecha: today(), remito: '', nro: '', seccion: SEC_DEF[defCat], entrada: 0, codigo: '', obs: '' } : S.bobinas.find((x) => x.id === id);
   const rb = R.bobinas.find((x) => x.id === id);
-  const usada = !nuevo && S.circuitos.some((c) => c.cat === b.cat && Object.values(c.real || {}).some((r) => r.bobina === rb.codigo));
+  const usada = !nuevo && (b.cat === 'CC' ? ((S.cc || {}).reg || []).some((x) => x.bobina === rb.codigo) : S.circuitos.some((c) => c.cat === b.cat && Object.values(c.real || {}).some((r) => r.bobina === rb.codigo)));
   const pm = modal({
     title: nuevo ? 'Nueva bobina' : `Editar bobina ${rb.codigo} (${b.cat})`,
     body: `<div class="form"><label>Tipo<select name="cat" ${usada ? 'disabled' : ''}>${Object.keys(CATS).map((k) => `<option value="${k}" ${b.cat === k ? 'selected' : ''}>${CATN[k]}</option>`).join('')}</select></label>
       <label>Sección<input type="text" name="seccion" list="secOpc" value="${esc(b.seccion)}" placeholder="1x240 · 1x50/25 · 1x25 · Prysalac 120/20"><datalist id="secOpc"></datalist></label>
+      <label id="ccColL" style="display:none">Color (cable solar)<select name="color"><option value="">—</option>${['Rojo', 'Negro'].map((c) => `<option ${b.color === c ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
       <div class="full" id="prysInfo" style="display:none"></div>
       <label>Fecha de ingreso<input type="date" name="fecha" value="${esc(b.fecha || '')}"></label><label>Remito<input type="text" name="remito" value="${esc(b.remito || '')}"></label>
       <label>N° de bobina (fabricante)<input type="text" name="nro" value="${esc(b.nro)}"></label><label>Cantidad de entrada (m)<input type="number" name="entrada" value="${b.entrada}"></label>
@@ -376,9 +377,12 @@ async function editBobina(id) {
     buttons: [...(nuevo ? [] : [['Eliminar', 'btn danger', () => 'del']]), ['Cancelar', 'btn', () => null], ['Guardar', 'btn pri', (box) => {
       const g = (n) => $(`[name=${n}]`, box).value.trim();
       if (!g('nro') || !(Number(g('entrada')) > 0) || Engine.parseSeccion(g('seccion')) == null) { toast('Completá N° de bobina, sección y metros', { err: true }); return false; }
+      if (g('cat') === 'CC' && !g('color')) { toast('Cable solar: elegí el color (rojo o negro)', { err: true }); return false; }
       if (g('cat') === 'LA' && !prysDe(g('seccion'))) { toast('Línea aérea: elegí una sección Prysalac de la lista (ej. Prysalac 120/20)', { err: true }); return false; }
       const old = rb && rb.codigo;
       Object.assign(b, { cat: usada ? b.cat : g('cat'), fecha: g('fecha'), remito: g('remito'), nro: g('nro'), seccion: g('seccion'), entrada: Number(g('entrada')), codigo: g('codigo'), obs: g('obs') });
+      if (b.cat === 'CC') b.color = g('color'); else delete b.color;
+      if (old && b.codigo && old !== b.codigo && b.cat === 'CC') ((S.cc || {}).reg || []).forEach((x) => { if (x.bobina === old) x.bobina = b.codigo; });
       if (old && b.codigo && old !== b.codigo) S.circuitos.forEach((c) => { if (c.cat === b.cat) Object.values(c.real || {}).forEach((r) => { if (r.bobina === old) r.bobina = b.codigo; }); });
       return 'ok';
     }]],
@@ -389,8 +393,8 @@ async function editBobina(id) {
       const k = sc.value; $('#secOpc', box).innerHTML = (SEC_OPC[k] || []).map((o) => `<option value="${o}">`).join('');
       if (cambioTipo && nuevo) si.value = SEC_DEF[k] || '';
       const p = k === 'LA' ? prysDe(si.value) : null, fi = Engine.ficha(k, si.value);
-      inf.style.display = k === 'PAT' ? 'none' : '';
-      inf.innerHTML = fi ? `<div class="alert info" style="margin:0">${fichaTxt(fi, Number(en.value) || 0)}</div>` : k === 'LA' ? '<div class="alert aviso" style="margin:0">Elegí la sección Al/Ac de la lista (ej. Prysalac 120/20)</div>' : k === 'PAT' ? '' : '<div class="alert aviso" style="margin:0">Sección sin ficha de catálogo: elegila de la lista</div>';
+      inf.style.display = k === 'PAT' ? 'none' : ''; $('#ccColL', box).style.display = k === 'CC' ? '' : 'none';
+      inf.innerHTML = k === 'CC' ? '<div class="alert info" style="margin:0"><b>Cable solar Prysmian</b> 4 o 6 mm² · rojo (+) o negro (−). Se descuenta con los tramos cargados en Tendido cable solar › Tendido de cable solar.</div>' : fi ? `<div class="alert info" style="margin:0">${fichaTxt(fi, Number(en.value) || 0)}</div>` : k === 'LA' ? '<div class="alert aviso" style="margin:0">Elegí la sección Al/Ac de la lista (ej. Prysalac 120/20)</div>' : k === 'PAT' ? '' : '<div class="alert aviso" style="margin:0">Sección sin ficha de catálogo: elegila de la lista</div>';
       if (k === 'LA' && p && nuevo && !(Number(en.value) > 0)) en.placeholder = `habitual ${p.largo} m`;
     };
     sc.onchange = () => upd(true); si.oninput = () => upd(false); en.oninput = () => upd(false); upd(false);
@@ -405,7 +409,9 @@ async function editBobina(id) {
       if (!b.codigo) { // código fijo desde el alta, para que sea el mismo en todas las PCs
         const sec = Engine.parseSeccion(b.seccion), usados = new Set(R.bobinas.filter((x) => x.cat === b.cat).map((x) => x.codigo));
         let n = R.bobinas.filter((x) => x.cat === b.cat && x.seccion === sec).length + 1; while (usados.has(`${n}/${sec}`)) n++;
-        b.codigo = `${n}/${sec}`;
+        const pre = b.cat === 'CC' ? (b.color || '?')[0] : ''; // cable solar: R1/6, N1/6…
+        if (pre) { n = R.bobinas.filter((x) => x.cat === 'CC' && x.seccion === sec && x.color === b.color).length + 1; while (usados.has(`${pre}${n}/${sec}`)) n++; }
+        b.codigo = `${pre}${n}/${sec}`;
       }
       S.bobinas.push(b);
     }

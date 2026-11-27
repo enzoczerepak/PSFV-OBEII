@@ -3,7 +3,7 @@
    el administrador define qué secciones puede editar cada uno. Los usuarios y el historial se sincronizan en la red. */
 window.VISOR = !!window.READONLY; // el visor web es de solo lectura siempre; READONLY pasa a depender también del permiso de cada vista
 let USR = null;
-const SECCIONES = [['general', 'General (partes, cronograma, lluvias)'], ['cables', 'Tendido de cables'], ['fo', 'Fibra óptica'], ['lmt', 'Línea aérea MT'], ['fundaciones', 'Fundaciones STS'], ['sala', 'Edificio O&M'], ['trk', 'Trackers (materiales, hincado, montaje)'], ['maqs', 'Maquinaria'], ['ajustes', 'Ajustes y usuarios']];
+const SECCIONES = [['general', 'General (partes, cronograma, lluvias)'], ['cables', 'Tendido de cables'], ['cc', 'Tendido cable solar'], ['fo', 'Fibra óptica'], ['lmt', 'Línea aérea MT'], ['fundaciones', 'Fundaciones STS'], ['sala', 'Edificio O&M'], ['trk', 'Trackers (materiales, hincado, montaje)'], ['maqs', 'Maquinaria'], ['ajustes', 'Ajustes y usuarios']];
 const ROLES = { admin: ['Administrador', 'Edita todo y maneja usuarios y ajustes'], edita: ['Carga datos', 'Edita las secciones que se le habiliten'], lectura: ['Solo consulta', 'Ve todo, no cambia nada'] };
 const usrL = () => (S.usuarios = S.usuarios || []);
 const usersOn = () => usrL().length > 0;

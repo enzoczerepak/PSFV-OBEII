@@ -1555,3 +1555,11 @@ tr.clk { cursor: pointer; } tr.clk:hover td { background: #fff7ed; }
 @media (max-width:1200px){.mqr .mqbt{grid-column:4;grid-row:1}}
 
 .salagr td{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);background:var(--bg2,#f5f7fa);padding:6px 10px!important}
+
+/* cable solar (CC) */
+:root { --cCC: #e0a800; } .g-CC { --gc: var(--cCC); } .c-CC { background: var(--cCC); }
+.ccinvh { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 12px 0 6px; } .ccinvh .sp { flex: 1; }
+.ccinv { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow: auto; padding: 6px; border: 1px solid var(--line, #3334); border-radius: 8px; }
+.ccinvg { display: grid; grid-template-columns: 52px 1fr; gap: 8px; align-items: start; } .ccinvg > span { font-weight: 600; font-size: 12px; opacity: .8; padding-top: 2px; } .ccinvg > div { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.ccchk { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; cursor: pointer; } .ccchk input { margin: 0; }
+.ccsw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; border: 1px solid #8886; }

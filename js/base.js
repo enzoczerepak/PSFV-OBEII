@@ -8,12 +8,12 @@ const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOff
 const uid = (p) => p + Math.random().toString(36).slice(2, 9);
 const CATS = Engine.CATS;
 const ED = window.EDICION || { blank: false, app: 'PSFV-OBE II', corto: 'PSFV-OBEII' };
-const CATN = { BT: 'BT 0,8 kV', MT: 'MT 33 kV', PAT: 'PAT Cu desnudo', LA: 'LA 33 kV Prysalac' };
-const CATL = { BT: 'BT · 0,8 kV', MT: 'MT · 33 kV', PAT: 'PAT · Cu desnudo', LA: 'LA · Línea aérea' };
+const CATN = { BT: 'BT 0,8 kV', MT: 'MT 33 kV', PAT: 'PAT Cu desnudo', LA: 'LA 33 kV Prysalac', CC: 'Cable solar CC' };
+const CATL = { BT: 'BT · 0,8 kV', MT: 'MT · 33 kV', PAT: 'PAT · Cu desnudo', LA: 'LA · Línea aérea', CC: 'CC · Cable solar' };
 const CATK = Object.keys(CATS); // BT, MT, PAT, LA
 // categorías a mostrar: la línea aérea aparece cuando se cargó algún tramo o bobina
 // la línea aérea (LA) no tiene plan de corte: su avance se lleva en el apartado LMT; sus bobinas Prysalac siguen en Bobinas
-const catsUso = () => CATK.filter((c) => c !== 'LA');
+const catsUso = () => CATK.filter((c) => c !== 'LA' && c !== 'CC'); // el cable solar (CC) va en su propio apartado
 window.CATN = CATN;
 let STSL = ['STS 1', 'STS 2', 'STS 3', 'STS 4'];
 const kvTxt = (v) => String(v).replace('.', ',');
@@ -39,6 +39,7 @@ function normalizar(st) {
   st.params = Object.assign({ margen: 0, minUtil: 30, cola: 0, holgura: 8 }, st.params || {});
   st.fundaciones = st.fundaciones || {};
   st.patBT = st.patBT || { reg: [] }; st.patBT.reg = st.patBT.reg || [];
+  st.cc = st.cc || { reg: [] }; st.cc.reg = st.cc.reg || [];
   normalizarHincado(st);
   st.cronoTareas = st.cronoTareas || [];
   st.partes = st.partes || [];
@@ -272,6 +273,11 @@ const VIEWS = {
   'MT-plan': ['Plan de corte', () => 'Cables de media tensión entre STS, sala de celdas y LMT · los cortes listos quedan fijos en su bobina'],
   'MT-circ': ['Circuitos', () => (ED.blank ? 'Circuitos de media tensión: zanja y registro de lo ejecutado' : 'STS 4 → 3 → sala de celdas · STS 1 → 2 → sala de celdas · sala de celdas → LMT · fin LMT → ET')],
   'PAT-plan': ['Plan de corte', () => `Cobre desnudo: ${(S.parque && S.parque.patBT) || 25} mm² en zanjas de BT, ${(S.parque && S.parque.patMT) || 95} mm² en zanjas de MT · los cortes listos quedan fijos en su bobina`],
+  ccexc: ['Excavaciones CC', () => 'Zanja de corriente continua: metros excavados por fecha y los inversores afectados'],
+  ccpead: ['Tendido de monotubo PEAD', () => 'Monotubo de polietileno de alta densidad: metros tendidos por fecha y los inversores afectados'],
+  cccab: ['Tendido de cable solar', () => 'Cable solar Prysmian 4 / 6 mm² rojo y negro: metros por fecha, inversores afectados y bobina de la que sale'],
+  ccinv: ['Avance por inversor', () => 'Excavación CC, monotubo PEAD y cable solar acumulados en cada inversor'],
+  ccbob: ['Bobinas de cable solar', () => 'Stock de cable solar Prysmian: remito, N° de bobina, metros, código interno, sección y color'],
   'PAT-perim': ['Perímetros de PAT de los sectores', () => 'Anillo de Cu desnudo 25 mm² alrededor de cada sector, según OBEII-EL-PL-400 r1 · se carga por metros tendidos o como completo'],
   'PAT-circ': ['Tendidos', () => 'Un conductor de Cu desnudo por zanja (compartida o no), con el largo de la zanja'],
   'LA-plan': ['Plan de corte', () => 'Línea aérea de 33 kV parque → ET · conductor desnudo Prysalac (Al/Ac) · los cortes de los tramos listos quedan fijos en su bobina'],
@@ -315,6 +321,7 @@ function go(v) {
   if (v === 'hplano') { ui.pl = ui.pl || { capas: new Set(PL_CAPAS.map((c) => c[0])), color: 'disc', zcol: 'estado', vb: null, sel: null }; ui.pl.color = ui.pl.color === 'hinc' ? 'hinc' : 'disc'; view = 'plano'; navKey = 'hplano'; ui.sel.clear();
     $$('#nav button[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === 'hplano')); $$('.sfBtn').forEach((b) => b.classList.remove('on'));
     const sec = $('#nav [data-sect="trk"]'); if (sec && !sec.classList.contains('open')) abrirSect(sec, true); $$('#nav .sect').forEach((x) => x.classList.toggle('act', x === sec)); pillUpd(true); render(true); if (typeof movSync === 'function') movSync('hplano'); return; }
+  if (v === 'ccbob') ui.bobCat = 'CC';
   view = v; ui.sel.clear(); navKey = MENU_ALIAS[v] || v;
   if (typeof aplicarPermiso === 'function') aplicarPermiso(v);
   $$('.sfBtn').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
@@ -332,7 +339,7 @@ function render(anim) {
   const [t, sub] = VIEWS[view];
   const vc = view.split('-')[0];
   setTimeout(badgePartes, 0);
-  $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes', 'pdia', 'hist', 'crono', 'campo', 'ctend'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : ['trec', 'tent', 'trecl', 'tarm', 'tpan', 'tstk'].includes(view) ? 'Trackers' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'fo' ? 'Fibra óptica' : view === 'lmt' ? 'Línea aérea MT' : view === 'sala' ? 'Edificio O&M' : ['hincado', 'htrk', 'hdist', 'hram', 'hmov', 'hrec', 'hcat'].includes(view) ? 'Trackers · Hincado' : MAQ_V.includes(view) ? 'Maquinaria de obra' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
+  $('#vMod').textContent = ['ajustes', 'resumen', 'avance', 'plano', 'partes', 'pdia', 'hist', 'crono', 'campo', 'ctend'].includes(view) ? 'General' : view === 'puntas' ? 'Puntas de cable' : ['trec', 'tent', 'trecl', 'tarm', 'tpan', 'tstk'].includes(view) ? 'Trackers' : view === 'fundaciones' ? 'Fundaciones STS' : view === 'fo' ? 'Fibra óptica' : view === 'lmt' ? 'Línea aérea MT' : view === 'sala' ? 'Edificio O&M' : view.startsWith('cc') ? 'Tendido cable solar' : ['hincado', 'htrk', 'hdist', 'hram', 'hmov', 'hrec', 'hcat'].includes(view) ? 'Trackers · Hincado' : MAQ_V.includes(view) ? 'Maquinaria de obra' : view === 'crono' || view === 'gantt' ? 'Cronograma de obra' : 'Tendido y aprovechamiento de cables';
   $('#vTitle').innerHTML = (CATN[vc] && view.includes('-') ? `<span class="cchip c-${vc}">${CATL[vc]}</span>` : '') + esc(t); $('#vSub').innerHTML = sub();
   $('#projName').textContent = S.nombre;
   const el = $('#view'), sc = el.scrollTop;
@@ -344,7 +351,7 @@ function render(anim) {
   if (kind === 'plan') vPlan(el, cat);
   else if (kind === 'circ') vCircuitos(el, cat);
   else if (kind === 'perim') vPatPerim(el);
-  else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hram: vRam, hmov: vMovSuelo, hdist: vHDist, hrec: vHRec, hcat: vHCat, fo: vFibra, lmt: vLMT, sala: vSala, trec: vTrkRec, tent: vTrkEnt, trecl: vTrkRecl, hist: vHist, pdia: vPdia, campo: vCampo, ctend: vCTend, tarm: (e) => vMont(e, 'arm'), tpan: (e) => vMont(e, 'pan'), tstk: vStock, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, patbt: vPatBT, bobinas: vBobinas, ajustes: vAjustes })[view](el);
+  else ({ resumen: vResumen, cables: vCables, avance: vAvance, diario: vDiario, puntas: vPuntas, fundaciones: vFund, crono: vCronoRes, gantt: vGantt, plano: vPlano, partes: vPartes, hincado: vHincado, htrk: vHTrk, hram: vRam, hmov: vMovSuelo, hdist: vHDist, hrec: vHRec, hcat: vHCat, fo: vFibra, lmt: vLMT, sala: vSala, trec: vTrkRec, tent: vTrkEnt, trecl: vTrkRecl, hist: vHist, pdia: vPdia, campo: vCampo, ctend: vCTend, tarm: (e) => vMont(e, 'arm'), tpan: (e) => vMont(e, 'pan'), tstk: vStock, maq: vMaq, maqev: vMaqEv, maqeq: vMaqEq, propuesta: vPropuesta, zanjas: vZanjas, patbt: vPatBT, bobinas: vBobinas, ccexc: (e) => vCC(e, 'exc'), ccpead: (e) => vCC(e, 'pead'), cccab: (e) => vCC(e, 'cab'), ccinv: vCCInv, ccbob: vBobinas, ajustes: vAjustes })[view](el);
   if (typeof menuArchivar === 'function') menuArchivar();
   if (anim) { void el.offsetWidth; el.classList.add('enter'); el.scrollTop = 0; countUp(el); }
   else {

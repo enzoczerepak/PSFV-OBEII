@@ -5,6 +5,7 @@ const MENU = [
   ['resumen', 'Inicio', 'inicio'], ['campo', 'Carga rápida', 'llave'], ['pdia', 'Parte diario', 'dia'], ['avance', 'Avance de obra', 'avance'], ['plano', 'Plano de obra', 'plano'], ['partes', 'Partes de campo', 'partes'],
   ['crono', 'Cronograma', 'crono'], ['hist', 'Historial de cambios', 'libro'],
   { s: 'cables', t: 'Tendido de cables', ico: 'cable', grupos: true, items: [['cables', 'Resumen de tendido', 'barras'], ['diario', 'Tendido por fecha', 'dia'], ['zanjas', 'Zanjas', 'zanja'], ['patbt', 'PAT de BT', 'punta'], ['bobinas', 'Bobinas', 'bobina'], ['propuesta', 'Propuesta de tendido', 'lista'], ['puntas', 'Puntas de cable', 'punta']] },
+  { s: 'cc', t: 'Tendido cable solar', ico: 'sol', items: [['ccexc', 'Excavaciones CC', 'zanja'], ['ccpead', 'Monotubo PEAD', 'cable'], ['cccab', 'Tendido de cable solar', 'cable'], ['ccinv', 'Avance por inversor', 'barras'], ['ccbob', 'Bobinas de cable solar', 'bobina']] },
   ['fo', 'Fibra óptica', 'fibra'], ['lmt', 'Línea aérea MT (LMT)', 'poste'], ['fundaciones', 'Fundaciones STS', 'sts'], ['sala', 'Edificio O&M (sala de celdas)', 'edificio'],
   { s: 'trk', t: 'Trackers', ico: 'trackers', items: ['Materiales', ['trec', 'Recepción de materiales', 'lista'], ['tent', 'Entregas y remitos', 'camion'], ['trecl', 'Reclamos al fabricante', 'libro'], ['tstk', 'Stock en obra', 'barras'],
     'Hincado', ['hincado', 'Avance de hincado', 'barras'], ['htrk', 'Distribución por tracker', 'trackers'], ['hdist', 'Plano de distribución', 'mapa'], ['hram', 'Ramming plan', 'perfil'], ['hmov', 'Cálculo movimiento de suelos', 'suelo'], ['hrec', 'Recepción de hincas', 'camion'],
@@ -18,7 +19,7 @@ const MOV_SIN = window.READONLY ? SOLO_PC : [];
 // vistas que no tienen botón propio: se marca la del menú que las contiene
 const MENU_ALIAS = { gantt: 'crono', ctend: 'campo' };
 // color de cada frente de obra: ícono, recuadro de la sección y marca del apartado activo
-const MCOL = { cables: '#2fc4b2', fo: '#5ab8ff', lmt: '#8b9dff', fundaciones: '#f2b33d', sala: '#b294ff', trk: '#3fb27f', maqs: '#ff8f57' };
+const MCOL = { cables: '#2fc4b2', cc: '#ffcf3a', fo: '#5ab8ff', lmt: '#8b9dff', fundaciones: '#f2b33d', sala: '#b294ff', trk: '#3fb27f', maqs: '#ff8f57' };
 const GRUPOS = [['BT', 'BT · 0,8 kV', [['plan', 'Plan de corte', 'corte'], ['circ', 'Circuitos', 'circuito']]], ['MT', 'MT · 33 kV', [['plan', 'Plan de corte', 'corte'], ['circ', 'Circuitos', 'circuito']]], ['PAT', 'PAT · Cu desnudo', [['plan', 'Plan de corte', 'corte'], ['circ', 'Tendidos', 'circuito'], ['perim', 'Perímetros de sectores', 'punta']]]];
 function menuHTML() {
   const btn = ([v, t, i, tg], tag) => `<button data-view="${v}"${MCOL[v] ? ` style="--mc:${MCOL[v]}"` : ''}>${ICO[i] || ''}<span>${t}</span>${tag ? `<em class="tg">${tag}</em>` : tg ? `<em class="tg pronto">${tg}</em>` : ''}</button>`;

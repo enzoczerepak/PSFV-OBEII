@@ -7,6 +7,7 @@
     MT: { nombre: 'Media tensión 33 kV', corto: 'MT', zanja: true },
     PAT: { nombre: 'Puesta a tierra (Cu desnudo)', corto: 'PAT', zanja: false },
     LA: { nombre: 'Línea aérea 33 kV (conductor desnudo Prysalac Al/Ac)', corto: 'LA', zanja: false, aerea: true },
+    CC: { nombre: 'Cable solar CC (Prysmian 4 / 6 mm², rojo y negro)', corto: 'CC', zanja: false, solar: true },
   };
   // Conductor desnudo Prysalac (aluminio con alma de acero, IRAM 2187): sección Al/Ac, Ø, masa, carga de rotura y largo habitual de bobina (catálogo Prysmian 2021)
   const PRYSALAC = [['16/2,5', 5.4, 63, 5.8, 5000], ['25/4', 6.8, 98, 8.9, 3500], ['35/6', 8.1, 140, 12.4, 3000], ['50/8', 9.6, 196, 16.8, 2000],
@@ -165,11 +166,15 @@
     const PB = state.patBT || {}, pbReg = (PB.reg || []).filter((x) => x.tipo === 'c' && Number(x.metros) > 0);
     const pbCirc = pbReg.map((x) => ({ id: 'pb-' + x.id, cat: 'PAT', formacion: PAT_SEC.BT, fases: 1, cantidad: Number(x.metros), designacion: 'PAT BT · ' + (x.desc || 'tramo'),
       desde: x.desc || 'tramo de PAT', hasta: '', patBT: x.id, real: { C: x.bobina ? { bobina: x.bobina, metros: Number(x.metros), fecha: x.f || '' } : { sinBobina: true, metros: Number(x.metros), fecha: x.f || '' } } }));
+    // cable solar (CC): cada tramo de cable cargado en Tendido de cable solar es un conductor ya tendido; descuenta de su bobina
+    const ccCirc = ((state.cc || {}).reg || []).filter((x) => x.tipo === 'cab' && Number(x.metros) > 0).map((x) => ({ id: 'cc-' + x.id, cat: 'CC', formacion: '1x' + (x.sec || 6), fases: 1, cantidad: Number(x.metros),
+      designacion: 'Cable solar ' + (x.sec || 6) + ' mm² ' + (x.color || '').toLowerCase() + ' · ' + ((x.inv || []).length > 3 ? (x.inv || []).length + ' inversores (' + [...new Set((x.inv || []).map((i) => String(i).split('-')[0]))].join(', ') + ')' : (x.inv || []).join(', ') || 'tramo'), desde: (x.inv || [])[0] || 'tramo', hasta: '', ccReg: x.id,
+      real: { C: x.bobina ? { bobina: x.bobina, metros: Number(x.metros), fecha: x.f || '' } : { sinBobina: true, metros: Number(x.metros), fecha: x.f || '' } } }));
     // la PAT por zanja de BT ya no cuenta (va aparte, por tramo): se ignora la que no se cargó. Los registros se dejan como están
     // en los datos (no se borran) para que todas las versiones del programa guarden lo mismo y no se peleen en la red
     const zCatE = new Map((state.zanjas || []).map((z) => [z.id, catDe(z)]));
     const patVacia = (c) => c.vinculo && zCatE.get(c.vinculo) === 'BT' && !(c.real && c.real.C && Number(c.real.C.metros) > 0);
-    const circuitos = (state.circuitos || []).filter((c) => !patVacia(c)).concat(pbCirc).map((c, i) => {
+    const circuitos = (state.circuitos || []).filter((c) => !patVacia(c)).concat(pbCirc, ccCirc).map((c, i) => {
       const cat = catDe(c), seccion = parseSeccion(c.formacion);
       const real = c.real || {}, fz = fasesDe(c);
       const nReal = fz.filter((f) => real[f] && (real[f].bobina || real[f].sinBobina)).length;
@@ -281,7 +286,7 @@
       // estado real en obra
       b.cortesHechos = b.cortes.filter((x) => x.estado === 'ejecutado').length;
       b.cortesPend = b.cortes.length - b.cortesHechos;
-      b.estadoReal = b.consumoReal <= 0 ? 'sin abrir' : b.cortesPend === 0 ? 'terminada' : 'en uso';
+      b.estadoReal = b.consumoReal <= 0 ? 'sin abrir' : b.cat === 'CC' ? (b.saldoActual <= 1 ? 'terminada' : 'en uso') : b.cortesPend === 0 ? 'terminada' : 'en uso';
       b.usoReal = b.entrada > 0 ? b.consumoReal / b.entrada : 0;
       b.abierta = b.consumoReal > 0;
       b.aprovech = b.entrada > 0 ? b.salidaTotal / b.entrada : 0;
@@ -324,7 +329,7 @@
 
     // ---- resumen por tipo de cable
     const keys = [...new Set([...bobinas.map((b) => b.key), ...circuitos.map((c) => c.key)])].filter((k) => !k.endsWith('|null'));
-    const ordenCat = { BT: 0, MT: 1, PAT: 2, LA: 3 };
+    const ordenCat = { BT: 0, MT: 1, PAT: 2, LA: 3, CC: 4 };
     keys.sort((a, b) => ordenCat[a.split('|')[0]] - ordenCat[b.split('|')[0]] || Number(b.split('|')[1]) - Number(a.split('|')[1]));
     const sum = (arr, k) => r2(arr.reduce((a, x) => a + (Number(x[k]) || 0), 0));
     const resumen = keys.map((key) => {
@@ -379,6 +384,8 @@
 
     resumen.forEach((r) => { r.desvio = r2(r.tendido - r.tendidoTeo); r.desvioPct = r.tendidoTeo > 0 ? r.desvio / r.tendidoTeo : 0; });
     // PAT 25 (BT): el requerido es el conductor del plano de PAT (sin saltos), no la suma por zanja
+    // cable solar: no hay plan por circuito; el requerido es lo tendido y el balance es el saldo de stock
+    resumen.filter((r) => r.cat === 'CC').forEach((r) => { r.requerido = r.tendido; r.balance = r2(r.stock - r.tendido); r.tendidoTeo = 0; r.desvio = 0; r.desvioPct = 0; r.solar = true; });
     const rp = resumen.find((r) => r.key === 'PAT|25');
     if (rp) { const req = Number((PB.cfg || {}).req) || PATBT_DEF.req; rp.requerido = r2(Math.max(req, rp.tendido)); rp.balance = r2(rp.stock - rp.requerido); rp.patBT = true; rp.tendidoTeo = 0; rp.desvio = 0; rp.desvioPct = 0; }
     return { params: p, bobinas, circuitos, piezas, resumen, alerts, zanjas, zlist, compromiso, mejoras, nManuales: manuales.length };
