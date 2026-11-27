@@ -1,24 +1,23 @@
-/* PSFV-OBE II · Tendido de cable solar (corriente continua, de los strings a los inversores).
-   Tres trabajos que se registran por fecha, en metros, con los inversores afectados:
-   - Excavación CC (zanja de corriente continua)
+/* PSFV-OBE II · Tendido de cable solar (corriente continua: la vinculación de los trackers con sus inversores).
+   Dos trabajos que se registran por fecha, en metros, con los inversores comprometidos:
    - Tendido de monotubo PEAD
    - Tendido de cable solar Prysmian 4 / 6 mm², rojo (+) y negro (−), que descuenta de su bobina como las de BT y MT.
-   Datos: S.cc.reg = [{ id, tipo: 'exc' | 'pead' | 'cab', f, metros, inv: ['TX1-INV1', …], desc, bobina?, por }] (sync 'cc:<id>'). */
+   Datos: S.cc.reg = [{ id, tipo: 'pead' | 'cab', f, metros, inv: ['TX1-INV1', …], desc, bobina?, por }] (sync 'cc:<id>'). */
 const CC_TIPOS = {
-  exc: { n: 'Excavación CC', corto: 'Excavación', ico: 'zanja', col: '#a0703c', hint: 'Zanja de corriente continua: metros excavados y los inversores cuyo cableado pasa por ese tramo.' },
-  pead: { n: 'Tendido de monotubo PEAD', corto: 'Monotubo PEAD', ico: 'cable', col: '#4e79a7', hint: 'Monotubo de polietileno de alta densidad: metros tendidos y los inversores a los que sirve.' },
-  cab: { n: 'Tendido de cable solar', corto: 'Cable solar', ico: 'cable', col: '#e15759', hint: 'Cable solar Prysmian 4 o 6 mm², rojo (+) o negro (−): cada tramo descuenta de su bobina, como en BT y MT.' },
+  pead: { n: 'Tendido de monotubo PEAD', corto: 'Monotubo PEAD', ico: 'cable', col: '#4e79a7', hint: 'Monotubo de polietileno de alta densidad por el que va el cable solar de los trackers al inversor: metros instalados y los inversores comprometidos.' },
+  cab: { n: 'Tendido de cable solar', corto: 'Cable solar', ico: 'cable', col: '#e15759', hint: 'Cable solar Prysmian 4 o 6 mm², rojo (+) o negro (−), que comunica los trackers con su inversor: cada tramo descuenta de su bobina, como en BT y MT.' },
 };
 const CC_COL = { Rojo: '#d23c3c', Negro: '#222' };
 const ccReg = () => { S.cc = S.cc || { reg: [] }; S.cc.reg = S.cc.reg || []; return S.cc.reg; };
+const ccVig = () => ccReg().filter((x) => CC_TIPOS[x.tipo]); // solo los trabajos vigentes (la excavación CC se dejó de registrar)
 const ccInvs = () => ((window.PLANO || {}).inv || []).map((i) => i.id).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
 const ccSts = (id) => (String(id).match(/^TX(\d+)/) || [])[1] || '?';
 const ccBobs = () => (R.bobinas || []).filter((b) => b.cat === 'CC');
 const ccBobTxt = (b) => `${b.codigo} · ${b.seccion} mm² ${b.color || ''} · saldo ${fmt(b.saldoActual, 0)} m`;
 // metros de un registro repartidos entre sus inversores (para el avance por inversor)
 function ccPorInv() {
-  const M = new Map(ccInvs().map((i) => [i, { exc: 0, pead: 0, cab: 0, n: 0, ult: '' }]));
-  ccReg().forEach((x) => { const L = (x.inv || []).filter((i) => M.has(i)); if (!L.length) return; const m = (Number(x.metros) || 0) / L.length;
+  const M = new Map(ccInvs().map((i) => [i, { pead: 0, cab: 0, n: 0, ult: '' }]));
+  ccVig().forEach((x) => { const L = (x.inv || []).filter((i) => M.has(i)); if (!L.length) return; const m = (Number(x.metros) || 0) / L.length;
     L.forEach((i) => { const q = M.get(i); q[x.tipo] += m; q.n++; if ((x.f || '') > q.ult) q.ult = x.f; }); });
   return M;
 }
@@ -35,13 +34,13 @@ async function ccEditar(tipo, id) {
       <label>Sección<select id="cS">${['4', '6'].map((v) => `<option value="${v}" ${String((x0 && x0.sec) || 6) === v ? 'selected' : ''}>${v} mm²</option>`).join('')}</select></label>
       <label>Color<select id="cC">${['Rojo', 'Negro'].map((v) => `<option ${((x0 && x0.color) || 'Rojo') === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label>` : ''}
       <label class="full">Descripción (opcional)<input type="text" id="cD" value="${esc((x0 && x0.desc) || '')}" placeholder="tramo, string, observación…"></label></div>
-      <div class="ccinvh"><b>Inversores afectados</b> <span class="muted" id="cN"></span><span class="sp"></span>${stss.map((s) => `<button class="btn sm ghost" data-ccs="${s}">STS ${s}</button>`).join('')}<button class="btn sm ghost" data-ccs="0">Ninguno</button></div>
+      <div class="ccinvh"><b>Inversores comprometidos</b> <span class="muted" id="cN"></span><span class="sp"></span>${stss.map((s) => `<button class="btn sm ghost" data-ccs="${s}">STS ${s}</button>`).join('')}<button class="btn sm ghost" data-ccs="0">Ninguno</button></div>
       <div class="ccinv">${stss.map((s) => `<div class="ccinvg"><span>STS ${s}</span><div>${invs.filter((i) => ccSts(i) === s).map((i) => `<label class="ccchk"><input type="checkbox" value="${i}" ${sel.has(i) ? 'checked' : ''}>${i.replace(/^TX\d+-/, '')}</label>`).join('')}</div></div>`).join('')}</div>
       <p class="hint">${T.hint}${tipo === 'cab' ? ' Para el avance por inversor, los metros se reparten en partes iguales entre los inversores marcados.' : ' En el avance por inversor, los metros se reparten en partes iguales entre los inversores marcados.'}</p>`,
     buttons: [['Cancelar', 'btn', () => null], [x0 ? 'Guardar' : 'Registrar', 'btn pri', (b) => {
       const m = Number($('#cM', b).value), inv = $$('.ccinv input:checked', b).map((c) => c.value);
       if (!(m > 0)) { $('#cM', b).classList.add('bad'); return false; }
-      if (!inv.length) { toast('Marcá al menos un inversor afectado', { err: true }); return false; }
+      if (!inv.length) { toast('Marcá al menos un inversor comprometido', { err: true }); return false; }
       return { f: $('#cF', b).value || today(), metros: Math.round(m * 10) / 10, inv, desc: $('#cD', b).value.trim(), bobina: tipo === 'cab' ? $('#cB', b).value : undefined,
         sec: tipo === 'cab' ? Number($('#cS', b).value) : undefined, color: tipo === 'cab' ? $('#cC', b).value : undefined }; }]],
   });
@@ -70,8 +69,8 @@ async function ccBorrar(id) {
 // ---------- pantallas ----------
 function ccTabla(L, tipo) {
   const ro = window.READONLY;
-  if (!L.length) return `<div class="empty"><b>Todavía no hay registros</b><p class="muted">Usá <b>+ Registrar</b> con la fecha, los metros y los inversores afectados.</p></div>`;
-  return `<div class="tblwrap"><table class="tbl"><thead><tr><th>Fecha</th><th class="n">Metros</th>${tipo === 'cab' ? '<th>Cable · bobina</th>' : ''}<th>Inversores afectados</th><th>Descripción</th><th>Cargó</th>${ro ? '' : '<th></th>'}</tr></thead><tbody>
+  if (!L.length) return `<div class="empty"><b>Todavía no hay registros</b><p class="muted">Usá <b>+ Registrar</b> con la fecha, los metros y los inversores comprometidos.</p></div>`;
+  return `<div class="tblwrap"><table class="tbl"><thead><tr><th>Fecha</th><th class="n">Metros</th>${tipo === 'cab' ? '<th>Cable · bobina</th>' : ''}<th>Inversores comprometidos</th><th>Descripción</th><th>Cargó</th>${ro ? '' : '<th></th>'}</tr></thead><tbody>
     ${L.map((x) => { const b = x.bobina ? ccBobs().find((y) => y.codigo === x.bobina) : null;
       return `<tr><td>${fechaCorta(x.f)}</td><td class="n"><b>${fmt(x.metros, 1)}</b></td>${tipo === 'cab' ? `<td><i class="ccsw" style="background:${CC_COL[x.color] || '#999'}"></i>${x.sec || '?'} mm² ${esc((x.color || '').toLowerCase())} · ${b ? esc(b.codigo) : x.bobina ? esc(x.bobina) : '<span class="muted">sin bobina</span>'}</td>` : ''}
         <td style="white-space:normal;max-width:380px">${(x.inv || []).map((i) => `<span class="chip">${esc(i)}</span>`).join(' ')}</td><td style="white-space:normal">${esc(x.desc || '')}</td><td>${esc(x.por || '')}</td>
@@ -91,7 +90,7 @@ function vCC(el, tipo) {
       <p class="hint" style="margin:6px 0 0">${B.length} bobinas de cable solar (${B.filter((b) => b.estadoReal === 'sin abrir').length} sin abrir). Se cargan en Bobinas con tipo «Cable solar», igual que las de BT y MT: remito, N° de bobina, metros, código interno, sección y color.</p></div>`; }
   el.innerHTML = `<div class="kpis k4" style="margin-bottom:14px">${kpi('Metros registrados', m, 'm', 1)}${kpi('Inversores con avance', inv.size, `/ ${N}`, 0)}${kpi('Registros', L.length, '', 0)}${kpi('Hoy', hoy, 'm', 1)}</div>${extra}
     <div class="card"><h3>${T.n} · registros</h3>${ccTabla(L, tipo)}</div>
-    <p class="hint">${T.hint} El avance por inversor de los tres trabajos está en «Avance por inversor».</p>`;
+    <p class="hint">${T.hint} El avance de PEAD y cable de cada inversor está en «Avance por inversor».</p>`;
   ccBind(el, tipo);
   $$('[data-go]', el).forEach((b) => { b.onclick = () => go(b.dataset.go); });
 }
@@ -99,7 +98,7 @@ function vCCInv(el) {
   actions([['Exportar Excel', 'btn', ccExcel]]);
   const M = ccPorInv(), invs = ccInvs(), stss = [...new Set(invs.map(ccSts))];
   const tot = (k) => [...M.values()].reduce((a, q) => a + q[k], 0), con = (k) => [...M.values()].filter((q) => q[k] > 0).length;
-  el.innerHTML = `<div class="kpis k3" style="margin-bottom:14px">${Object.entries(CC_TIPOS).map(([k, T]) => kpi(`${T.corto} · inversores con avance`, con(k), `/ ${invs.length} · ${fmt(tot(k), 0)} m`, 0)).join('')}</div>
+  el.innerHTML = `<div class="kpis k2" style="margin-bottom:14px">${Object.entries(CC_TIPOS).map(([k, T]) => kpi(`${T.corto} · inversores con avance`, con(k), `/ ${invs.length} · ${fmt(tot(k), 0)} m`, 0)).join('')}</div>
     ${stss.map((s) => `<div class="card" style="margin-bottom:12px"><h3>STS ${s}</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Inversor</th>${Object.values(CC_TIPOS).map((T) => `<th class="n">${T.corto} (m)</th>`).join('')}<th class="n">Registros</th><th>Último</th></tr></thead><tbody>
       ${invs.filter((i) => ccSts(i) === s).map((i) => { const q = M.get(i); return `<tr><td><b>${esc(i)}</b></td>${Object.keys(CC_TIPOS).map((k) => `<td class="n">${q[k] > 0 ? `<b style="color:${CC_TIPOS[k].col}">${fmt(q[k], 1)}</b>` : '<span class="muted">–</span>'}</td>`).join('')}<td class="n">${q.n || '–'}</td><td>${q.ult ? fechaCorta(q.ult) : '—'}</td></tr>`; }).join('')}
       </tbody></table></div></div>`).join('')}
@@ -109,8 +108,8 @@ function vCCInv(el) {
 
 // ---------- Excel ----------
 async function ccExcel() {
-  const wb = XLSX.utils.book_new(), L = ccReg().slice().sort((a, b) => (a.f || '').localeCompare(b.f || ''));
-  const a = [['Fecha', 'Trabajo', 'Metros', 'Bobina', 'Sección', 'Color', 'Inversores afectados', 'Cantidad de inversores', 'Descripción', 'Cargó']];
+  const wb = XLSX.utils.book_new(), L = ccVig().slice().sort((a, b) => (a.f || '').localeCompare(b.f || ''));
+  const a = [['Fecha', 'Trabajo', 'Metros', 'Bobina', 'Sección', 'Color', 'Inversores comprometidos', 'Cantidad de inversores', 'Descripción', 'Cargó']];
   L.forEach((x) => { const b = x.bobina ? ccBobs().find((y) => y.codigo === x.bobina) : null; a.push([x.f, CC_TIPOS[x.tipo].n, Number(x.metros) || 0, x.bobina || '', x.sec || (b ? b.seccion : ''), x.color || (b ? b.color || '' : ''), (x.inv || []).join(', '), (x.inv || []).length, x.desc || '', x.por || '']); });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a), 'Registros');
   const M = ccPorInv(), b2 = [['Inversor', 'STS', ...Object.values(CC_TIPOS).map((T) => T.corto + ' (m)'), 'Registros', 'Último']];
