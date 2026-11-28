@@ -1563,3 +1563,5 @@ tr.clk { cursor: pointer; } tr.clk:hover td { background: #fff7ed; }
 .ccinvg { display: grid; grid-template-columns: 52px 1fr; gap: 8px; align-items: start; } .ccinvg > span { font-weight: 600; font-size: 12px; opacity: .8; padding-top: 2px; } .ccinvg > div { display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .ccchk { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; cursor: pointer; } .ccchk input { margin: 0; }
 .ccsw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; border: 1px solid #8886; }
+
+.stkpdf th { white-space: normal; } .stkpdf td:nth-child(2) { white-space: normal; }

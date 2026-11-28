@@ -134,7 +134,7 @@ function stockInfo() {
 }
 const STK = { c: 'all', q: '', f: 'rec' };
 function vStock(el) {
-  actions([['Exportar Excel', 'btn', stockExcel]]);
+  actions([['Exportar Excel', 'btn', stockExcel], ['Exportar PDF', 'btn pri', stockPdf]]);
   const L = stockInfo(); if (!L.length) { el.innerHTML = '<div class="card empty"><b>Sin BOM cargado</b><p class="muted">Cargá el Bill of Materials en Recepción de materiales.</p></div>'; return; }
   const cats = [...new Set(L.map((x) => x.cat))];
   let list = L; if (STK.c !== 'all') list = list.filter((x) => x.cat === STK.c);
@@ -160,6 +160,23 @@ function vStock(el) {
   $('#kC', el).onchange = (e) => { STK.c = e.target.value; render(false); };
   segBind('#kF', STK.f, (v) => { STK.f = v; render(false); });
   const q = $('#kQ', el); q.oninput = () => { STK.q = q.value.trim(); clearTimeout(q._t); q._t = setTimeout(() => render(false), 300); };
+}
+// PDF del stock en obra: solo los códigos con stock distinto de 0, agrupados por categoría (respeta la categoría y la búsqueda elegidas)
+function stockPdf() {
+  const val = (x) => (x.stock == null ? x.rec : x.stock);
+  let L = stockInfo().filter((x) => Math.abs(val(x)) > 0.0001);
+  if (STK.c !== 'all') L = L.filter((x) => x.cat === STK.c);
+  if (STK.q) { const q = STK.q.toLowerCase(); L = L.filter((x) => (x.k + ' ' + x.desc).toLowerCase().includes(q)); }
+  if (!L.length) { toast('No hay materiales con stock en obra para exportar', { err: true }); return; }
+  const cats = [...new Set(L.map((x) => x.cat))].sort((a, b) => String(trkCat(a)[0]).localeCompare(String(trkCat(b)[0])));
+  const neg = L.filter((x) => val(x) < 0).length;
+  const sub = `${fmt(L.length)} códigos con stock · ${fmt(L.filter((x) => val(x) > 0).reduce((a, x) => a + val(x), 0))} piezas en obra${STK.c !== 'all' ? ' · ' + esc(trkCat(STK.c)[0]) : ''}${STK.q ? ' · búsqueda «' + esc(STK.q) + '»' : ''} · los códigos en 0 no se listan`;
+  const h = prHead('Stock de materiales en obra', sub) + cats.map((c) => { const G = L.filter((x) => x.cat === c).sort((a, b) => val(b) - val(a) || String(a.k).localeCompare(String(b.k)));
+    return `<h3 style="margin:14px 0 6px;break-after:avoid;page-break-after:avoid"><i class="cdot" style="background:${trkCat(c)[1]}"></i>${esc(trkCat(c)[0])} <span class="muted" style="font-weight:400">· ${G.length} códigos</span></h3>
+    <table class="tbl stkpdf" style="table-layout:fixed;width:100%"><colgroup><col style="width:12%"><col style="width:32%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:8%"><col style="width:8%"><col style="width:10%"></colgroup><thead><tr><th>Código</th><th>Descripción</th><th class="n">Stock en obra</th><th class="n">Recibido OK</th><th class="n">Consumido</th><th class="n">Dañado</th><th class="n">BOM</th><th class="n">Falta recibir</th></tr></thead><tbody>
+    ${G.map((x) => `<tr><td><b>${esc(x.k)}</b></td><td>${esc(x.desc)}</td><td class="n"><b style="${val(x) < 0 ? 'color:#d9573f' : ''}">${fmt(val(x))}</b></td><td class="n">${fmt(x.rec)}</td><td class="n">${x.cons == null ? '–' : fmt(x.cons)}</td><td class="n">${x.dan ? fmt(x.dan) : '–'}</td><td class="n">${fmt(x.tot)}</td><td class="n">${x.pend ? fmt(x.pend) : '✓'}</td></tr>`).join('')}</tbody></table>`; }).join('')
+    + `<p class="hint" style="margin-top:12px">Stock en obra = recibido conforme − consumido (estimado por hincado y montaje registrados).${neg ? ` ${neg} código${neg > 1 ? 's' : ''} en negativo (en rojo): se usó más de lo recibido conforme, revisar recepción.` : ''}</p>`;
+  printHTML(h, `Stock de materiales en obra ${today()}.pdf`, true);
 }
 function stockExcel() {
   const rows = [['Código', 'Descripción', 'Categoría', 'BOM', 'Recibido OK', 'Dañado', 'Consumido (estimado)', 'Stock en obra', 'Falta recibir', 'Se descuenta por']]
