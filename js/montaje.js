@@ -129,7 +129,12 @@ function stockInfo() {
     if (cat === 'POST') { const code = (it.dib || [])[0]; if (HI && HI.completa && code) { cons = HI.hecho[code] || 0; base = 'hincado por código'; } else { cons = Math.round(neto * frH); base = 'proporción de trackers hincados'; } }
     else if (frEt[cat]) { cons = Math.round(neto * frEt[cat].f); base = frEt[cat].n; }
     const stock = cons == null ? null : o.rec - cons;
-    return { k: it.k, desc: it.desc, cat: it.cat, tot: it.tot || 0, neto, rec: o.rec, dan: o.dan, pend: o.pend, cons, base, stock, falta: cons == null ? false : stock < 0 };
+    // números con que llegó en el packing list cuando difieren del código del BOM, y las entregas en que vino
+    const plc = new Set(), ents = [];
+    (o.ents || []).forEach(({ e, l }) => { const m = trkKey(l.mat); if (m && m !== trkKey(it.k)) plc.add(String(l.mat).trim());
+      String(l.plc || '').split(/[,;]/).map((x) => x.trim()).filter((x) => x && trkKey(x) !== trkKey(it.k)).forEach((x) => plc.add(x));
+      if ((Number(l.rec) || 0) + (Number(l.dan) || 0) + (Number(l.decl) || 0) > 0 && !ents.includes(e)) ents.push(e); });
+    return { k: it.k, desc: it.desc, cat: it.cat, tot: it.tot || 0, neto, rec: o.rec, dan: o.dan, pend: o.pend, cons, base, stock, falta: cons == null ? false : stock < 0, plc: [...plc], ents };
   });
 }
 const STK = { c: 'all', q: '', f: 'rec' };
@@ -161,6 +166,17 @@ function vStock(el) {
   segBind('#kF', STK.f, (v) => { STK.f = v; render(false); });
   const q = $('#kQ', el); q.oninput = () => { STK.q = q.value.trim(); clearTimeout(q._t); q._t = setTimeout(() => render(false), 300); };
 }
+// datos de una entrega para los reportes: el remito se carga como "remito / packing list" y el transporte como "contenedor / patente"
+function stkEnt(e) {
+  const sp = (v) => String(v || '').split('/').map((x) => x.trim()).filter(Boolean);
+  const rp = sp(e.remito), remito = rp[0] || '', pl = rp.slice(1);
+  const plObs = (String(e.obs || '').match(/\bPL\s+([^·]+)/i) || [])[1]; if (!pl.length && plObs) pl.push(plObs.trim());
+  const cont = [], pat = [];
+  const esCont = (y) => /^[A-Z]{4}\s*-?\s*\d{5,}/i.test(y), esPat = (y) => /^[A-Z]{2,3}\s*-?\s*\d{3}\s*-?\s*[A-Z]{0,2}$/i.test(y);
+  // "contenedor / patente" por posición; los contenedores de un packing list importado vienen separados por "·"
+  sp(e.cont).forEach((x, i) => x.split(/\s*·\s*/).forEach((y) => { if (!y) return; (esCont(y) ? cont : esPat(y) ? pat : i === 0 ? cont : pat).push(y); }));
+  return { fecha: e.fecha || '', remito, pl: pl.join(' / '), cont: cont.join(' / '), pat: pat.join(' / '), transp: e.transp || '', resp: e.resp || '' };
+}
 // PDF del stock en obra: solo los códigos con stock distinto de 0, agrupados por categoría (respeta la categoría y la búsqueda elegidas)
 function stockPdf() {
   const val = (x) => (x.stock == null ? x.rec : x.stock);
@@ -174,14 +190,35 @@ function stockPdf() {
   const h = prHead('Stock de materiales en obra', sub) + cats.map((c) => { const G = L.filter((x) => x.cat === c).sort((a, b) => val(b) - val(a) || String(a.k).localeCompare(String(b.k)));
     return `<h3 style="margin:14px 0 6px;break-after:avoid;page-break-after:avoid"><i class="cdot" style="background:${trkCat(c)[1]}"></i>${esc(trkCat(c)[0])} <span class="muted" style="font-weight:400">· ${G.length} códigos</span></h3>
     <table class="tbl stkpdf" style="table-layout:fixed;width:100%"><colgroup><col style="width:18%"><col style="width:34%"><col style="width:10%"><col style="width:9%"><col style="width:8%"><col style="width:6%"><col style="width:7%"><col style="width:8%"></colgroup><thead><tr><th>Código</th><th>Descripción</th><th class="n">Stock en obra</th><th class="n">Recib. OK</th><th class="n">Consum.</th><th class="n">Dañ.</th><th class="n">BOM</th><th class="n">Falta recibir</th></tr></thead><tbody>
-    ${G.map((x) => `<tr><td><b>${esc(x.k)}</b></td><td>${esc(x.desc)}</td><td class="n"><b style="${val(x) < 0 ? 'color:#d9573f' : ''}">${fmt(val(x))}</b></td><td class="n">${fmt(x.rec)}</td><td class="n">${x.cons == null ? '–' : fmt(x.cons)}</td><td class="n">${x.dan ? fmt(x.dan) : '–'}</td><td class="n">${fmt(x.tot)}</td><td class="n">${x.pend ? fmt(x.pend) : '✓'}</td></tr>`).join('')}</tbody></table>`; }).join('')
+    ${G.map((x) => `<tr><td><b>${esc(x.k)}</b>${x.plc.length ? `<small style="display:block;color:#c26a00">PL: ${esc(x.plc.join(', '))}</small>` : ''}</td><td>${esc(x.desc)}${x.ents.length ? `<small class="muted" style="display:block">Remito ${esc([...new Set(x.ents.map((e) => stkEnt(e).remito || '–'))].join(', '))}</small>` : ''}</td><td class="n"><b style="${val(x) < 0 ? 'color:#d9573f' : ''}">${fmt(val(x))}</b></td><td class="n">${fmt(x.rec)}</td><td class="n">${x.cons == null ? '–' : fmt(x.cons)}</td><td class="n">${x.dan ? fmt(x.dan) : '–'}</td><td class="n">${fmt(x.tot)}</td><td class="n">${x.pend ? fmt(x.pend) : '✓'}</td></tr>`).join('')}</tbody></table>`; }).join('')
+    + stkAnexo(L)
     + `<p class="hint" style="margin-top:12px">Stock en obra = recibido conforme − consumido (estimado por hincado y montaje registrados).${neg ? ` ${neg} código${neg > 1 ? 's' : ''} en negativo (en rojo): se usó más de lo recibido conforme, revisar recepción.` : ''}</p>`;
   printHTML(h, `Stock de materiales en obra ${today()}.pdf`, false);
 }
+// anexo del PDF: códigos que llegaron con otro número que el del BOM y entregas con remito, packing list, contenedor y transporte
+function stkAnexo(L) {
+  const C = L.filter((x) => x.plc.length), E = [...new Set(L.flatMap((x) => x.ents))].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+  const th = 'style="white-space:normal"';
+  let h = '';
+  if (C.length) h += `<h3 style="margin:18px 0 6px;break-after:avoid;page-break-after:avoid">Códigos cambiados: BOM ↔ packing list recibido <span class="muted" style="font-weight:400">· ${C.length}</span></h3>
+    <table class="tbl stkpdf" style="table-layout:fixed;width:100%"><colgroup><col style="width:18%"><col style="width:20%"><col style="width:42%"><col style="width:10%"><col style="width:10%"></colgroup>
+    <thead><tr><th>Código BOM</th><th>Código en packing list</th><th>Descripción</th><th class="n">Recib. OK</th><th class="n">Stock en obra</th></tr></thead><tbody>
+    ${C.map((x) => `<tr><td><b>${esc(x.k)}</b></td><td style="color:#c26a00"><b>${esc(x.plc.join(', '))}</b></td><td>${esc(x.desc)}</td><td class="n">${fmt(x.rec)}</td><td class="n">${fmt(x.stock == null ? x.rec : x.stock)}</td></tr>`).join('')}</tbody></table>`;
+  if (E.length) { const D = E.map(stkEnt), hay = (k) => D.some((d) => d[k]);
+    const cols = [['fecha', 'Fecha', 9], ['remito', 'Remito', 15], ['pl', 'Packing list', 19], ['cont', 'Contenedor', 18], ['pat', 'Patente', 13], ['transp', 'Transporte', 14], ['resp', 'Recibió', 12]].filter(([k]) => k === 'fecha' || k === 'remito' || hay(k));
+    const tw = cols.reduce((a, c) => a + c[2], 0);
+    h += `<h3 style="margin:18px 0 6px;break-after:avoid;page-break-after:avoid">Entregas recibidas <span class="muted" style="font-weight:400">· ${E.length} · remito, packing list, contenedor y transporte</span></h3>
+    <table class="tbl stkpdf" style="table-layout:fixed;width:100%"><colgroup>${cols.map((c) => `<col style="width:${((c[2] / tw) * 100).toFixed(1)}%">`).join('')}</colgroup>
+    <thead><tr>${cols.map((c) => `<th ${th}>${c[1]}</th>`).join('')}</tr></thead><tbody>
+    ${D.map((d) => `<tr>${cols.map(([k]) => `<td style="white-space:normal">${k === 'fecha' ? (d.fecha ? fechaCorta(d.fecha) : '–') : k === 'remito' ? `<b>${esc(d.remito || '–')}</b>` : esc(d[k] || '–')}</td>`).join('')}</tr>`).join('')}</tbody></table>`; }
+  return h;
+}
 function stockExcel() {
-  const rows = [['Código', 'Descripción', 'Categoría', 'BOM', 'Recibido OK', 'Dañado', 'Consumido (estimado)', 'Stock en obra', 'Falta recibir', 'Se descuenta por']]
-    .concat(stockInfo().map((x) => [x.k, x.desc, trkCat(x.cat)[0], x.tot, x.rec, x.dan, x.cons == null ? '' : x.cons, x.stock == null ? x.rec : x.stock, x.pend, x.base]));
+  const rows = [['Código', 'Código en packing list (si difiere)', 'Descripción', 'Categoría', 'BOM', 'Recibido OK', 'Dañado', 'Consumido (estimado)', 'Stock en obra', 'Falta recibir', 'Se descuenta por', 'Remitos']]
+    .concat(stockInfo().map((x) => [x.k, x.plc.join(', '), x.desc, trkCat(x.cat)[0], x.tot, x.rec, x.dan, x.cons == null ? '' : x.cons, x.stock == null ? x.rec : x.stock, x.pend, x.base, [...new Set(x.ents.map((e) => stkEnt(e).remito))].filter(Boolean).join(', ')]));
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Stock');
+  const E = (trkS().ent || []).slice().sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+  if (E.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Fecha', 'Remito', 'Packing list', 'Contenedor', 'Patente', 'Transporte', 'Recibió', 'Códigos']].concat(E.map((e) => { const d = stkEnt(e); return [d.fecha, d.remito, d.pl, d.cont, d.pat, d.transp, d.resp, (e.lin || []).length]; }))), 'Entregas');
   monGuardar(wb, `Stock de materiales ${today()}.xlsx`);
 }
 async function monGuardar(wb, nom) {
