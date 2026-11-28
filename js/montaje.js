@@ -189,11 +189,12 @@ function stockPdf() {
   const sub = `${fmt(L.length)} códigos con stock · ${fmt(L.filter((x) => val(x) > 0).reduce((a, x) => a + val(x), 0))} piezas en obra${STK.c !== 'all' ? ' · ' + esc(trkCat(STK.c)[0]) : ''}${STK.q ? ' · búsqueda «' + esc(STK.q) + '»' : ''} · los códigos en 0 no se listan`;
   const h = prHead('Stock de materiales en obra', sub) + cats.map((c) => { const G = L.filter((x) => x.cat === c).sort((a, b) => val(b) - val(a) || String(a.k).localeCompare(String(b.k)));
     return `<h3 style="margin:14px 0 6px;break-after:avoid;page-break-after:avoid"><i class="cdot" style="background:${trkCat(c)[1]}"></i>${esc(trkCat(c)[0])} <span class="muted" style="font-weight:400">· ${G.length} códigos</span></h3>
-    <table class="tbl stkpdf" style="table-layout:fixed;width:100%"><colgroup><col style="width:18%"><col style="width:34%"><col style="width:10%"><col style="width:9%"><col style="width:8%"><col style="width:6%"><col style="width:7%"><col style="width:8%"></colgroup><thead><tr><th>Código</th><th>Descripción</th><th class="n">Stock en obra</th><th class="n">Recib. OK</th><th class="n">Consum.</th><th class="n">Dañ.</th><th class="n">BOM</th><th class="n">Falta recibir</th></tr></thead><tbody>
-    ${G.map((x) => `<tr><td><b>${esc(x.k)}</b>${x.plc.length ? `<small style="display:block;color:#c26a00">PL: ${esc(x.plc.join(', '))}</small>` : ''}</td><td>${esc(x.desc)}${x.ents.length ? `<small class="muted" style="display:block">Remito ${esc([...new Set(x.ents.map((e) => stkEnt(e).remito || '–'))].join(', '))}</small>` : ''}</td><td class="n"><b style="${val(x) < 0 ? 'color:#d9573f' : ''}">${fmt(val(x))}</b></td><td class="n">${fmt(x.rec)}</td><td class="n">${x.cons == null ? '–' : fmt(x.cons)}</td><td class="n">${x.dan ? fmt(x.dan) : '–'}</td><td class="n">${fmt(x.tot)}</td><td class="n">${x.pend ? fmt(x.pend) : '✓'}</td></tr>`).join('')}</tbody></table>`; }).join('')
+    <table class="tbl stkpdf" style="table-layout:fixed;width:100%"><colgroup><col style="width:10%"><col style="width:9%"><col style="width:20%"><col style="width:6.5%"><col style="width:6%"><col style="width:6%"><col style="width:4.5%"><col style="width:5.5%"><col style="width:6%"><col style="width:9%"><col style="width:9.5%"><col style="width:8%"></colgroup><thead><tr><th>Código BOM</th><th>Código en packing list</th><th>Descripción</th><th class="n">Stock en obra</th><th class="n">Recib. OK</th><th class="n">Consum.</th><th class="n">Dañ.</th><th class="n">BOM</th><th class="n">Falta recibir</th><th>Remito</th><th>Packing list</th><th>Contenedor</th></tr></thead><tbody>
+    ${G.map((x) => { const u = (k) => [...new Set(x.ents.map((e) => stkEnt(e)[k]).filter(Boolean))].join(' / ') || '–';
+      return `<tr><td><b>${esc(x.k)}</b></td><td>${x.plc.length ? `<b style="color:#c26a00">${esc(x.plc.join(', '))}</b>` : '<span class="muted">igual</span>'}</td><td>${esc(x.desc)}</td><td class="n"><b style="${val(x) < 0 ? 'color:#d9573f' : ''}">${fmt(val(x))}</b></td><td class="n">${fmt(x.rec)}</td><td class="n">${x.cons == null ? '–' : fmt(x.cons)}</td><td class="n">${x.dan ? fmt(x.dan) : '–'}</td><td class="n">${fmt(x.tot)}</td><td class="n">${x.pend ? fmt(x.pend) : '✓'}</td><td>${esc(u('remito'))}</td><td>${esc(u('pl'))}</td><td>${esc(u('cont'))}</td></tr>`; }).join('')}</tbody></table>`; }).join('')
     + stkAnexo(L)
     + `<p class="hint" style="margin-top:12px">Stock en obra = recibido conforme − consumido (estimado por hincado y montaje registrados).${neg ? ` ${neg} código${neg > 1 ? 's' : ''} en negativo (en rojo): se usó más de lo recibido conforme, revisar recepción.` : ''}</p>`;
-  printHTML(h, `Stock de materiales en obra ${today()}.pdf`, false);
+  printHTML(`<div class="stkdoc">${h}</div>`, `Stock de materiales en obra ${today()}.pdf`, true);
 }
 // anexo del PDF: códigos que llegaron con otro número que el del BOM y entregas con remito, packing list, contenedor y transporte
 function stkAnexo(L) {
@@ -214,11 +215,15 @@ function stkAnexo(L) {
   return h;
 }
 function stockExcel() {
-  const rows = [['Código', 'Código en packing list (si difiere)', 'Descripción', 'Categoría', 'BOM', 'Recibido OK', 'Dañado', 'Consumido (estimado)', 'Stock en obra', 'Falta recibir', 'Se descuenta por', 'Remitos']]
-    .concat(stockInfo().map((x) => [x.k, x.plc.join(', '), x.desc, trkCat(x.cat)[0], x.tot, x.rec, x.dan, x.cons == null ? '' : x.cons, x.stock == null ? x.rec : x.stock, x.pend, x.base, [...new Set(x.ents.map((e) => stkEnt(e).remito))].filter(Boolean).join(', ')]));
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Stock');
+  const L = stockInfo(), u = (x, k) => [...new Set(x.ents.map((e) => stkEnt(e)[k]).filter(Boolean))].join(' / ');
+  const rows = [['Código', 'Código en packing list (si difiere)', 'Descripción', 'Categoría', 'BOM', 'Recibido OK', 'Dañado', 'Consumido (estimado)', 'Stock en obra', 'Falta recibir', 'Se descuenta por', 'Remitos', 'Packing lists', 'Contenedores', 'Patentes', 'Transporte']]
+    .concat(L.map((x) => [x.k, x.plc.join(', '), x.desc, trkCat(x.cat)[0], x.tot, x.rec, x.dan, x.cons == null ? '' : x.cons, x.stock == null ? x.rec : x.stock, x.pend, x.base, u(x, 'remito'), u(x, 'pl'), u(x, 'cont'), u(x, 'pat'), u(x, 'transp')]));
+  const wb = XLSX.utils.book_new(), hoja = (aoa, w) => { const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = w.map((c) => ({ wch: c })); return ws; };
+  XLSX.utils.book_append_sheet(wb, hoja(rows, [14, 18, 42, 22, 9, 10, 8, 11, 10, 10, 26, 24, 24, 24, 20, 22]), 'Stock');
+  const C = L.filter((x) => x.plc.length);
+  if (C.length) XLSX.utils.book_append_sheet(wb, hoja([['Código BOM', 'Código en packing list', 'Descripción', 'Categoría', 'Recibido OK', 'Stock en obra', 'Remitos', 'Packing lists']].concat(C.map((x) => [x.k, x.plc.join(', '), x.desc, trkCat(x.cat)[0], x.rec, x.stock == null ? x.rec : x.stock, u(x, 'remito'), u(x, 'pl')])), [14, 20, 42, 22, 11, 11, 24, 24]), 'Códigos cambiados');
   const E = (trkS().ent || []).slice().sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
-  if (E.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Fecha', 'Remito', 'Packing list', 'Contenedor', 'Patente', 'Transporte', 'Recibió', 'Códigos']].concat(E.map((e) => { const d = stkEnt(e); return [d.fecha, d.remito, d.pl, d.cont, d.pat, d.transp, d.resp, (e.lin || []).length]; }))), 'Entregas');
+  if (E.length) XLSX.utils.book_append_sheet(wb, hoja([['Fecha', 'Remito', 'Packing list', 'Contenedor', 'Patente', 'Transporte', 'Recibió', 'Códigos', 'Unidades recibidas OK']].concat(E.map((e) => { const d = stkEnt(e); return [d.fecha, d.remito, d.pl, d.cont, d.pat, d.transp, d.resp, (e.lin || []).length, (e.lin || []).reduce((a, l) => a + (Number(l.rec) || 0), 0)]; })), [11, 18, 22, 18, 18, 24, 16, 9, 12]), 'Entregas');
   monGuardar(wb, `Stock de materiales ${today()}.xlsx`);
 }
 async function monGuardar(wb, nom) {

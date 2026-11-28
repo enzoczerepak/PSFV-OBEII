@@ -1564,4 +1564,5 @@ tr.clk { cursor: pointer; } tr.clk:hover td { background: #fff7ed; }
 .ccchk { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; cursor: pointer; } .ccchk input { margin: 0; }
 .ccsw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; border: 1px solid #8886; }
 
-.stkpdf th { white-space: normal; font-size: 9px; padding: 5px 4px !important; } .stkpdf td { font-size: 10px; padding: 4px !important; } .stkpdf td:nth-child(2) { white-space: normal; } .stkpdf td:first-child { word-break: break-all; }
+.stkpdf th { white-space: normal; font-size: 9px; padding: 5px 4px !important; } .stkpdf td { font-size: 10px; padding: 4px !important; } .stkpdf td { white-space: normal !important; word-break: break-word; } .stkpdf td.n { white-space: nowrap !important; }
+@media print { #printArea:has(.stkdoc) { padding: 0 6mm 3mm; } .stkdoc .pr-h { margin-bottom: 6px; } .stkdoc h3:first-of-type { margin-top: 6px !important; } }
