@@ -70,7 +70,7 @@ function vZanjas(el) {
       <td class="ztit">${esc(z.titulo)}${z.miembros.length > 1 ? ' <span class="pill p-warn" title="Zanja compartida">compartida</span>' : ''}${z.tramoDe ? ` <span class="pill p-info" title="Pendiente de la zanja compartida ${esc(z.tramoDe.titulo)} (${z.tramoDe.estado}). Se abre y se tiende cuando toque; al cerrarse vuelve a esa zanja.">tramo de ${esc(z.tramoDe.titulo)}</span>${!window.READONLY && z.estado === 'cerrada' && z.tramoDe.estado === 'cerrada' ? ` <button class="btn sm" data-sumt="${z.id}">Sumar a la compartida</button>` : ''}` : ''}${(z.tramos || []).filter((t) => t.estado !== 'cerrada').map((t) => ` <span class="pill" title="Circuito de esta zanja que quedó pendiente: se abre y se tiende después">+ ${t.inv.map(esc).join(', ')} pendiente</span>`).join('')}</td>
       <td><div class="chips">${z.miembros.map((c) => `<span class="chip ${c.completo ? 'lista' : ''}" title="${esc(c.desde)} → ${esc(c.hasta)}${c.completo ? ' · tendido' : ''}">${c.completo ? '✓ ' : ''}${esc(c.designacion)}${z.miembros.length > 1 && !c.completo && !window.READONLY ? `<button class="chipx" data-sacar="${c.id}" title="Sacar de esta zanja (queda con zanja propia, para más adelante)">×</button>` : ''}</span>`).join('')}</div></td>
       <td class="n"><input type="number" class="zl" step="0.1" min="0" value="${z.largo}" title="Largo de zanja según plano"></td><td>${zSeg(z.id, z.estado, z.listoCerrar)}</td><td>${z.nReal}/${z.nCond} ${z.completo ? '✓' : ''}</td>
-      <td style="white-space:nowrap">${patOk ? `<button class="pill p-done pbtn" data-a="tp" title="PAT cargada · tocá para corregir">${esc(z.pat.fasesInfo.C.bobina || 'sin bobina')} · ${fmt(z.pat.fasesInfo.C.len, 1)} m</button>` : z.pat && !window.READONLY && z.estado !== 'no abierta' ? '<button class="btn sm" data-a="tp" title="Cargar los metros de PAT tendidos en esta zanja">Cargar PAT</button>' : `<span class="muted">${z.estado === 'no abierta' ? '–' : 'sin cargar'}</span>`}</td>
+      <td style="white-space:nowrap">${z.cat === 'BT' ? patZanjaBT(z) : patOk ? `<button class="pill p-done pbtn" data-a="tp" title="PAT cargada · tocá para corregir">${esc(z.pat.fasesInfo.C.bobina || 'sin bobina')} · ${fmt(z.pat.fasesInfo.C.len, 1)} m</button>` : z.pat && !window.READONLY && z.estado !== 'no abierta' ? '<button class="btn sm" data-a="tp" title="Cargar los metros de PAT tendidos en esta zanja">Cargar PAT</button>' : `<span class="muted">${z.estado === 'no abierta' ? '–' : 'sin cargar'}</span>`}</td>
       <td style="white-space:nowrap"><button class="btn sm acc" data-a="tc">Cable</button><button class="btn sm ghost" data-a="ez" title="Editar zanja">✎</button></td></tr>`;
   });
   el.innerHTML = h + `</tbody></table></div><p class="hint">Si varios circuitos van por la misma zanja, tildalos y tocá <b>Misma zanja</b>: quedan con un solo estado, un solo largo y una sola PAT. El largo se carga directo en la tabla (por ejemplo, del plano); con ✎ cambiás el nombre o separás un circuito. Abierta: se puede tender, de a un circuito, y el plan se recalcula con cada tendido. <b>Cerrar</b> se habilita cuando están tendidos todos los circuitos de la zanja: ahí se registra la PAT con el largo de la zanja (editable). Si un circuito de una zanja compartida queda para más adelante, sacalo con la <b>×</b> de su nombre: pasa a zanja propia y libera su bobina para el recálculo.</p>`;
@@ -83,6 +83,7 @@ function vZanjas(el) {
     const z = R.zlist.find((x) => x.id === tr.dataset.id);
     tr.querySelector('[data-a=tc]').onclick = () => tenderZanja(z);
     const tp = tr.querySelector('[data-a=tp]'); if (tp) tp.onclick = () => z.pat && tender(z.pat.id);
+    const tb = tr.querySelector('[data-a=tpb]'); if (tb) tb.onclick = () => { const L = patBTdeZanja(z.id); patBTTramo(L.length === 1 ? L[0].id : null, null, false, z); };
     const cp = tr.querySelector('[data-a=cp]'); if (cp) cp.onclick = () => cierreParcial(z.id);
     tr.querySelector('[data-a=ez]').onclick = () => editZanja(z.id);
     $('.zl', tr).onchange = (e) => { const sz = S.zanjas.find((x) => x.id === z.id); sz.largo = Math.max(0, Number(e.target.value) || 0); sz.largoPlano = true; commit(`Zanja ${z.titulo}: ${fmt(sz.largo, 1)} m`); };
@@ -190,6 +191,13 @@ async function sacarDeZanja(cid) {
   commit(`${c.designacion} sacado de la zanja ${rz.titulo}`);
 }
 
+// PAT de BT de una zanja de BT: se carga como tramo de PAT de BT ligado a la zanja (largo editable)
+function patZanjaBT(z) {
+  const L = patBTdeZanja(z.id), m = L.reduce((a, x) => a + (Number(x.metros) || 0), 0), ro = window.READONLY;
+  if (L.length) return `<button class="pill p-done pbtn" data-a="tpb" ${ro ? 'disabled' : ''} title="${L.length === 1 ? 'PAT cargada · tocá para corregir el largo' : 'PAT cargada en ' + L.length + ' tramos · tocá para sumar otro (se corrigen en PAT de BT)'}">${esc(L.length === 1 ? L[0].bobina || 'sin bobina' : L.length + ' tramos')} · ${fmt(m, 1)} m</button>`;
+  if (z.estado === 'no abierta') return '<span class="muted">–</span>';
+  return ro ? '<span class="muted">sin cargar</span>' : '<button class="btn sm" data-a="tpb" title="Cargar los metros de PAT 25 mm² tendidos en esta zanja (editable)">Cargar PAT</button>';
+}
 // Cerrar zanjas: solo con todos sus circuitos tendidos; registra la PAT (largo de zanja, editable)
 async function cerrarZanjas(zids, auto) {
   if (window.READONLY) return;
@@ -214,6 +222,14 @@ async function cerrarZanjas(zids, auto) {
     const largo = real && real.metros ? real.metros : tramo ? 0 : z.largo;
     const notaT = tramo ? `<div class="muted" style="color:var(--acc)">Tramo de ${esc(z.tramoDe.titulo)}: al cerrar se suma a esa zanja</div>` : '';
     const cargada = real && (real.bobina || real.sinBobina) && real.metros > 0;
+    if (z.cat === 'BT') { const L = patBTdeZanja(z.id), mL = L.reduce((a, x) => a + (Number(x.metros) || 0), 0), bb = bobsDe('PAT|25');
+      if (L.length) return `<div class="phase-row" data-z="${z.id}" data-ok="1" style="grid-template-columns:minmax(150px,1fr) 70px 1fr 130px">
+        <div><b>${esc(z.titulo)}</b><div class="muted">${z.miembros.length} circuito${z.miembros.length > 1 ? 's' : ''} · zanja ${fmt(z.largo, 1)} m</div></div><span class="chip">25 mm²</span>
+        <div class="patok"><span class="pill p-done">PAT cargada ✓</span> <b>${fmt(mL, 1)} m</b> · ${esc(L.map((x) => x.bobina || 'sin bobina').join(', '))}</div><input type="date" class="pd" value="${today()}" title="Fecha de cierre"></div>`;
+      return `<div class="phase-row" data-z="${z.id}" data-bt="1" style="grid-template-columns:minmax(150px,1fr) 70px 200px 96px 130px">
+        <div><b>${esc(z.titulo)}</b><div class="muted">${z.miembros.length} circuito${z.miembros.length > 1 ? 's' : ''} · zanja ${fmt(z.largo, 1)} m · PAT de BT (0 si va aparte)</div></div><span class="chip">25 mm²</span>
+        <select class="pb"><option value="">Sin bobina registrada</option>${bb.map((b) => `<option value="${esc(b.codigo)}">${esc(b.codigo)} · saldo ${fmt(b.saldoActual, 1)} m</option>`).join('')}</select>
+        <input type="number" class="pm" step="0.1" min="0" value="${tramo ? 0 : z.largo}" title="Largo de PAT tendido en la zanja (editable; 0 si la PAT se carga aparte)"><input type="date" class="pd" value="${today()}"></div>`; }
     if (cargada) return `<div class="phase-row" data-z="${z.id}" data-ok="1" style="grid-template-columns:minmax(150px,1fr) 70px 1fr 130px">
       <div><b>${esc(z.titulo)}</b><div class="muted">${z.miembros.length} circuito${z.miembros.length > 1 ? 's' : ''} · zanja ${fmt(z.largo, 1)} m</div></div>
       <span class="chip">${p.seccion} mm²</span>
@@ -227,7 +243,7 @@ async function cerrarZanjas(zids, auto) {
       <input type="date" class="pd" value="${(real && real.fecha) || today()}"></div>`;
   };
   const res = await modal({ title: ok.length === 1 ? `Cerrar zanja ${esc(ok[0].titulo)}` : `Cerrar ${ok.length} zanjas`, wide: true,
-    sub: (auto ? 'Están tendidos todos los circuitos de la zanja. ' : '') + (ok.some((z) => z.pat) ? 'Cerrar la zanja confirma que la PAT está tendida.' : 'La PAT de BT se carga aparte, en PAT de BT.'),
+    sub: (auto ? 'Están tendidos todos los circuitos de la zanja. ' : '') + (ok.some((z) => z.pat) ? 'Cerrar la zanja confirma que la PAT está tendida.' : 'Cargá el largo de PAT 25 mm² tendido en la zanja (editable; 0 si se carga aparte en PAT de BT).'),
     body: `<div class="muted phase-row prh" style="grid-template-columns:minmax(150px,1fr) 70px 200px 96px 130px"><span>Zanja</span><span>PAT</span><span>Bobina</span><span>Largo (m)</span><span>Fecha</span></div>${ok.map(fila).join('')}
       ${inc.length ? `<p class="hint" style="color:var(--warn)">No se cierran (faltan circuitos por tender): ${inc.map((z) => esc(z.titulo)).join(', ')}.</p>` : ''}
       <p class="hint">Si la PAT ya se cargó (botón <b>Cargar PAT</b> en Zanjas, o un parte de campo) solo se confirma. Si no, cargá ahora los metros tendidos: se propone el largo de la zanja y la bobina del plan.${ok.some((z) => z.tramoDe && z.tramoDe.estado === 'cerrada') ? ' En un <b>tramo reabierto</b> de una zanja compartida, poné 0 si la PAT ya estaba tendida; si se tendió PAT nueva, cargá los metros y se suman a la de la zanja compartida.' : ''}</p>`,
@@ -236,6 +252,7 @@ async function cerrarZanjas(zids, auto) {
       for (const row of $$('.phase-row[data-z]', box)) {
         if (row.dataset.ok) { out.push({ zid: row.dataset.z, ya: true, fecha: $('.pd', row).value }); continue; }
         const pb = $('.pb', row); const m = Number($('.pm', row).value) || 0;
+        if (row.dataset.bt) { out.push({ zid: row.dataset.z, bt: true, bobina: pb.value, metros: m, fecha: $('.pd', row).value }); continue; }
         if (pb && !(m > 0) && !row.dataset.tramo) { $('.pm', row).classList.add('bad'); $('.pm', row).focus(); return false; }
         out.push({ zid: row.dataset.z, bobina: pb ? pb.value : null, metros: m, fecha: $('.pd', row).value, conPat: !!pb });
       }
@@ -244,6 +261,7 @@ async function cerrarZanjas(zids, auto) {
   if (!res) return;
   res.forEach((r) => {
     const z = S.zanjas.find((x) => x.id === r.zid), rzz = R.zlist.find((x) => x.id === r.zid);
+    if (r.bt && r.metros > 0) S.patBT.reg.push({ id: uid('pb'), tipo: 'c', por: patBTautor(), f: r.fecha || today(), metros: Math.round(r.metros * 10) / 10, bobina: r.bobina || '', desc: `Zanja ${rzz.titulo}`, zid: r.zid });
     if (!r.ya && r.conPat && rzz.pat && r.metros > 0) {
       const pc = S.circuitos.find((x) => x.id === rzz.pat.id);
       pc.real = { C: r.bobina ? { bobina: r.bobina, metros: r.metros, fecha: r.fecha } : { sinBobina: true, metros: r.metros, fecha: r.fecha } };

@@ -267,7 +267,7 @@ const VIEWS = {
   fundaciones: ['Fundaciones STS', () => `Avance de las bases de ${STSL.length === 1 ? 'la STS' : `las ${STSL.length} STS`} por etapa: iniciá y finalizá cada etapa con su fecha`],
   puntas: ['Puntas de cable', () => 'Terminales colocados en cada extremo: lado inversor y lado STS en BT; entre STS, sala de celdas, piquete y ET en MT'],
   propuesta: ['Propuesta de tendido', () => 'Lotes de zanjas por zona, del tamaño de una bobina, en el orden sugerido para abrir'],
-  zanjas: ['Zanjas', () => 'Estado de cada zanja (BT y MT). Se tiende de a un circuito; la PAT de MT se carga por zanja y al cerrar se confirma (la de BT va aparte, en PAT de BT). Las compartidas admiten cierre parcial'],
+  zanjas: ['Zanjas', () => 'Estado de cada zanja (BT y MT). Se tiende de a un circuito; la PAT de MT se carga por zanja y al cerrar se confirma (la de BT se carga con «Cargar PAT» en la zanja, largo editable, o aparte en PAT de BT). Las compartidas admiten cierre parcial'],
   'BT-plan': ['Plan de corte', () => 'Cables de aluminio inversor → STS · los cortes listos quedan fijos en su bobina'],
   'BT-circ': ['Circuitos', () => 'Tendidos inversor → STS: zanja y registro de lo ejecutado'],
   'MT-plan': ['Plan de corte', () => 'Cables de media tensión entre STS, sala de celdas y LMT · los cortes listos quedan fijos en su bobina'],

@@ -55,17 +55,20 @@ function vPatBT(el) {
   const cf = $('#pbCfg', el); if (cf) cf.onclick = (e) => { e.preventDefault(); patBTCfg(); };
 }
 const patBTautor = () => (typeof USR !== 'undefined' && USR ? USR.nombre : '');
-async function patBTTramo(id, secIni, completo) {
-  const x0 = id ? S.patBT.reg.find((y) => y.id === id) : null, PP = patPerim(), pq = (sec) => PP.find((q) => q.sec === String(sec));
+// tramos de PAT de BT cargados desde una zanja de BT (zanja abierta o al cerrarla)
+const patBTdeZanja = (zid) => ((S.patBT || {}).reg || []).filter((x) => x.tipo === 'c' && x.zid === zid);
+async function patBTTramo(id, secIni, completo, zan) {
+  const x0 = id ? S.patBT.reg.find((y) => y.id === id) : null; if (x0 && x0.zid && !zan) zan = R.zlist.find((z) => z.id === x0.zid);
+  const PP = patPerim(), pq = (sec) => PP.find((q) => q.sec === String(sec));
   const sec0 = x0 ? x0.sec || '' : secIni || '', falta0 = sec0 && !x0 ? Math.max(0, pq(sec0).req - pq(sec0).m) : 0;
   const bobs = R.bobinas.filter((b) => b.key === 'PAT|25');
-  const r = await modal({ title: x0 ? 'Corregir tramo de PAT de BT' : 'Tramo de PAT de BT tendido', sub: 'Cu desnudo 1×25 mm² · se descuenta de la bobina elegida',
+  const r = await modal({ title: x0 ? 'Corregir tramo de PAT de BT' : 'Tramo de PAT de BT tendido', sub: zan ? `Zanja ${esc(zan.titulo)} (${fmt(zan.largo, 1)} m) · Cu desnudo 1×25 mm² · el largo es editable` : 'Cu desnudo 1×25 mm² · se descuenta de la bobina elegida',
     body: `<div class="form"><label>Fecha<input type="date" id="pF" value="${(x0 && x0.f) || today()}"></label>
-      <label>Metros tendidos<input type="number" id="pM" step="0.1" min="0" value="${x0 ? x0.metros : completo ? falta0.toFixed(1) : ''}"></label>
+      <label>Metros tendidos<input type="number" id="pM" step="0.1" min="0" value="${x0 ? x0.metros : completo ? falta0.toFixed(1) : zan ? Number(zan.largo || 0).toFixed(1) : ''}"></label>
       <label class="full">Perímetro de sector<select id="pS"><option value="">No es del perímetro (fila, inversor, chicote…)</option>${PP.map((q) => `<option value="${q.sec}" ${String(sec0) === q.sec ? 'selected' : ''}>Sector ${q.sec} · ${fmt(q.m)} de ${fmt(q.req)} m tendidos</option>`).join('')}</select></label>
       <label class="full rmchk"><input type="checkbox" id="pC" ${(x0 && x0.completo) || completo ? 'checked' : ''}> Con este tramo el perímetro del sector queda completo</label>
       <label class="full">Bobina<select id="pB"><option value="">Sin bobina registrada</option>${bobs.map((b) => `<option value="${esc(b.codigo)}" ${x0 && x0.bobina === b.codigo ? 'selected' : ''}>${esc(b.codigo)} · saldo ${fmt(b.saldoActual, 1)} m</option>`).join('')}</select></label>
-      <label class="full">Tramo (por dónde va)<input type="text" id="pD" value="${esc((x0 && x0.desc) || (sec0 ? `Perímetro sector ${sec0}` : ''))}" placeholder="Ej.: fila TRK 204–229 · STS 4 → INV 4.12 · chicote INV 3.5"></label></div>`,
+      <label class="full">Tramo (por dónde va)<input type="text" id="pD" value="${esc((x0 && x0.desc) || (sec0 ? `Perímetro sector ${sec0}` : zan ? `Zanja ${zan.titulo}` : ''))}" placeholder="Ej.: fila TRK 204–229 · STS 4 → INV 4.12 · chicote INV 3.5"></label></div>`,
     buttons: [['Cancelar', 'btn', () => null], [x0 ? 'Guardar' : 'Registrar', 'btn pri', (b) => {
       const m = Number($('#pM', b).value); if (!(m > 0)) { $('#pM', b).classList.add('bad'); return false; }
       const sc = $('#pS', b).value, d = $('#pD', b).value.trim() || (sc ? `Perímetro sector ${sc}` : ''); if (!d) { $('#pD', b).classList.add('bad'); return false; }
@@ -73,6 +76,7 @@ async function patBTTramo(id, secIni, completo) {
   if (r && !r.sec) { delete r.sec; delete r.completo; } if (r && !r.completo) delete r.completo;
   if (r && x0) { if (!r.sec) delete x0.sec; if (!r.completo) delete x0.completo; }
   if (!r) return;
+  if (zan) r.zid = zan.id;
   if (x0) Object.assign(x0, r); else S.patBT.reg.push(Object.assign({ id: uid('pb'), tipo: 'c', por: patBTautor() }, r));
   commit(`PAT BT: ${x0 ? 'corregido' : 'tendido'} ${r.desc} · ${fmt(r.metros, 1)} m${r.bobina ? ` (${r.bobina})` : ''}`);
 }
